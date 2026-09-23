@@ -39,7 +39,9 @@ export default {
   // A hung mutant is a real detection - a mutated loop bound can run forever
   // - but each one holds a worker for the whole budget.
   timeoutMS: 20000,
-  concurrency: 8,
+  // Workers are left to Stryker, which sizes them to the host. A fixed eight
+  // on the four-core hosted runner slowed every mutant enough that 85 of the
+  // workstation's survivors timed out there, and a timeout counts as a kill.
   // The initial run is the whole suite in one process. Its git tests spawn
   // git dozens of times, which is seconds on a host that scans every process.
   dryRunTimeoutMinutes: 30,

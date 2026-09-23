@@ -28,7 +28,7 @@ which measured between 0.3 and 1.5 seconds a process on that host.
   `plugins` - and holds it to the unit suite: every test that reads no disk
   and spawns no process (`vitest.core.config.ts`). A core mutant has to be
   killed by the tests written for the module it is in, which is the stronger
-  claim. It runs in about 13 minutes on the workstation above.
+  claim. It runs in about ten minutes on the workstation above.
 - **The full sweep** (`npm run test:mutation:full`) mutates everything
   against the whole suite. It runs weekly in CI and on request, and gates
   nothing until it has been measured on the hosted runner (`briefs/002`).
@@ -71,6 +71,17 @@ empty string or `undefined` and the loop stops the same; `??` fallbacks for
 states the types rule out; comparator branches for values that are never
 equal, such as two paths in one corpus. Killing them would take assertions
 that restate the implementation, which is worse than the number.
+
+### On the hosted runner
+
+The first core sweep on `ubuntu-latest`, four cores, scored 97.37 in 22
+minutes: 329 timeouts to the workstation's 75, and 123 survivors to its 208.
+The configuration fixed eight workers, twice the runner's cores, and every
+mutant ran slower for it; 85 mutants that survive on the workstation ran out
+of time there, and Stryker counts a timeout as detected. The higher score was
+the runner's contention, not the tests. The workers are now sized to the host,
+which on the workstation changed only the time: 95.75, 208 survivors, ten
+minutes.
 
 Coverage at the same commit: lines 100%, statements 99.9%, functions 99.8%,
 branches 98.1%. The floors in `vitest.config.ts` sit just below. The
