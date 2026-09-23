@@ -10,7 +10,7 @@
  */
 
 import { randomBytes } from 'node:crypto';
-import { mkdir, readdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
+import { mkdir, readdir, readFile, realpath, rename, rm, stat, writeFile } from 'node:fs/promises';
 import { dirname, join, relative, resolve, sep } from 'node:path';
 
 import { normalisePath as repoPath } from './links.js';
@@ -27,6 +27,20 @@ export interface FileSystem {
   /** Every file beneath the root, as sorted repository-relative paths, skipping {@link IGNORED_DIRECTORIES}. */
   walk(): Promise<string[]>;
   exists(path: string): Promise<boolean>;
+}
+
+/**
+ * The path as the filesystem names it: links and junctions followed, and on
+ * Windows short names such as `RUNNER~1` expanded. Git reports the top of a
+ * work tree this way, so a root compared with it has to be named the same.
+ * A path that does not exist is returned as given, for the caller to report.
+ */
+export async function canonicalPath(path: string): Promise<string> {
+  try {
+    return await realpath(path);
+  } catch {
+    return path;
+  }
 }
 
 /** Directories a walk never enters: build output and other tools' state. */

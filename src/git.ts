@@ -11,6 +11,7 @@
 import { execFile } from 'node:child_process';
 import { resolve } from 'node:path';
 
+import { canonicalPath } from './fs.js';
 import { relativePath } from './links.js';
 
 export interface CommitInfo {
@@ -113,10 +114,10 @@ export class NodeGit implements Git {
     return this.prefix;
   }
 
-  /** The working tree's top directory, or `null` outside a repository. */
+  /** The working tree's top directory, canonical, or `null` outside a repository. */
   static async toplevel(cwd: string): Promise<string | null> {
     const result = await run(cwd, ['rev-parse', '--show-toplevel']);
-    return result.ok ? resolve(result.stdout.trim()) : null;
+    return result.ok ? canonicalPath(resolve(result.stdout.trim())) : null;
   }
 
   async commit(revision: string): Promise<CommitInfo | null> {

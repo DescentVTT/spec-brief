@@ -18,7 +18,7 @@ import type { Brief } from './brief.js';
 import { collisionFindings, collisions, type CollisionOptions, type CollisionReport } from './collisions.js';
 import { type Config, DEFAULT_CONFIG, locateConfig, parseConfig } from './config.js';
 import { buildCorpus, type Corpus, findBriefs, isReady, pendingDependencies, type SourceFile } from './corpus.js';
-import { type FileSystem, NodeFileSystem } from './fs.js';
+import { canonicalPath, type FileSystem, NodeFileSystem } from './fs.js';
 import { type CommitInfo, type FileChange, type Git, NodeGit, pullRequestUrl } from './git.js';
 import { matchGlob, parseGlob } from './glob.js';
 import { normalisePath } from './links.js';
@@ -133,8 +133,9 @@ export class BriefEngine {
    * configuration; without one it is the working tree's top, or `cwd`.
    */
   static async open(options: OpenOptions = {}): Promise<BriefEngine> {
-    const cwd = resolve(options.cwd ?? process.cwd());
-    const explicit = options.config === undefined ? undefined : resolve(cwd, options.config);
+    // Named as git names them, so the root and the work tree compare.
+    const cwd = await canonicalPath(resolve(options.cwd ?? process.cwd()));
+    const explicit = options.config === undefined ? undefined : await canonicalPath(resolve(cwd, options.config));
     const configPath = options.noConfig === true ? undefined : (explicit ?? (await locateConfig(cwd, exists)));
     // Asking git costs a process; without git there is nothing to ask.
     const toplevel = options.git === null ? null : await NodeGit.toplevel(cwd);

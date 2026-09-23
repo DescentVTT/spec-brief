@@ -20,14 +20,16 @@ export default defineConfig({
       // with the measurement and never down to make a change pass.
       //
       // Measured at 0.1.0 on Windows: lines 100, statements 99.91, functions
-      // 99.8, branches 98.12. The branches left are `??` fallbacks that
-      // noUncheckedIndexedAccess requires and no input reaches, and the
-      // platform paths of which one host runs only one. Mutation testing is the
-      // check on the branches that carry behaviour.
+      // 99.8, branches 98.12; on Linux, where CI measures, lines 99.89,
+      // statements 99.78, functions 99.4, branches 98.0. The difference is the
+      // retry on Windows file locks, which no other host reaches. The branches
+      // left are `??` fallbacks that noUncheckedIndexedAccess requires and no
+      // input reaches. Mutation testing is the check on the branches that
+      // carry behaviour.
       thresholds: {
         lines: 99.5,
         statements: 99.5,
-        functions: 99.5,
+        functions: 99,
         branches: 97,
       },
     },

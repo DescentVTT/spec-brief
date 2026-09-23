@@ -1,4 +1,4 @@
-import { readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { afterAll, describe, expect, it } from 'vitest';
@@ -256,6 +256,24 @@ describe('opening a repository', () => {
     const engine = await BriefEngine.open({ cwd: join(root, 'sub') });
     expect(engine.root).toBe(join(root, 'sub'));
     expect(engine.git).not.toBeNull();
+  });
+
+  it('names the root as git names the work tree when it is reached through a link', async () => {
+    // Git reports the top of the work tree with links followed and, on Windows,
+    // short names such as RUNNER~1 expanded; a root named otherwise compared as
+    // outside it, and archival lost its dirty-tree and scope checks.
+    const real = dir('open-link');
+    initRepo(real);
+    writeTree(real, { '.spec-brief.json': '{}', 'briefs/001_a.md': goodBrief(), 'sub/x.txt': '' });
+    const link = join(dir('open-link-alias'), 'repo');
+    symlinkSync(real, link, 'junction');
+    const found = await BriefEngine.open({ cwd: join(link, 'sub') });
+    expect(found.root).toBe(real);
+    expect(found.git).not.toBeNull();
+    const explicit = await BriefEngine.open({ cwd: link, config: '.spec-brief.json' });
+    expect(explicit.root).toBe(real);
+    expect(explicit.configFile).toBe('.spec-brief.json');
+    expect(explicit.git).not.toBeNull();
   });
 
   it('leaves git out when the configuration sits outside the work tree it was found from', async () => {

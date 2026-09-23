@@ -59,7 +59,8 @@ let counter = 0;
  */
 export function tempDir(name: string): string {
   counter += 1;
-  const dir = join(realpathSync(tmpdir()), 'spec-brief-tests', `${name}-${process.pid}-${counter}`);
+  // Native, which expands Windows short names (`RUNNER~1` on hosted runners) as git does.
+  const dir = join(realpathSync.native(tmpdir()), 'spec-brief-tests', `${name}-${process.pid}-${counter}`);
   rmSync(dir, { recursive: true, force: true });
   mkdirSync(dir, { recursive: true });
   return dir;
