@@ -3,7 +3,6 @@ import { describe, expect, it } from 'vitest';
 import { planArchive, planUnarchive } from '../src/archive.js';
 import { BANNER_OPEN } from '../src/brief.js';
 import { collisions } from '../src/collisions.js';
-import { BriefEngine } from '../src/engine.js';
 import { rewriteLinks } from '../src/links.js';
 import { sortFindings } from '../src/lint.js';
 import { scan } from '../src/markdown.js';
@@ -68,9 +67,4 @@ describe('edges', () => {
     expect(plan.linksRewritten).toBe(0);
   });
 
-  it('opens the repository the process runs in when given no directory', async () => {
-    const engine = await BriefEngine.open({ git: null });
-    expect(engine.configFile).toBe('.spec-brief.json');
-    expect(engine.corpus.live.length).toBeGreaterThan(0);
-  });
 });

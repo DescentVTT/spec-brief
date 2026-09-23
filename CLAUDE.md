@@ -38,8 +38,15 @@ npm run lint            # tsc --noEmit
 npm test                # vitest
 npm run build
 npm run selfcheck       # spec-brief lints this repository's own briefs
-npm run test:mutation   # stryker; see docs/adr/0009-mutation-testing.md
+npm run test:mutation   # the core sweep: pure modules against the unit suite
 ```
+
+`npm run test:mutation:full` mutates the edges too, against the whole suite;
+it spawns git for every CLI mutant and runs weekly in CI rather than per
+change. See [ADR-0009](docs/adr/0009-mutation-testing.md) for both, and for
+why a unit test that belongs in the core suite must not read the disk or
+spawn a process: under per-test coverage, one that does is run for every
+mutant it reaches.
 
 The coverage floors in `vitest.config.ts` and the mutation `break` in
 `stryker.config.mjs` sit below the last measurement. They move up with the

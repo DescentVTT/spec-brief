@@ -428,7 +428,8 @@ export const RULES: readonly Rule[] = [
       if (wave === null) return [];
       return brief.dependsOn.flatMap((dependency) => {
         const target = resolveDependency(corpus, dependency);
-        if (target === undefined || target.phase !== 'live' || target.wave === null || target.wave < wave) return [];
+        // A self-dependency is reported once, by the dependency rule.
+        if (target === undefined || target === brief || target.phase !== 'live' || target.wave === null || target.wave < wave) return [];
         return [
           {
             line: at(lineOfField(brief, 'dependsOn')),

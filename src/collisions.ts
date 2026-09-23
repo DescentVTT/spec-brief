@@ -14,7 +14,7 @@ import { lineOfField } from './brief.js';
 import type { Corpus } from './corpus.js';
 import { type Glob, globBase, intersectGlobs, parseGlob } from './glob.js';
 import { severityOf } from './lint.js';
-import { COLLISION_RULES } from './rules.js';
+import { COLLISION_RULES, type RuleInfo } from './rules.js';
 import type { Finding, Severity } from './types.js';
 
 export interface Collision {
@@ -114,8 +114,8 @@ function where(wave: number | null): string {
  */
 export function collisionFindings(corpus: Corpus, report: CollisionReport): Finding[] {
   const severity = (id: string): Severity | null => {
-    const rule = COLLISION_RULES.find((r) => r.id === id);
-    const setting = severityOf(corpus, id, rule?.severity ?? 'off');
+    const rule = COLLISION_RULES.find((r) => r.id === id) as RuleInfo;
+    const setting = severityOf(corpus, id, rule.severity);
     return setting === 'off' ? null : setting;
   };
   const findings: Finding[] = [];

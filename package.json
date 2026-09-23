@@ -50,7 +50,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
-    "test:mutation": "stryker run",
+    "test:mutation": "stryker run stryker.core.config.mjs",
+    "test:mutation:full": "stryker run",
     "schema": "npm run build && node scripts/write-schema.mjs",
     "selfcheck": "node ./bin/spec-brief.js lint",
     "prepublishOnly": "npm run clean && npm run build"

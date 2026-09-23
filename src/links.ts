@@ -70,7 +70,7 @@ export function relativePath(fromDirectory: string, to: string): string {
   const from = parts(fromDirectory);
   const target = parts(to);
   let common = 0;
-  while (common < from.length && common < target.length && from[common] === target[common]) common += 1;
+  while (common < from.length && from[common] === target[common]) common += 1;
   const up = from.slice(common).map(() => '..');
   const rest = target.slice(common);
   const joined = [...up, ...rest].join('/');
@@ -88,10 +88,8 @@ function decode(path: string): string {
 /** Writes a path back in the encoding its original destination used. */
 function encodeLike(original: string, path: string): string {
   if (!original.includes('%')) return path;
-  return path
-    .split('/')
-    .map((p) => (p === '..' || p === '.' ? p : encodeURIComponent(p)))
-    .join('/');
+  // encodeURIComponent leaves "." and ".." as they are.
+  return path.split('/').map(encodeURIComponent).join('/');
 }
 
 export interface LinkRewrite {
@@ -147,5 +145,6 @@ export function linesLinkingTo(scanned: Scan, directory: string, target: string)
     const { path } = splitTarget(link.target);
     if (path !== '' && resolveFrom(directory, decode(path)) === target) found.add(link.line);
   }
-  return [...found].sort((a, b) => a - b);
+  // Lines are scanned in order, so the set is already ascending.
+  return [...found];
 }

@@ -60,12 +60,8 @@ export function parseGlob(source: string, options: ParseOptions = {}): GlobParse
   if (pattern.length === 0) return { ok: false, error: 'the pattern is empty' };
   if (pattern.startsWith('!')) return { ok: false, error: 'negated patterns are not supported; narrow the positive pattern' };
   if (pattern.startsWith('/')) return { ok: false, error: 'a pattern is relative to the repository root and cannot start with "/"' };
-  // A backslash before a letter, a digit or a slash is a Windows separator, not an escape.
-  if (/\\(?:[A-Za-z0-9/]|$)/.test(pattern)) {
-    return { ok: false, error: '"\\" escapes glob syntax; separate directories with "/"' };
-  }
   if (/(?:^|[^\\])[@+!?*]\(/.test(pattern)) return { ok: false, error: 'extended globs such as "+(a|b)" are not supported' };
-  while (pattern.startsWith('./')) pattern = pattern.slice(2);
+  // A leading "./" needs no stripping: "." segments are dropped below.
   if (pattern.endsWith('/')) pattern = `${pattern}**`;
 
   const expanded = expandBraces(pattern);
@@ -180,7 +176,8 @@ function tokenize(segment: string): CharToken[] | string {
     const ch = chars[i] as string;
     if (ch === '\\') {
       const next = chars[i + 1];
-      if (next === undefined || /[A-Za-z0-9/]/.test(next)) return '"\\" escapes glob syntax; separate directories with "/"';
+      // A backslash before a letter, a digit or nothing is a Windows separator, not an escape.
+      if (next === undefined || /[A-Za-z0-9]/.test(next)) return '"\\" escapes glob syntax; separate directories with "/"';
       tokens.push({ kind: 'literal', char: next });
       i += 1;
     } else if (ch === '*') {
@@ -210,10 +207,8 @@ function readClass(chars: readonly string[], open: number): { token: CharToken; 
   let first = true;
   for (; i < chars.length; i += 1) {
     const ch = chars[i] as string;
-    if (ch === ']' && !first) {
-      if (ranges.length === 0) return 'a character class is empty';
-      return { token: { kind: 'class', negated, ranges }, end: i };
-    }
+    // Never empty: the first character is always a member, even "]".
+    if (ch === ']' && !first) return { token: { kind: 'class', negated, ranges }, end: i };
     first = false;
     let lo = ch;
     if (ch === '\\' && chars[i + 1] !== undefined) {
@@ -237,8 +232,8 @@ function splitPath(path: string): string[] {
   return path.split('/').filter((s) => s !== '' && s !== '.');
 }
 
+/** Membership of a class. A slash is never asked about: paths are matched a segment at a time. */
 function inClass(token: Extract<CharToken, { kind: 'class' }>, point: number): boolean {
-  if (point === SLASH) return false;
   const inside = token.ranges.some(([lo, hi]) => point >= lo && point <= hi);
   return token.negated ? !inside : inside;
 }
@@ -248,7 +243,7 @@ function charMatches(token: Single, char: string): boolean {
     case 'literal':
       return token.char === char;
     case 'any':
-      return char !== '/';
+      return true;
     case 'class':
       return inClass(token, char.codePointAt(0) as number);
   }
@@ -411,24 +406,33 @@ function accepts(token: Single, point: number): boolean {
   }
 }
 
+/**
+ * Every point where the set of characters all the tokens accept could begin.
+ *
+ * Each token accepts a union of intervals: a literal one point, a positive
+ * class its ranges, a negated class and `?` everything outside theirs. Less the
+ * slash. The least character of an intersection of such sets is the left end
+ * of one of its intervals, so it is one of these points, and checking them
+ * all decides the intersection exactly. `0` is also the point after the
+ * slash, and readable characters go first, so that a witness is one a person
+ * would type.
+ */
 function candidates(tokens: readonly Single[]): number[] {
-  const points = [0x78, 0x61, 0x30, 0x5f, 0x2d];
+  const points = [0x78, 0x61, 0x30, 0x5f, 0x2d, 0x21, 0];
   for (const token of tokens) {
     if (token.kind === 'literal') points.push(token.char.codePointAt(0) as number);
     if (token.kind === 'class') {
-      for (const [lo, hi] of token.ranges) points.push(lo, hi, lo - 1, hi + 1);
+      for (const [lo, hi] of token.ranges) points.push(lo, hi + 1);
     }
   }
   return points;
 }
 
-/** A character every token accepts, or `null`. */
+/** A character every token accepts, or `null` when there is none. */
 function pick(tokens: readonly Single[]): string | null {
-  const ok = (point: number): boolean => point >= 0 && point <= 0x10ffff && tokens.every((t) => accepts(t, point));
-  for (const point of candidates(tokens)) if (ok(point)) return String.fromCodePoint(point);
-  // Bounded by the size of Unicode: reached only by classes that exclude every
-  // candidate above, which a real scope never writes.
-  for (let point = 0x21; point <= 0x10ffff; point += 1) if (ok(point)) return String.fromCodePoint(point);
+  for (const point of candidates(tokens)) {
+    if (point <= 0x10ffff && tokens.every((t) => accepts(t, point))) return String.fromCodePoint(point);
+  }
   return null;
 }
 

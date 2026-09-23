@@ -1,0 +1,109 @@
+---
+status: accepted
+date: 2026-09-24
+---
+
+# ADR-0009: Mutation testing, in two sweeps
+
+## Context
+
+The commissioning brief asked for a mutation score of at least 95% on schema
+parsing, dependency resolution, the collision matrix and archival, and for
+100% coverage. The sibling tools measure mutation testing, set the gate below
+the measurement, and treat it as a regression guard rather than a target.
+
+The first sweep of everything - every module, every test, 6,646 mutants - was
+stopped after 23 minutes with 551 tested and an estimate of 20 hours left, on a
+Windows workstation with 16 cores and 8 workers. The cause is structural. The
+CLI and engine tests run every line of the core, so under per-test coverage a
+mutant in the Markdown scanner reruns them too, and each of them spawns git,
+which measured between 0.3 and 1.5 seconds a process on that host.
+
+## Decision
+
+**Two sweeps.**
+
+- **The core sweep** (`npm run test:mutation`, `stryker.core.config.mjs`)
+  mutates every module but the edges - `cli`, `engine`, `fs`, `git`,
+  `plugins` - and holds it to the unit suite: every test that reads no disk
+  and spawns no process (`vitest.core.config.ts`). A core mutant has to be
+  killed by the tests written for the module it is in, which is the stronger
+  claim. It runs in about 13 minutes on the workstation above.
+- **The full sweep** (`npm run test:mutation:full`) mutates everything
+  against the whole suite. It runs weekly in CI and on request, and gates
+  nothing until it has been measured on the hosted runner (`briefs/002`).
+
+**The core gate is `break: 93`**, below the measurement, and moves up with it,
+never down to let a change pass.
+
+## Measurement
+
+Four rounds of the core sweep on 2026-09-24, 5,246 mutants in the last:
+
+| Round | Score | What changed |
+| --- | ---: | --- |
+| 1 | 85.31 | The suite as first written. |
+| 2 | 93.26 | Every finding, refusal and banner asserted whole; the algorithm edges below. |
+| 3 | 94.11 | Dead code removed; the dialects' anchors and bounds tested. |
+| 4 | **95.75** | Whole output of the reports; the last edges of rules and scanner. |
+
+The final score by module, and by what the commissioning brief named:
+
+| Area | Module | Score |
+| --- | --- | ---: |
+| Schema parsing | `config.ts` | 98.19 |
+| | `schema.ts` | 95.88 |
+| | `frontmatter.ts` | 94.40 |
+| Dependency resolution | `corpus.ts` | 94.06 |
+| Collision matrix | `collisions.ts` | 96.60 |
+| | `glob.ts` | 94.03 |
+| Archival | `integrity.ts` | 100.00 |
+| | `links.ts` | 97.45 |
+| | `apply.ts` | 97.22 |
+| | `archive.ts` | 95.67 |
+| Everything else | `scaffold.ts` 98.50, `report.ts` 97.76, `rules.ts` 97.28, `text.ts` 95.35, `lint.ts` 94.74, `brief.ts` 94.58, `markdown.ts` 93.94 | |
+
+Six modules sit under 95. Their survivors were read one by one, and what
+remains is equivalent: an array pre-sized to a length a mutant changes, which
+JavaScript grows past anyway; a memo table whose loss costs time and not
+answers; a loop bound one past the end, where reading past the end yields an
+empty string or `undefined` and the loop stops the same; `??` fallbacks for
+states the types rule out; comparator branches for values that are never
+equal, such as two paths in one corpus. Killing them would take assertions
+that restate the implementation, which is worse than the number.
+
+Coverage at the same commit: lines 100%, statements 99.9%, functions 99.8%,
+branches 98.1%. The floors in `vitest.config.ts` sit just below. The
+commissioning brief's 100% is met for lines; the branches short of it are
+fallbacks the type system requires and no input reaches.
+
+## What the rounds found
+
+Mutation testing measures what the tests assert, and reading the survivors
+was also a review. It found defects no test had:
+
+- **A witness search that scanned all of Unicode** for every pair of
+  characters that did not match - the common case of a glob intersection. It
+  was milliseconds at native speed and timed a test out under instrumentation.
+  It now checks the boundaries of the intervals each token accepts, which is
+  complete: the least character of an intersection of unions of intervals is
+  the left end of one of them.
+- **Two findings for one defect**: a brief depending on itself and on a
+  brief in a cycle had the cycle reported as `001 -> 001`, and a
+  self-dependency was reported again by `wave-order`.
+- **A slug cut at a word boundary lost the word before it.**
+- **An empty banner template wrote an empty pair of markers.**
+- **Directories were compared unresolved**, so `b` and `b/./` counted as
+  different briefs and archive directories.
+- Dead code, removed rather than tested: a backslash check the tokenizer
+  repeated, a class that could never be empty checked for being empty, slash
+  checks in functions a slash cannot reach, and a heading rule that could no
+  longer match.
+
+## Consequences
+
+A change to a core module is measured in minutes. A change that makes a unit
+test read the disk or spawn a process moves that test out of the core suite,
+because under per-test coverage it would be rerun for every mutant it reaches.
+The edges are measured weekly rather than per change until the hosted runner's
+cost is known.

@@ -59,9 +59,11 @@ export async function applyPlan(fs: FileSystem, ops: readonly FileOp[]): Promise
   } catch (error) {
     const failures: string[] = [];
     for (const op of [...done].reverse()) {
+      // Undoing is putting back what was there: a file that was absent is
+      // removed, and one that was present - written over or removed - is
+      // written again.
       try {
-        if (op.kind === 'remove') await fs.write(op.path, op.before);
-        else if (op.before === null) await fs.remove(op.path);
+        if (op.before === null) await fs.remove(op.path);
         else await fs.write(op.path, op.before);
       } catch (undo) {
         failures.push(`${op.path}: ${undo instanceof Error ? undo.message : String(undo)}`);

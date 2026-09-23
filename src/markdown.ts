@@ -179,7 +179,6 @@ function findHeadings(lines: readonly string[], masked: readonly string[]): Head
     const text = original
       .replace(/^ {0,3}#{1,6}/, '')
       .replace(/[ \t]+#+[ \t]*$/, '')
-      .replace(/^#+[ \t]*$/, '')
       .trim();
     headings.push({ line: i, level, text });
   }

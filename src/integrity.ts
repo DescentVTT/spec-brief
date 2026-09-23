@@ -18,6 +18,6 @@ export const INTEGRITY_FIELD = 'integrity';
 export function integrityOf(text: string): string {
   const lines = splitLines(canonicalText(text));
   const without = removeEntry(lines, readFrontMatter(lines), INTEGRITY_FIELD);
-  const digest = createHash('sha256').update(`${without.join('\n')}\n`, 'utf8').digest('hex');
+  const digest = createHash('sha256').update(`${without.join('\n')}\n`).digest('hex');
   return `sha256-${digest}`;
 }

@@ -14,8 +14,7 @@ export function splitLines(text: string): string[] {
  * the first terminator; a file with none is written with LF.
  */
 export function lineEnding(text: string): '\n' | '\r\n' {
-  const first = text.indexOf('\n');
-  return first > 0 && text[first - 1] === '\r' ? '\r\n' : '\n';
+  return text.charAt(text.indexOf('\n') - 1) === '\r' ? '\r\n' : '\n';
 }
 
 /** Joins lines with the given ending and a final newline. */
@@ -82,6 +81,8 @@ export function slugify(title: string, maxLength = 80): string {
     .replace(/^-+|-+$/g, '');
   if (slug.length <= maxLength) return slug;
   const cut = slug.slice(0, maxLength);
+  // A cut that lands on a break keeps its last word whole.
+  if (slug.charAt(maxLength) === '-') return cut;
   const lastBreak = cut.lastIndexOf('-');
   return lastBreak > 0 ? cut.slice(0, lastBreak) : cut;
 }

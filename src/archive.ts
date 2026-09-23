@@ -86,9 +86,14 @@ function lineOf(brief: Brief, key: string): number {
   return lineOfField(brief, key) + 1;
 }
 
-function globs(patterns: readonly string[], isFile: (path: string) => boolean): Glob[] {
+/**
+ * Scope patterns, for matching the files a round changed. A changed path is a
+ * file, and a literal pattern matches its own path whether it is read as a
+ * file or as a directory, so the tree is not asked.
+ */
+function globs(patterns: readonly string[]): Glob[] {
   return patterns.flatMap((p) => {
-    const parsed = parseGlob(p, { isFile });
+    const parsed = parseGlob(p);
     return parsed.ok ? [parsed.glob] : [];
   });
 }
@@ -155,12 +160,14 @@ function diffstat(changes: readonly FileChange[]): string {
 /**
  * The banner's lines, markers included. A template line whose placeholders
  * are not all filled is left out, so a round with no pull request has no
- * pull-request sentence rather than a sentence with a hole in it.
+ * pull-request sentence rather than a sentence with a hole in it. A template
+ * with nothing left writes no banner at all, markers included.
  */
 export function renderBanner(template: readonly string[], values: Readonly<Record<string, string>>): string[] {
   const kept = template
     .filter((line) => templateHoles(line).every((hole) => (values[hole] ?? '') !== ''))
     .map((line) => fillTemplate(line, values));
+  if (kept.length === 0) return [];
   return [BANNER_OPEN, ...kept.map((line) => (line === '' ? '>' : `> ${line}`)), BANNER_CLOSE];
 }
 
@@ -262,9 +269,11 @@ export function planArchive(corpus: Corpus, brief: Brief, request: ArchiveReques
     const refuses = finding.severity === 'error' || (request.strict === true && finding.severity === 'warning');
     if (finding.file === brief.file && refuses) blocking.push(finding);
   }
+  // Only a status field can say "draft", so there is one to point at.
+  const field = config.status.field as string;
   if (brief.status === 'draft') {
     blocking.push(
-      problem(brief, 'archive-draft', 'error', lineOf(brief, config.status.field ?? 'status'), 'is a draft, and a draft has not been executed', `set "${config.status.field ?? 'status'}: ${config.status.active}" once the round runs`),
+      problem(brief, 'archive-draft', 'error', lineOf(brief, field), 'is a draft, and a draft has not been executed', `set "${field}: ${config.status.active}" once the round runs`),
     );
   }
   for (const task of openTasks(brief, corpus)) {
@@ -299,11 +308,8 @@ export function planArchive(corpus: Corpus, brief: Brief, request: ArchiveReques
   }
 
   const work = (request.changes ?? []).filter((change) => !bookkeeping(change.path));
-  // A path the round changed is a file, whatever its name looks like.
-  const changed = new Set(work.map((c) => c.path));
-  const isFile = (path: string): boolean => changed.has(path);
-  const protectedGlobs = globs(brief.protectedFiles, isFile);
-  const affectedGlobs = globs(brief.affectedFiles, isFile);
+  const protectedGlobs = globs(brief.protectedFiles);
+  const affectedGlobs = globs(brief.affectedFiles);
   for (const change of work) {
     if (protectedGlobs.some((g) => matchGlob(g, change.path))) {
       blocking.push(
@@ -355,7 +361,7 @@ export function planArchive(corpus: Corpus, brief: Brief, request: ArchiveReques
     author: request.commit?.author ?? '',
   };
   const banner = renderBanner(config.archiving.banner, values);
-  lines = withBanner(lines, banner);
+  if (banner.length > 0) lines = withBanner(lines, banner);
   if (config.status.field !== null) {
     lines = setEntry(lines, readFrontMatter(lines), config.status.field, renderScalar(config.status.archived));
   }

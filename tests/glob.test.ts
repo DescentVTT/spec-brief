@@ -25,7 +25,8 @@ describe('parsing', () => {
     expect(error('src/+(a|b)')).toBe('extended globs such as "+(a|b)" are not supported');
     expect(error('@(a)')).toBe('extended globs such as "+(a|b)" are not supported');
     expect(error('../x')).toBe('a pattern cannot leave the repository with ".."');
-    expect(error('./')).toBe('the pattern names no path');
+    expect(error('.')).toBe('the pattern names no path');
+    expect(error('./.')).toBe('the pattern names no path');
     expect(error('a{b')).toBe('a "{" is never closed');
     expect(error('a}b')).toBe('a "}" closes no "{"');
     expect(error('a[b')).toBe('a "[" is never closed');
@@ -45,6 +46,7 @@ describe('parsing', () => {
   it('strips a leading ./, reads a trailing / as everything beneath', () => {
     expect(matches('./src/a.ts', 'src/a.ts')).toBe(true);
     expect(matches('src/', 'src/deep/x.ts')).toBe(true);
+    expect(matches('./', 'anything/at/all')).toBe(true);
     expect(matches('src/*/', 'src/a/b.ts')).toBe(true);
   });
 

@@ -19,16 +19,16 @@ export default defineConfig({
       // fails the build while ordinary refactoring does not. They move up
       // with the measurement and never down to make a change pass.
       //
-      // Measured at 0.1.0 on Windows: lines 100, statements 99.57, functions
-      // 99.8, branches 96.46. The branches left are `??` fallbacks that
+      // Measured at 0.1.0 on Windows: lines 100, statements 99.91, functions
+      // 99.8, branches 98.12. The branches left are `??` fallbacks that
       // noUncheckedIndexedAccess requires and no input reaches, and the
       // platform paths of which one host runs only one. Mutation testing is the
       // check on the branches that carry behaviour.
       thresholds: {
-        lines: 99,
-        statements: 99,
-        functions: 99,
-        branches: 95,
+        lines: 99.5,
+        statements: 99.5,
+        functions: 99.5,
+        branches: 97,
       },
     },
   },

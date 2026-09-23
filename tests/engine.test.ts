@@ -202,6 +202,12 @@ describe('an engine over memory', () => {
 });
 
 describe('opening a repository', () => {
+  it('opens the repository the process runs in when given no directory', async () => {
+    const engine = await BriefEngine.open({ git: null });
+    expect(engine.configFile).toBe('.spec-brief.json');
+    expect(engine.corpus.live.length).toBeGreaterThan(0);
+  });
+
   it('finds the configuration above the working directory and takes its directory as the root', async () => {
     const root = dir('open');
     initRepo(root);

@@ -1,15 +1,25 @@
 name: Mutation
 
-# A mutation score is only worth reading while it is current, so the sweep
-# runs on every push to main, weekly, and on request. It is not a pull-request
-# gate yet: the first measurement is recorded in docs/adr/0009-mutation-testing.md,
-# and a gate is added when a run on the hosted runner has been measured too.
+# Two sweeps, recorded in docs/adr/0009-mutation-testing.md.
+#
+# The core sweep mutates the pure modules and holds them to the unit suite. It
+# runs on every push to main, and its `break` in stryker.config.mjs is the gate.
+#
+# The full sweep mutates everything, the CLI and the engine included, against
+# the whole suite. Its tests spawn git and write to disk, so it is slower by an
+# order of magnitude; it runs weekly and on request, and is not a gate until a
+# hosted run has been measured (briefs/002).
 on:
   push:
     branches: [main]
   schedule:
     - cron: '0 3 * * 1'
   workflow_dispatch:
+    inputs:
+      full:
+        description: Run the full sweep as well
+        type: boolean
+        default: false
 
 concurrency:
   group: mutation-${{ github.ref }}-${{ github.event_name }}
@@ -19,9 +29,9 @@ permissions:
   contents: read
 
 jobs:
-  stryker:
+  core:
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
         with:
@@ -34,12 +44,38 @@ jobs:
 
       - run: npm ci
 
-      - name: Mutation testing
+      - name: Core mutation sweep
         run: npm run test:mutation
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
         with:
-          name: mutation-report
+          name: mutation-core
+          path: reports/mutation-core/
+          if-no-files-found: ignore
+
+  full:
+    if: github.event_name == 'schedule' || inputs.full
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: '24'
+          cache: npm
+
+      - run: npm ci
+
+      - name: Full mutation sweep
+        run: npm run test:mutation:full
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: mutation-full
           path: reports/mutation/
           if-no-files-found: ignore

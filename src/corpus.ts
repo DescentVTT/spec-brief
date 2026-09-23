@@ -4,6 +4,7 @@
 
 import { parseBrief, type Brief } from './brief.js';
 import type { Config } from './config.js';
+import { normalisePath } from './links.js';
 import type { Phase } from './types.js';
 
 export interface SourceFile {
@@ -21,8 +22,9 @@ export interface Corpus {
 }
 
 export function buildCorpus(files: readonly SourceFile[], config: Config): Corpus {
+  // Paths are unique, so no two compare equal.
   const briefs = [...files]
-    .sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0))
+    .sort((a, b) => (a.path < b.path ? -1 : 1))
     .map((file) => parseBrief(file.path, file.text, config, file.phase));
   return {
     config,
@@ -46,7 +48,12 @@ export function findBriefs(corpus: Corpus, reference: string): Brief[] {
   const key = idKey(reference.trim());
   const byId = corpus.briefs.filter((b) => b.id !== null && idKey(b.id) === key);
   if (byId.length > 0) return byId;
-  const path = reference.replace(/\\/g, '/').replace(/^\.\//, '');
+  let path: string;
+  try {
+    path = normalisePath(reference);
+  } catch {
+    return [];
+  }
   return corpus.briefs.filter((b) => b.file === path || b.name === path);
 }
 
@@ -90,9 +97,11 @@ export function dependencyCycles(corpus: Corpus): Brief[][] {
   const nodes = corpus.live;
   const edges = new Map<Brief, Brief[]>();
   for (const brief of nodes) {
+    // A brief that depends on itself is the dependency rule's finding; left
+    // in, the edge would be the shortest way round any cycle it is part of.
     const targets = brief.dependsOn
       .map((d) => resolveDependency(corpus, d))
-      .filter((t): t is Brief => t !== undefined && t.phase === 'live');
+      .filter((t): t is Brief => t !== undefined && t !== brief && t.phase === 'live');
     edges.set(brief, targets);
   }
 
@@ -126,7 +135,6 @@ export function dependencyCycles(corpus: Corpus): Brief[][] {
         component.push(w);
         if (w === v) break;
       }
-      // A brief that depends on itself is the dependency rule's finding, not a cycle's.
       if (component.length > 1) components.push(component);
     }
   };

@@ -44,8 +44,7 @@ export default {
   // git dozens of times, which is seconds on a host that scans every process.
   dryRunTimeoutMinutes: 30,
 
-  // `break` is a regression guard set below the measured score, never a
-  // target to argue down to. See docs/adr/0009-mutation-testing.md for the
-  // measurement it rests on and the rule for moving it.
-  thresholds: { high: 90, low: 80, break: 80 },
+  // The full sweep has not been measured on the hosted runner, so it gates
+  // nothing yet (briefs/002). The core sweep's gate is in its own file.
+  thresholds: { high: 95, low: 90, break: null },
 };

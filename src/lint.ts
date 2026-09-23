@@ -104,13 +104,15 @@ export async function lint(corpus: Corpus, options: LintOptions = {}): Promise<F
   return sortFindings(findings);
 }
 
+/** Strings by code unit, which is the same order on every host and in every locale. */
+function order(a: string, b: string): number {
+  if (a === b) return 0;
+  return a < b ? -1 : 1;
+}
+
 export function sortFindings(findings: readonly Finding[]): Finding[] {
   return [...findings].sort(
-    (a, b) =>
-      (a.file < b.file ? -1 : a.file > b.file ? 1 : 0) ||
-      a.line - b.line ||
-      (a.rule < b.rule ? -1 : a.rule > b.rule ? 1 : 0) ||
-      (a.message < b.message ? -1 : a.message > b.message ? 1 : 0),
+    (a, b) => order(a.file, b.file) || a.line - b.line || order(a.rule, b.rule) || order(a.message, b.message),
   );
 }
 

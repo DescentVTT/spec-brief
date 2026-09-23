@@ -218,6 +218,8 @@ describe('the archived text', () => {
     const plan = planArchive(corpus, the(corpus, '001'), { date: '2026-09-24', commit: COMMIT });
     expect(plan.banner).toEqual([BANNER_OPEN, '> 001 A brief by Tester on 2026-09-24', '>', '> end', BANNER_CLOSE]);
     expect(renderBanner(['{nothing}', 'kept'], {})).toEqual([BANNER_OPEN, '> kept', BANNER_CLOSE]);
+    expect(renderBanner(['{nothing}'], {})).toEqual([]);
+    expect(renderBanner([], {})).toEqual([]);
   });
 
   it('keeps CRLF and a byte-order mark, adds front matter where there is none, and can skip the freeze and the links', () => {

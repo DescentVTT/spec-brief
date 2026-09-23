@@ -18,3 +18,5 @@ The first release.
 - Pretty, JSON, SARIF 2.1.0 and GitHub workflow-command output.
 - Rule plugins, and a library API over a real or an in-memory filesystem.
 - No runtime dependencies.
+- Mutation testing in two sweeps: the core measured at 95.75% and gated at 93
+  (ADR-0009); coverage 100% of lines.

@@ -16,6 +16,7 @@
 import { dirname, join } from 'node:path';
 
 import { parseGlob } from './glob.js';
+import { normalisePath } from './links.js';
 import { type Schema, toJsonSchema, validate } from './schema.js';
 import { templateHoles } from './text.js';
 import type { SeveritySetting } from './types.js';
@@ -308,8 +309,17 @@ export function resolveConfig(raw: unknown, file = 'configuration'): Config {
 /** What the schema cannot say: relationships between values. */
 function checkConfig(config: Config): string[] {
   const problems: string[] = [];
-  const norm = (p: string): string => p.replace(/\\/g, '/').replace(/^\.\/+/, '').replace(/\/+$/, '');
-  if (norm(config.briefs) === norm(config.archive)) problems.push('"briefs" and "archive" must be different directories');
+  const inside = (key: string, path: string): string | null => {
+    try {
+      return normalisePath(path);
+    } catch {
+      problems.push(`"${key}" must be a directory inside the repository, not "${path}"`);
+      return null;
+    }
+  };
+  const briefs = inside('briefs', config.briefs);
+  const archive = inside('archive', config.archive);
+  if (briefs !== null && briefs === archive) problems.push('"briefs" and "archive" must be different directories');
   const words = [config.status.draft, config.status.active, config.status.archived].filter((w) => w !== null);
   if (new Set(words.map((w) => w.toLowerCase())).size !== words.length) {
     problems.push('the status words for draft, active and archived must differ');
