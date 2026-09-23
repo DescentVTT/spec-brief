@@ -81,7 +81,10 @@ mutant ran slower for it; 85 mutants that survive on the workstation ran out
 of time there, and Stryker counts a timeout as detected. The higher score was
 the runner's contention, not the tests. The workers are now sized to the host,
 which on the workstation changed only the time: 95.75, 208 survivors, ten
-minutes.
+minutes. On the runner, with four workers, the next sweep matched the
+workstation mutant for mutant - 95.75: 4,948 killed, 75 timed out, 208
+survived - in 14 minutes, eight fewer than with eight workers. The gate is
+now judged by the same number on both hosts.
 
 Coverage at the same commit: lines 100%, statements 99.9%, functions 99.8%,
 branches 98.1%. The floors in `vitest.config.ts` sit just below. The
