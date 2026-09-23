@@ -1,0 +1,269 @@
+# spec-brief
+
+**Lint the contract a round of work runs under, map which rounds can run side by side, and archive a finished one in one atomic command.**
+
+A *brief* is the input to one round of work - for a coding agent or a person: what done looks like, what the round must not touch, and the checks that prove it finished. spec-brief manages briefs as files in your repository. It has no runtime dependencies, reads and writes nothing but Markdown in two directories, and never writes to git.
+
+```bash
+npm install --save-dev @descent-vtt/spec-brief
+npx spec-brief init
+npx spec-brief new "Rotate session tokens on privilege change" --wave 1
+npx spec-brief lint
+```
+
+## Why
+
+Repositories that run agents on briefs end up doing the same ceremony by hand, and getting it wrong in the same places:
+
+- **A brief that is incomplete.** A missing negative scope or an empty invariant list is how a round wanders. `lint` checks the sections your repository requires, in the order it requires them, and that each one says something.
+- **Two rounds that write the same files.** Run in parallel, they collide at merge time. `matrix` compares the scopes of briefs scheduled in the same wave *as globs*, and names a file both would write.
+- **Archival.** Move the file, set its status, write a frozen banner with the date, the pull request and the commit, disposition every open box, add `../` to every relative link so they still resolve, fix the links other briefs hold to it. `archive` does all of it as one transaction, or none of it.
+
+The conventions are not invented here. They were measured against two repositories that already keep briefs - one with front matter and eight ordered sections, one with none at all - and everything they disagree on is configuration.
+
+## A brief
+
+```markdown
+---
+status: active
+wave: 2
+dependsOn: [007]
+affectedFiles: [src/auth/**, tests/auth/**]
+protectedFiles: [src/db/schema.ts]
+---
+
+# 012 - Rotate session tokens on privilege change
+
+## Intent
+
+Every privilege change issues a new session token and invalidates the old one.
+
+## Negative Scope
+
+- No change to the login UI or the token format.
+
+## Invariants
+
+- [ ] `npm test` passes
+- [ ] a rotated token is rejected by every endpoint
+```
+
+The id comes from the file name (`012_rotate-session-tokens.md`) or from an `id` field. `affectedFiles` is the scope the round may write; `protectedFiles` is what it is not empowered to change, and archival refuses a round that changed it.
+
+## Commands
+
+### `spec-brief init`
+
+Writes `.spec-brief.json` with every default spelled out, and creates the brief and archive directories. `--briefs <dir>` and `--archive <dir>` choose them.
+
+### `spec-brief new <title>`
+
+Scaffolds a brief with the next free number - one more than the highest id, live or archived, since ids are never reused - and every required section, each holding a hint in a comment. A comment is not content, so a fresh brief reads as unwritten until someone writes it. `--id`, `--type`, `--wave`, `--depends-on 7,8` and `--date` fill the front matter.
+
+### `spec-brief lint [brief...]`
+
+Checks every brief, or the ones named. A draft (`status: draft`) gets its unwritten sections as warnings; an active brief gets them as errors. Archived briefs are frozen records: they are checked for identity and for the freeze, never against today's schema.
+
+```text
+briefs/035_the-background-side.md
+    5  error    has no "Report" section  missing-section
+                add a "## Report" heading
+   48  error    "Context" comes before "Standing directives"  section-order
+                the order is Mission, Standing directives, Context, Deliverables, ...
+
+2 errors, 0 warnings, 0 notes in 35 brief(s)
+```
+
+### `spec-brief list`
+
+Live briefs with their status, wave, task count and readiness. A brief is *ready* when every brief it depends on is archived. `--ready` shows only those, which is the question an orchestrator asks; `--archived` includes the archive; `--format json` gives an orchestrator the whole table.
+
+### `spec-brief matrix`
+
+Compares the `affectedFiles` of every pair of live briefs in the same wave, `--all-waves` for every pair.
+
+```text
+wave 1 · 3 briefs
+       001  002  003
+  001    ·    X    ·
+  002    X    ·    ·
+  003    ·    ·    ·
+  X 001 "src/auth/**" and 002 "src/**/session.ts" both cover src/auth/session.ts
+  ? 003 declares no affectedFiles and cannot be checked
+```
+
+Scopes are intersected as globs, not compared as strings: the two above share no prefix and still meet, and the file named is one both patterns match. A brief with no scope is reported as unscoped rather than counted as safe. Exit 1 on a collision.
+
+### `spec-brief archive <brief>`
+
+Closes a round. Refused, with every reason, when:
+
+- the brief has lint errors, is a draft, or depends on a brief that is still live;
+- a task item is neither ticked nor dispositioned - an open box counts as closed when a note under it starts with one of the `dispositions` (`**Delegated`, `**Accepted debt`, `**Rejected` by default);
+- the working tree holds uncommitted work outside the brief directories (`--allow-dirty` to proceed);
+- the round's commit changed a file in `protectedFiles`.
+
+Changes outside `affectedFiles` are a warning, and an error under `--strict`. Otherwise it writes the archived brief with its status set, a frozen banner under the front matter, every relative link rewritten for the archive directory, and an `integrity` hash; rewrites the links other live briefs hold to it; and removes the original. `--commit <rev>` records the commit and the files it changed; `--base <rev>` measures from the merge base instead, for a branch of several commits; `--pr <n>` links the pull request; `--summary <text>` is what the round did, in the banner. `--dry-run` prints the plan and the banner and writes nothing; `--no-git` leaves git out even inside a repository. Archiving an archived brief does nothing and exits 0.
+
+spec-brief reads git and never writes it. Review the change and commit it with the round.
+
+### `spec-brief unarchive <brief>`
+
+Reopens an archived brief: the banner and the hash come off, the status goes back to the live word, and the links are rewritten again. A round archived and reopened is byte for byte the brief it was.
+
+### Every command
+
+`--root <dir>` runs from another directory. `--config <file>` names the configuration; `--no-config` uses the defaults. `--format` is `pretty`, `json`, `sarif` or `github` where the command reports findings. `--strict` makes warnings fail the run. `--color` and `--no-color` override `NO_COLOR`, `FORCE_COLOR` and the terminal check. `--help` and `--version` do what they say.
+
+**Exit codes:** `0` clean, `1` findings, a collision, or a refused action, `2` the run could not be trusted - a bad flag, a configuration that does not load, a brief that does not exist. A run over a briefs directory that does not exist exits 2, because a check over nothing looks exactly like a clean one.
+
+## Configuration
+
+`.spec-brief.json` (or `spec-brief.json`) at the root; the nearest one above the working directory is used, and its directory is the root. It is JSON, validated against [`schema.json`](schema.json): an unknown key, a misspelt rule or a value of the wrong type stops the run with exit 2 rather than falling back to defaults and reporting on the wrong rules.
+
+| Key | Default | What it says |
+| --- | --- | --- |
+| `briefs` | `"briefs"` | Directory of live briefs. |
+| `archive` | `"<briefs>/archive"` | Directory of archived briefs. |
+| `files` | `"[0-9]*.md"` | Glob a file name must match to be a brief. |
+| `exclude` | `[]` | File-name globs that are never briefs, such as an index. |
+| `template` | `null` | A template file for `new`, with `{id}`, `{title}`, `{date}`, `{type}`, `{wave}`, `{status}`. |
+| `id` | `{ "source": "filename", "separator": "_", "digits": 3 }` | Where an id comes from, and how a new one is written. |
+| `status` | `{ "field": "status", "draft": "draft", "active": "active", "archived": "archived" }` | The words a repository uses. `field: null` reads status from location alone. |
+| `sections` | Intent, Negative Scope, Not Empowered (optional), Invariants (checklist) | Sections every live brief carries: a name, or `{ name, aliases, mustContain, checklist, optional }`. |
+| `sectionOrder` | `false` | Sections must appear in the listed order. |
+| `types` | `feature`, `defect`, `refactor`, `chore` | Brief types and the sections each adds. |
+| `placeholders` | `TBD`, `TODO`, `FIXME`, ... | Words that mark a section as unwritten. |
+| `fields` | `[]` | Front-matter keys the repository uses beyond the built-in ones. |
+| `archiving.tasks` | `"all"` | `"all"`, or the sections whose boxes must be closed. |
+| `archiving.dispositions` | `**Delegated`, `**Accepted debt`, `**Rejected` | Text under an open box that closes it. |
+| `archiving.banner` | see [`src/config.ts`](src/config.ts) | Banner lines, with `{date}`, `{summary}`, `{pr}`, `{commit}`, `{diffstat}`, `{links}`, `{id}`, `{title}`, `{author}`. A line with an empty placeholder is left out. |
+| `archiving.rewriteLinks` | `true` | Rewrite relative links when a brief moves. |
+| `archiving.freeze` | `true` | Write an integrity hash, so a later edit is caught. |
+| `archiving.base` | `null` | Branch the diff is measured from, such as `"main"`. |
+| `rules` | `{}` | Severity per rule: `off`, `note`, `warning` or `error`. |
+| `plugins` | `[]` | Modules that contribute rules: a path or package, or `{ module, options }`. |
+
+A repository whose briefs have eight ordered sections, `proposed` and `archived` for words, and a banner of its own:
+
+```json
+{
+  "$schema": "./node_modules/@descent-vtt/spec-brief/schema.json",
+  "files": "[0-9][0-9][0-9]_*.md",
+  "status": { "draft": null, "active": "proposed", "archived": "archived" },
+  "sections": [
+    "Mission",
+    { "name": "Standing directives", "mustContain": ["Latest ≠ Newest"] },
+    "Context",
+    { "name": "Deliverables", "checklist": true },
+    "Not empowered",
+    "Architectural empowerment",
+    "Verification",
+    "Report"
+  ],
+  "sectionOrder": true,
+  "types": {},
+  "archiving": {
+    "tasks": ["Deliverables"],
+    "banner": ["**Executed {date} in pull request {pr}.** {summary} The body below describes the tree before execution and is not maintained."]
+  }
+}
+```
+
+Section names compare without case, typographic quotes, emphasis, a leading number or a trailing colon, and a heading may add a qualifier after a separator: `## 2. Commander’s Intent:` fills `Commander's Intent`, and `## Invariants (must hold)` fills `Invariants`.
+
+## Rules
+
+<!-- rules:start -->
+| Rule | Default | Reports |
+| --- | --- | --- |
+| `front-matter` | error | Front matter that does not parse, a duplicate key, YAML beyond the flat subset. |
+| `field` | error | A field spec-brief reads with a value of the wrong shape: a wave that is not a whole number, a list where one value belongs. |
+| `unknown-field` | warning | A front-matter key nobody declared, with the one probably meant. |
+| `status` | error | No status, a word the configuration does not use, or a status that disagrees with the directory. |
+| `id` | error | No id, or one with whitespace or a slash. |
+| `duplicate-id` | error | Two briefs, live or archived, with one id. |
+| `title` | warning | A live brief with no title. |
+| `unknown-type` | error | A type the configuration does not define. |
+| `missing-section` | error | A required section that is absent. |
+| `duplicate-section` | warning | A section that appears twice. |
+| `empty-section` | error | A section with no content; a comment is not content. A warning in a draft. |
+| `placeholder` | error | A section holding only `TBD`, `TODO` or an empty box. A warning in a draft. |
+| `missing-checklist` | error | A checklist section with no task item. A warning in a draft. |
+| `must-contain` | error | A section without the text the configuration requires of it. |
+| `section-order` | error | Sections out of the configured order, when one is configured. |
+| `dependency` | error | A dependency on itself, or on a brief that does not exist. |
+| `dependency-cycle` | error | Live briefs that depend on each other in a cycle, reported once, as a path. |
+| `wave-order` | error | A live dependency that does not run in an earlier wave. |
+| `glob` | error | A scope pattern spec-brief cannot read. |
+| `scope-contradiction` | error | A file that is both in `affectedFiles` and in `protectedFiles`. |
+| `glob-matches-nothing` | note | A scope pattern that matches no file git sees, tracked or untracked - expected when the round creates it. |
+| `archive-freeze` | error | An archived brief that changed after it was archived. |
+| `collision` | error | Two briefs in one wave whose scopes can name the same file (`matrix`). |
+| `unscoped` | note | A brief sharing a wave that declares no scope (`matrix`). |
+| `shared-directory` | off | Two briefs in one wave writing into the same directory (`matrix`). |
+<!-- rules:end -->
+
+`archive` refuses with its own reasons - `open-task`, `archive-draft`, `dependency-open`, `dirty-tree`, `protected-file`, `out-of-scope`, `archive-exists` - which are not lint rules: they are about whether this round is done, not whether the brief is well written.
+
+## In CI
+
+```yaml
+- run: npx spec-brief lint --format github
+- run: npx spec-brief matrix --format github
+```
+
+`github` writes workflow commands, which annotate the pull request with no upload and no permission. `sarif` writes SARIF 2.1.0 for code-scanning upload. `json` is a versioned document (`schemaVersion`) for anything else.
+
+## As a library
+
+```ts
+import { BriefEngine } from '@descent-vtt/spec-brief';
+
+const engine = await BriefEngine.open({ cwd: process.cwd() });
+const findings = await engine.lint();
+const ready = engine.ready();                        // what can run now
+const { report } = await engine.collisions();        // who collides with whom
+const plan = await engine.planArchive('012', { commit: 'HEAD', pr: 41 });
+if (plan.blocking.length === 0) await engine.apply(plan);
+```
+
+Everything below the engine is a pure function of text: `parseBrief`, `lint`, `collisions`, `intersectGlobs`, `planArchive`. `MemoryFileSystem` runs an engine over files that were never written, which is how a harness can ask what archiving a brief would do.
+
+## Plugins
+
+A plugin is a module that exports `{ name, rules }`, or a function of its configured options that returns one. Its rules run beside the built-in ones as `<name>/<rule>`, and configuration sets their severity like any other.
+
+```js
+// tools/departures.mjs
+export default (options) => ({
+  name: 'departures',
+  rules: [{
+    id: 'signed',
+    description: 'every departure is signed',
+    severity: 'error',
+    check: ({ brief }) => brief.text.includes(options.marker) ? [] : [{ line: 1, message: 'has an unsigned departure' }],
+  }],
+});
+```
+
+```json
+{ "plugins": [{ "module": "./tools/departures.mjs", "options": { "marker": "Signed-off-by" } }] }
+```
+
+This is where integrations belong. A tool that defines a format - signed departures, recorded reproducers, a code graph's blast radius - is the one that can check it, and spec-brief carries no copy of formats it does not own. Loading a plugin runs its code, exactly as loading a linter configuration does.
+
+## What it does not do
+
+- **No status file.** There is no `manifest.json` to keep in step. A brief and the directory it sits in are the record; `list --format json` is the index, computed when asked. A committed index is also the one file every round merging in parallel edits.
+- **No roadmap editing.** A roadmap is a document people write. spec-brief reports on briefs; it does not rewrite prose around them.
+- **No git writes.** It reads commits, diffs and the working tree, and leaves staging and committing to whoever does them.
+- **No labels as sections, yet.** Sections are headings. A repository that marks its sections with bold or bracketed labels instead, `**Your Mission:**` or `[STANDING DIRECTIVES]`, is not described by this version.
+
+## Design
+
+The decisions and what they cost are in [`docs/adr/`](docs/adr/README.md).
+
+## License
+
+MIT

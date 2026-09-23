@@ -1,0 +1,134 @@
+/**
+ * Running rules: severities from the configuration, plugins beside the
+ * built-in rules, findings in a stable order.
+ */
+
+import type { Brief } from './brief.js';
+import { ConfigError } from './config.js';
+import type { Corpus } from './corpus.js';
+import { analyse, COLLISION_RULES, type Rule, RULES } from './rules.js';
+import type { Finding, Severity, SeveritySetting } from './types.js';
+
+export interface Plugin {
+  /** Prefixes the plugin's rule ids: `<name>/<rule>`. */
+  readonly name: string;
+  readonly rules: readonly Rule[];
+  /** The plugin's entry in the configuration, handed to each rule. */
+  readonly options?: unknown;
+}
+
+export interface LintOptions {
+  readonly plugins?: readonly Plugin[];
+  /** Tracked files, for the rules that read the tree. */
+  readonly repoFiles?: readonly string[] | null;
+  /** Limit the findings to these briefs. The whole corpus is still read. */
+  readonly only?: readonly Brief[];
+}
+
+const RANK: Readonly<Record<Severity, number>> = { note: 0, warning: 1, error: 2 };
+
+function lower(a: Severity, b: Severity): Severity {
+  return RANK[a] <= RANK[b] ? a : b;
+}
+
+interface ActiveRule {
+  readonly id: string;
+  readonly rule: Rule;
+  readonly severity: SeveritySetting;
+  readonly options: unknown;
+}
+
+/** Every rule id a run knows: built-in, collision and plugin. */
+export function ruleIds(plugins: readonly Plugin[] = []): string[] {
+  return [
+    ...RULES.map((r) => r.id),
+    ...COLLISION_RULES.map((r) => r.id),
+    ...plugins.flatMap((p) => p.rules.map((r) => `${p.name}/${r.id}`)),
+  ];
+}
+
+/** The severity configuration assigns a rule, or its own. */
+export function severityOf(corpus: Corpus, id: string, fallback: SeveritySetting): SeveritySetting {
+  return corpus.config.rules[id] ?? fallback;
+}
+
+/** Refuses a configuration that names a rule nobody defines: a typo there silences nothing. */
+export function checkRuleIds(corpus: Corpus, plugins: readonly Plugin[] = []): void {
+  const known = new Set(ruleIds(plugins));
+  const unknown = Object.keys(corpus.config.rules).filter((id) => !known.has(id));
+  if (unknown.length > 0) {
+    throw new ConfigError('configuration', unknown.map((id) => `"rules.${id}" names no rule`));
+  }
+}
+
+export async function lint(corpus: Corpus, options: LintOptions = {}): Promise<Finding[]> {
+  const plugins = options.plugins ?? [];
+  checkRuleIds(corpus, plugins);
+  const active: ActiveRule[] = [
+    ...RULES.map((rule) => ({ id: rule.id, rule, severity: severityOf(corpus, rule.id, rule.severity), options: undefined })),
+    ...plugins.flatMap((plugin) =>
+      plugin.rules.map((rule) => {
+        const id = `${plugin.name}/${rule.id}`;
+        return { id, rule, severity: severityOf(corpus, id, rule.severity), options: plugin.options };
+      }),
+    ),
+  ].filter((r) => r.severity !== 'off');
+
+  const shared = analyse(corpus);
+  const targets = options.only ?? corpus.briefs;
+  const findings: Finding[] = [];
+  for (const brief of targets) {
+    for (const { id, rule, severity, options: ruleOptions } of active) {
+      const results = await rule.check({
+        brief,
+        corpus,
+        config: corpus.config,
+        repoFiles: options.repoFiles ?? null,
+        shared,
+        options: ruleOptions,
+      });
+      for (const result of results) {
+        const configured = severity as Severity;
+        findings.push({
+          rule: id,
+          severity: result.severity === undefined ? configured : lower(result.severity, configured),
+          message: result.message,
+          file: brief.file,
+          line: Math.max(1, Math.trunc(result.line)),
+          brief: brief.id ?? undefined,
+          hint: result.hint,
+        });
+      }
+    }
+  }
+  return sortFindings(findings);
+}
+
+export function sortFindings(findings: readonly Finding[]): Finding[] {
+  return [...findings].sort(
+    (a, b) =>
+      (a.file < b.file ? -1 : a.file > b.file ? 1 : 0) ||
+      a.line - b.line ||
+      (a.rule < b.rule ? -1 : a.rule > b.rule ? 1 : 0) ||
+      (a.message < b.message ? -1 : a.message > b.message ? 1 : 0),
+  );
+}
+
+export interface Summary {
+  readonly errors: number;
+  readonly warnings: number;
+  readonly notes: number;
+}
+
+export function summarise(findings: readonly Finding[]): Summary {
+  return {
+    errors: findings.filter((f) => f.severity === 'error').length,
+    warnings: findings.filter((f) => f.severity === 'warning').length,
+    notes: findings.filter((f) => f.severity === 'note').length,
+  };
+}
+
+/** Whether findings fail a run: any error, or any warning under `--strict`. */
+export function failing(findings: readonly Finding[], strict: boolean): boolean {
+  return findings.some((f) => f.severity === 'error' || (strict && f.severity === 'warning'));
+}

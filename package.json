@@ -1,0 +1,75 @@
+{
+  "name": "@descent-vtt/spec-brief",
+  "version": "0.1.0",
+  "description": "Lifecycle management for task briefs: lint the contract, map parallel collisions, and archive a round in one atomic command.",
+  "keywords": [
+    "agents",
+    "archive",
+    "brief",
+    "collision",
+    "lifecycle",
+    "lint",
+    "markdown",
+    "spec",
+    "task",
+    "wave"
+  ],
+  "license": "MIT",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "bin": {
+    "spec-brief": "bin/spec-brief.js"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./schema.json": "./schema.json",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "CHANGELOG.md",
+    "LICENSE",
+    "README.md",
+    "bin",
+    "dist",
+    "schema.json"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\"",
+    "lint": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "test:mutation": "stryker run",
+    "schema": "npm run build && node scripts/write-schema.mjs",
+    "selfcheck": "node ./bin/spec-brief.js lint",
+    "prepublishOnly": "npm run clean && npm run build"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "@stryker-mutator/core": "^10.0.0",
+    "@stryker-mutator/vitest-runner": "^10.0.0",
+    "@types/node": "^22.20.4",
+    "@vitest/coverage-v8": "^4.1.11",
+    "typescript": "^7.0.2",
+    "vitest": "^4.1.11"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/DescentVTT/spec-brief.git"
+  },
+  "bugs": {
+    "url": "https://github.com/DescentVTT/spec-brief/issues"
+  },
+  "homepage": "https://github.com/DescentVTT/spec-brief#readme"
+}

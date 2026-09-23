@@ -1,0 +1,321 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/DescentVTT/spec-brief/main/schema.json",
+  "title": "spec-brief configuration",
+  "type": "object",
+  "properties": {
+    "$schema": {
+      "type": "string"
+    },
+    "briefs": {
+      "description": "Directory of live briefs, relative to this file.",
+      "type": "string",
+      "minLength": 1
+    },
+    "archive": {
+      "description": "Directory of archived briefs, relative to this file.",
+      "type": "string",
+      "minLength": 1
+    },
+    "files": {
+      "description": "Glob a file name must match to be a brief.",
+      "type": "string",
+      "minLength": 1
+    },
+    "exclude": {
+      "description": "File-name globs that are never briefs.",
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "template": {
+      "description": "Template file for \"new\"; null builds one from the sections.",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "id": {
+      "type": "object",
+      "properties": {
+        "source": {
+          "description": "Where a brief id comes from.",
+          "type": "string",
+          "enum": [
+            "filename",
+            "frontmatter"
+          ]
+        },
+        "separator": {
+          "description": "Separates the id from the slug in a file name.",
+          "type": "string",
+          "minLength": 1
+        },
+        "digits": {
+          "description": "Width of an allocated numeric id.",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 12
+        }
+      },
+      "additionalProperties": false
+    },
+    "status": {
+      "type": "object",
+      "properties": {
+        "field": {
+          "description": "Front-matter key holding the status; null uses location only.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "draft": {
+          "description": "The word for a brief still being written, or null.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "active": {
+          "description": "The word for a live brief.",
+          "type": "string",
+          "minLength": 1
+        },
+        "archived": {
+          "description": "The word for an archived brief.",
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "additionalProperties": false
+    },
+    "sections": {
+      "description": "Sections every live brief carries.",
+      "type": "array",
+      "items": {
+        "description": "A section name, or a section with aliases and content rules.",
+        "anyOf": [
+          {
+            "type": "string",
+            "minLength": 1
+          },
+          {
+            "type": "object",
+            "properties": {
+              "name": {
+                "description": "The heading text, compared without case or punctuation.",
+                "type": "string",
+                "minLength": 1
+              },
+              "aliases": {
+                "description": "Other headings that fill this section.",
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "mustContain": {
+                "description": "Literal text the section must contain.",
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "checklist": {
+                "description": "The section must hold at least one \"- [ ]\" task item.",
+                "type": "boolean"
+              },
+              "optional": {
+                "description": "Checked when present, not required.",
+                "type": "boolean"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "name"
+            ]
+          }
+        ]
+      }
+    },
+    "sectionOrder": {
+      "description": "Sections must appear in the order listed.",
+      "type": "boolean"
+    },
+    "types": {
+      "description": "Brief types, each with the sections it adds.",
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "sections": {
+            "type": "array",
+            "items": {
+              "description": "A section name, or a section with aliases and content rules.",
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "name": {
+                      "description": "The heading text, compared without case or punctuation.",
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "aliases": {
+                      "description": "Other headings that fill this section.",
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "minLength": 1
+                      }
+                    },
+                    "mustContain": {
+                      "description": "Literal text the section must contain.",
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "minLength": 1
+                      }
+                    },
+                    "checklist": {
+                      "description": "The section must hold at least one \"- [ ]\" task item.",
+                      "type": "boolean"
+                    },
+                    "optional": {
+                      "description": "Checked when present, not required.",
+                      "type": "boolean"
+                    }
+                  },
+                  "additionalProperties": false,
+                  "required": [
+                    "name"
+                  ]
+                }
+              ]
+            }
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "placeholders": {
+      "description": "Words that mark a section as unwritten.",
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "fields": {
+      "description": "Front-matter keys this repository uses beyond the built-in ones.",
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "archiving": {
+      "type": "object",
+      "properties": {
+        "tasks": {
+          "description": "\"all\", or the sections whose task items must be closed before archiving.",
+          "anyOf": [
+            {
+              "type": "string",
+              "enum": [
+                "all"
+              ]
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          ]
+        },
+        "dispositions": {
+          "description": "Text under an open box that closes it without a tick.",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "banner": {
+          "description": "Lines of the frozen banner; a line with an empty {placeholder} is left out, and an empty line separates paragraphs.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "rewriteLinks": {
+          "description": "Rewrite relative links so they resolve from the new directory.",
+          "type": "boolean"
+        },
+        "freeze": {
+          "description": "Record a content hash so later edits are caught.",
+          "type": "boolean"
+        },
+        "base": {
+          "description": "Branch the diff is measured from, such as \"main\".",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "rules": {
+      "description": "Severity per rule id.",
+      "type": "object",
+      "additionalProperties": {
+        "type": "string",
+        "enum": [
+          "off",
+          "note",
+          "warning",
+          "error"
+        ]
+      }
+    },
+    "plugins": {
+      "description": "Modules that contribute rules.",
+      "type": "array",
+      "items": {
+        "anyOf": [
+          {
+            "type": "string",
+            "minLength": 1
+          },
+          {
+            "type": "object",
+            "properties": {
+              "module": {
+                "type": "string",
+                "minLength": 1
+              },
+              "options": {}
+            },
+            "additionalProperties": false,
+            "required": [
+              "module"
+            ]
+          }
+        ]
+      }
+    }
+  },
+  "additionalProperties": false
+}

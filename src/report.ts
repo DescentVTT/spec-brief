@@ -1,0 +1,272 @@
+/**
+ * Rendering: findings, lists, the collision matrix and plans, for a person at
+ * a terminal or for the machine reading the job.
+ *
+ * `json` is a document with a version, for orchestrators. `sarif` is SARIF
+ * 2.1.0, for code-scanning upload. `github` is workflow commands, which put a
+ * finding on the line of the pull request with no upload and no permission.
+ */
+
+import type { Plan } from './archive.js';
+import type { Brief } from './brief.js';
+import type { CollisionReport } from './collisions.js';
+import { summarise } from './lint.js';
+import { COLLISION_RULES, RULES } from './rules.js';
+import type { Finding, Severity } from './types.js';
+
+export type Format = 'pretty' | 'json' | 'sarif' | 'github';
+
+export const FORMATS: readonly Format[] = ['pretty', 'json', 'sarif', 'github'];
+
+/** The version of the JSON documents this tool prints. Bumped when a field changes meaning. */
+export const JSON_SCHEMA_VERSION = 1;
+
+export interface Style {
+  readonly color: boolean;
+}
+
+const CODES: Readonly<Record<string, readonly [number, number]>> = {
+  red: [31, 39],
+  yellow: [33, 39],
+  cyan: [36, 39],
+  green: [32, 39],
+  dim: [2, 22],
+  bold: [1, 22],
+};
+
+export function paint(style: Style, color: keyof typeof CODES, text: string): string {
+  const code = CODES[color];
+  return style.color && code !== undefined ? `\u001b[${code[0]}m${text}\u001b[${code[1]}m` : text;
+}
+
+const SEVERITY_COLOR: Readonly<Record<Severity, keyof typeof CODES>> = { error: 'red', warning: 'yellow', note: 'cyan' };
+
+function plural(count: number, word: string): string {
+  return `${count} ${word}${count === 1 ? '' : 's'}`;
+}
+
+export function summaryLine(findings: readonly Finding[]): string {
+  const s = summarise(findings);
+  return `${plural(s.errors, 'error')}, ${plural(s.warnings, 'warning')}, ${plural(s.notes, 'note')}`;
+}
+
+export function prettyFindings(findings: readonly Finding[], style: Style): string {
+  const out: string[] = [];
+  let file: string | undefined;
+  const width = Math.max(1, ...findings.map((f) => String(f.line).length));
+  for (const f of findings) {
+    if (f.file !== file) {
+      if (file !== undefined) out.push('');
+      out.push(paint(style, 'bold', f.file));
+      file = f.file;
+    }
+    const severity = paint(style, SEVERITY_COLOR[f.severity], f.severity.padEnd(7));
+    out.push(`  ${String(f.line).padStart(width)}  ${severity}  ${f.message}  ${paint(style, 'dim', f.rule)}`);
+    if (f.hint !== undefined) out.push(`  ${' '.repeat(width)}           ${paint(style, 'dim', f.hint)}`);
+  }
+  return out.join('\n');
+}
+
+export function jsonDocument(command: string, version: string, body: Record<string, unknown>): string {
+  return `${JSON.stringify({ tool: 'spec-brief', version, schemaVersion: JSON_SCHEMA_VERSION, command, ...body }, null, 2)}\n`;
+}
+
+export function findingJson(f: Finding): Record<string, unknown> {
+  const out: Record<string, unknown> = { rule: f.rule, severity: f.severity, file: f.file, line: f.line, message: f.message };
+  if (f.brief !== undefined) out['brief'] = f.brief;
+  if (f.hint !== undefined) out['hint'] = f.hint;
+  return out;
+}
+
+const SARIF_LEVEL: Readonly<Record<Severity, string>> = { error: 'error', warning: 'warning', note: 'note' };
+
+export function sarif(findings: readonly Finding[], version: string): string {
+  const described = new Map([...RULES, ...COLLISION_RULES].map((r) => [r.id, r]));
+  const ids = [...new Set(findings.map((f) => f.rule))].sort();
+  const document = {
+    $schema: 'https://json.schemastore.org/sarif-2.1.0.json',
+    version: '2.1.0',
+    runs: [
+      {
+        tool: {
+          driver: {
+            name: 'spec-brief',
+            version,
+            informationUri: 'https://github.com/DescentVTT/spec-brief',
+            rules: ids.map((id) => {
+              const rule = described.get(id);
+              return {
+                id,
+                shortDescription: { text: rule?.description ?? id },
+                ...(rule !== undefined && rule.severity !== 'off'
+                  ? { defaultConfiguration: { level: SARIF_LEVEL[rule.severity] } }
+                  : {}),
+              };
+            }),
+          },
+        },
+        results: findings.map((f) => ({
+          ruleId: f.rule,
+          level: SARIF_LEVEL[f.severity],
+          message: { text: f.hint === undefined ? f.message : `${f.message}. ${f.hint}` },
+          locations: [
+            {
+              physicalLocation: {
+                artifactLocation: { uri: f.file, uriBaseId: '%SRCROOT%' },
+                region: { startLine: f.line },
+              },
+            },
+          ],
+        })),
+      },
+    ],
+  };
+  return `${JSON.stringify(document, null, 2)}\n`;
+}
+
+function escapeData(text: string): string {
+  return text.replace(/%/g, '%25').replace(/\r/g, '%0D').replace(/\n/g, '%0A');
+}
+
+function escapeProperty(text: string): string {
+  return escapeData(text).replace(/:/g, '%3A').replace(/,/g, '%2C');
+}
+
+const GITHUB_COMMAND: Readonly<Record<Severity, string>> = { error: 'error', warning: 'warning', note: 'notice' };
+
+export function githubCommands(findings: readonly Finding[]): string {
+  return findings
+    .map((f) => {
+      const message = f.hint === undefined ? f.message : `${f.message}. ${f.hint}`;
+      const properties = `file=${escapeProperty(f.file)},line=${f.line},title=${escapeProperty(`spec-brief ${f.rule}`)}`;
+      return `::${GITHUB_COMMAND[f.severity]} ${properties}::${escapeData(message)}\n`;
+    })
+    .join('');
+}
+
+export function briefJson(brief: Brief, extra: Record<string, unknown> = {}): Record<string, unknown> {
+  return {
+    id: brief.id,
+    file: brief.file,
+    title: brief.title,
+    phase: brief.phase,
+    status: brief.status,
+    type: brief.type,
+    wave: brief.wave,
+    dependsOn: brief.dependsOn,
+    affectedFiles: brief.affectedFiles,
+    protectedFiles: brief.protectedFiles,
+    tasks: { total: brief.tasks.length, checked: brief.tasks.filter((t) => t.checked).length },
+    ...extra,
+  };
+}
+
+/** Columns padded to their widest cell; every row has the header's length. */
+function table(header: readonly string[], rows: readonly (readonly string[])[]): string[] {
+  const all = [header, ...rows];
+  const widths = header.map((_, c) => Math.max(...all.map((r) => (r[c] as string).length)));
+  return all.map((r) =>
+    r
+      .map((cell, c) => (c === r.length - 1 ? cell : cell.padEnd(widths[c] as number)))
+      .join('  ')
+      .trimEnd(),
+  );
+}
+
+export interface ListRow {
+  readonly brief: Brief;
+  readonly ready: boolean;
+  readonly waitingOn: readonly string[];
+}
+
+export function prettyList(rows: readonly ListRow[], style: Style): string {
+  if (rows.length === 0) return 'no briefs';
+  const lines = table(
+    ['ID', 'STATUS', 'WAVE', 'TASKS', 'READY', 'TITLE'],
+    rows.map(({ brief, ready, waitingOn }) => [
+      brief.id ?? '?',
+      brief.status ?? brief.statusWord ?? '?',
+      brief.wave === null ? '-' : String(brief.wave),
+      `${brief.tasks.filter((t) => t.checked).length}/${brief.tasks.length}`,
+      brief.phase === 'archived' ? '-' : ready ? 'yes' : waitingOn.length > 0 ? `after ${waitingOn.join(', ')}` : 'no',
+      brief.title ?? brief.name,
+    ]),
+  );
+  return [paint(style, 'dim', lines[0] as string), ...lines.slice(1)].join('\n');
+}
+
+export function prettyMatrix(report: CollisionReport, style: Style): string {
+  const out: string[] = [];
+  const label = (b: Brief): string => b.id ?? b.name;
+  for (const wave of report.waves) {
+    const title = wave.wave === null ? 'all live briefs' : `wave ${wave.wave}`;
+    out.push(paint(style, 'bold', `${title} \u00b7 ${plural(wave.briefs.length, 'brief')}`));
+    const names = wave.briefs.map(label);
+    const width = Math.max(3, ...names.map((n) => n.length));
+    const hits = new Set(wave.collisions.flatMap((c) => [`${label(c.a)}\u0000${label(c.b)}`, `${label(c.b)}\u0000${label(c.a)}`]));
+    const near = new Set(wave.shared.flatMap((s) => [`${label(s.a)}\u0000${label(s.b)}`, `${label(s.b)}\u0000${label(s.a)}`]));
+    out.push(`  ${''.padEnd(width)}  ${names.map((n) => n.padStart(width)).join('  ')}`);
+    for (const row of names) {
+      const cells = names.map((col) => {
+        const key = `${row}\u0000${col}`;
+        const mark = row === col ? '\u00b7' : hits.has(key) ? paint(style, 'red', 'X') : near.has(key) ? paint(style, 'yellow', '~') : '\u00b7';
+        return `${' '.repeat(width - 1)}${mark}`;
+      });
+      out.push(`  ${row.padEnd(width)}  ${cells.join('  ')}`);
+    }
+    for (const c of wave.collisions) {
+      out.push(`  ${paint(style, 'red', 'X')} ${label(c.a)} "${c.patterns[0]}" and ${label(c.b)} "${c.patterns[1]}" both cover ${c.witness}`);
+    }
+    for (const s of wave.shared) {
+      out.push(`  ${paint(style, 'yellow', '~')} ${label(s.a)} and ${label(s.b)} both write into ${s.directory}/`);
+    }
+    for (const b of wave.unscoped) {
+      out.push(`  ${paint(style, 'cyan', '?')} ${label(b)} declares no affectedFiles and cannot be checked`);
+    }
+    out.push('');
+  }
+  if (report.unscheduled.length > 0) {
+    out.push(paint(style, 'dim', `no wave: ${report.unscheduled.map(label).join(', ')}`));
+  }
+  if (report.waves.length === 0 && report.unscheduled.length === 0) out.push('no live briefs');
+  return out.join('\n').trimEnd();
+}
+
+export function prettyPlan(plan: Plan, dryRun: boolean, style: Style): string {
+  const out: string[] = [];
+  const verb = plan.action === 'archive' ? 'archive' : 'unarchive';
+  if (plan.done) return `${plan.brief.file} is already ${plan.action === 'archive' ? 'archived' : 'live'}; nothing to do`;
+  if (plan.blocking.length > 0) {
+    out.push(paint(style, 'red', `cannot ${verb} ${plan.brief.file}:`), prettyFindings(plan.blocking, style));
+    if (plan.warnings.length > 0) out.push('', prettyFindings(plan.warnings, style));
+    return out.join('\n');
+  }
+  out.push(`${dryRun ? 'would move' : 'moved'} ${plan.from} -> ${plan.to}`);
+  if (plan.linksRewritten > 0) out.push(`  ${plural(plan.linksRewritten, 'relative link')} rewritten`);
+  for (const file of plan.inboundRewritten) out.push(`  ${file}: links to it rewritten`);
+  for (const f of plan.inboundFrozen) out.push(`  ${f.file}:${f.line}: links to the old path, and is frozen, so it was left as it is`);
+  if (plan.changes.length > 0) out.push(`  the round changed ${plural(plan.changes.length, 'file')}`);
+  if (plan.warnings.length > 0) out.push('', prettyFindings(plan.warnings, style));
+  if (dryRun && plan.banner.length > 0) out.push('', paint(style, 'dim', 'banner:'), ...plan.banner.map((l) => `  ${l}`));
+  if (!dryRun) out.push('', paint(style, 'dim', 'nothing was committed; review the change and commit it with the round'));
+  return out.join('\n');
+}
+
+export function planJson(plan: Plan): Record<string, unknown> {
+  return {
+    action: plan.action,
+    brief: plan.brief.id,
+    from: plan.from,
+    to: plan.to,
+    done: plan.done,
+    refused: plan.blocking.length > 0,
+    blocking: plan.blocking.map(findingJson),
+    warnings: plan.warnings.map(findingJson),
+    linksRewritten: plan.linksRewritten,
+    inboundRewritten: plan.inboundRewritten,
+    inboundFrozen: plan.inboundFrozen,
+    operations: plan.ops.map((op) => ({ kind: op.kind, path: op.path })),
+    banner: plan.banner,
+    changes: plan.changes,
+  };
+}
