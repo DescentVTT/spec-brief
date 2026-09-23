@@ -103,17 +103,17 @@ Closes a round. Refused, with every reason, when:
 - the working tree holds uncommitted work outside the brief directories (`--allow-dirty` to proceed);
 - the round's commit changed a file in `protectedFiles`.
 
-Changes outside `affectedFiles` are a warning, and an error under `--strict`. Otherwise it writes the archived brief with its status set, a frozen banner under the front matter, every relative link rewritten for the archive directory, and an `integrity` hash; rewrites the links other live briefs hold to it; and removes the original. `--commit <rev>` records the commit and the files it changed; `--base <rev>` measures from the merge base instead, for a branch of several commits; `--pr <n>` links the pull request; `--summary <text>` is what the round did, in the banner. `--dry-run` prints the plan and the banner and writes nothing; `--no-git` leaves git out even inside a repository. Archiving an archived brief does nothing and exits 0.
+Changes outside `affectedFiles` are a warning, and an error under `--strict`. Otherwise it writes the archived brief with its status set, a frozen banner under the front matter, every relative link rewritten for the archive directory, and an `integrity` hash; rewrites the links other live briefs hold to it; and removes the original. `--commit <rev>` records the commit and the files it changed; `--base <rev>` measures from the merge base instead, for a branch of several commits; `--pr <n>` links the pull request; `--summary <text>` is what the round did, in the banner. `--dry-run` prints the plan and the banner and writes nothing. Archiving an archived brief does nothing and exits 0.
 
 spec-brief reads git and never writes it. Review the change and commit it with the round.
 
 ### `spec-brief unarchive <brief>`
 
-Reopens an archived brief: the banner and the hash come off, the status goes back to the live word, and the links are rewritten again. A round archived and reopened is byte for byte the brief it was.
+Reopens an archived brief: the banner and the hash come off, the status goes back to the live word, and the links are rewritten again. A brief archived and reopened is the brief it was, blank lines and final newline included, with two exceptions: the status line is written in its plain spelling, and a relative link that had to be rewritten comes back in its shortest form (`./b.md` returns as `b.md`).
 
 ### Every command
 
-`--root <dir>` runs from another directory. `--config <file>` names the configuration; `--no-config` uses the defaults. `--format` is `pretty`, `json`, `sarif` or `github` where the command reports findings. `--strict` makes warnings fail the run. `--color` and `--no-color` override `NO_COLOR`, `FORCE_COLOR` and the terminal check. `--help` and `--version` do what they say.
+`--root <dir>` runs from another directory. `--config <file>` names the configuration; `--no-config` uses the defaults. `--format` is `pretty`, `json`, `sarif` or `github` where the command reports findings. `--strict` makes warnings fail the run. `--no-git` leaves git out even inside a repository: the tree is read from disk, and `archive` records no commit. `--color` and `--no-color` override `NO_COLOR`, `FORCE_COLOR` and the terminal check. `--help` and `--version` do what they say.
 
 **Exit codes:** `0` clean, `1` findings, a collision, or a refused action, `2` the run could not be trusted - a bad flag, a configuration that does not load, a brief that does not exist. A run over a briefs directory that does not exist exits 2, because a check over nothing looks exactly like a clean one.
 

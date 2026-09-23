@@ -60,6 +60,19 @@ error rather than a line that silently never appears.
 ## Consequences
 
 The ceremony runs in one command and can be previewed. Reopening a brief is
-the same machinery run the other way, and restores the brief byte for byte,
-which the suite checks. A repository that wants the move staged runs
-`git add` afterwards.
+the same machinery run the other way. It restores the body, the blank lines
+around the banner and the presence or absence of a final newline exactly,
+which the suite checks. It does not restore two spellings: the status line
+comes back plain, without the quotes or comment it may have had, and a
+relative link that was rewritten comes back in its shortest form. Both
+resolve as they did; recording the original spelling to restore it would be
+a second copy of the brief to keep in step. A repository that wants the move
+staged runs `git add` afterwards.
+
+A review before release found seven defects, each now held by a test in
+`tests/regressions.test.ts`. Three bear on this decision: banner markers
+quoted in a code block were taken for a banner and deleted; a note under a
+nested box closed its parent; and with the briefs at the root, every path
+counted as bookkeeping, which silenced the tree and scope checks. The last is
+why bookkeeping is now "a file the configuration takes for a brief" rather
+than "anything in the brief directories".

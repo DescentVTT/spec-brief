@@ -74,6 +74,7 @@ Options for every command:
   --no-config           use the defaults, ignoring any configuration file
   --format <format>     pretty (default), json, sarif or github
   --strict              treat warnings as errors
+  --no-git              leave git out; read the files on disk instead
   --color, --no-color   force colour on or off
   -h, --help            show this help
   -v, --version         show the version
@@ -103,7 +104,6 @@ archive:
   --summary <text>      what the round did, for the banner
   --date <YYYY-MM-DD>   the archival date; default today
   --allow-dirty         archive although the tree has uncommitted work
-  --no-git              leave git out
   --dry-run             print the plan and change nothing
 
 unarchive:
@@ -120,6 +120,7 @@ const GLOBAL: NonNullable<ParseArgsConfig['options']> = {
   'no-config': { type: 'boolean' },
   format: { type: 'string' },
   strict: { type: 'boolean' },
+  'no-git': { type: 'boolean' },
   color: { type: 'boolean' },
   'no-color': { type: 'boolean' },
   help: { type: 'boolean', short: 'h' },
@@ -149,7 +150,6 @@ const COMMANDS: Readonly<Record<string, { options: NonNullable<ParseArgsConfig['
       summary: { type: 'string' },
       date: { type: 'string' },
       'allow-dirty': { type: 'boolean' },
-      'no-git': { type: 'boolean' },
       'dry-run': { type: 'boolean' },
     },
     formats: ['pretty', 'json'],
@@ -249,6 +249,7 @@ async function openEngine(run: Run): Promise<BriefEngine> {
   return BriefEngine.open({
     cwd: root === undefined ? run.cwd : root,
     ...(config === undefined ? {} : { config }),
+    ...(flag(run.values, 'no-git') ? { git: null } : {}),
     noConfig: flag(run.values, 'no-config'),
   });
 }

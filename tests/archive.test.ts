@@ -75,7 +75,7 @@ describe('refusals', () => {
 
   it('refuses uncommitted work outside the briefs, unless allowed', () => {
     const corpus = corpusOf({ [A]: goodBrief() });
-    const dirty = ['briefs/001_a.md', 'briefs/archive/x.md', 'src/a.ts', 'b', 'c', 'd', 'e', 'f'];
+    const dirty = ['briefs/001_a.md', 'briefs/archive/002_x.md', 'src/a.ts', 'b', 'c', 'd', 'e', 'f'];
     const plan = planArchive(corpus, the(corpus, '001'), { date: '2026-09-24', dirty });
     expect(plan.blocking.map((f) => f.message)).toEqual(['the working tree has uncommitted changes outside the briefs: src/a.ts, b, c, d, e, and 1 more']);
     expect(planArchive(corpus, the(corpus, '001'), { date: '2026-09-24', dirty, allowDirty: true }).blocking).toEqual([]);
@@ -83,6 +83,12 @@ describe('refusals', () => {
       'the working tree has uncommitted changes outside the briefs: src/a.ts',
     );
     expect(planArchive(corpus, the(corpus, '001'), { date: '2026-09-24', dirty: ['briefs/001_a.md'] }).blocking).toEqual([]);
+    // Only briefs are the ceremony: a README beside them, or a brief-shaped file one level down, is work.
+    for (const path of ['briefs/README.md', 'briefs/sub/003_c.md']) {
+      expect(planArchive(corpus, the(corpus, '001'), { date: '2026-09-24', dirty: [path] }).blocking.map((f) => f.rule), path).toEqual(['dirty-tree']);
+    }
+    const excluding = corpusOf({ [A]: goodBrief() }, config({ exclude: ['00*'] }));
+    expect(planArchive(excluding, the(excluding, '001'), { date: '2026-09-24', dirty: ['briefs/00_INDEX.md'] }).blocking.map((f) => f.rule)).toEqual(['dirty-tree']);
   });
 
   it('refuses a change to a protected file, and reports it once', () => {

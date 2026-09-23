@@ -141,10 +141,15 @@ export function parseBrief(file: string, text: string, config: Config, phase: Ph
   const heading = titleOf(scanned);
   const id = config.id.source === 'filename' ? idFromName(name, config.id.separator) : text1('id');
 
+  // A marker is a comment on a line of its own. Quoted in a code block it is
+  // text: the prose mask keeps code and blanks comments, so a real marker is
+  // a line whose prose is empty.
+  const marker = (line: number, text: string): boolean =>
+    (lines[line] as string).trim() === text && (scanned.prose[line] as string).trim() === '';
   let banner: Brief['banner'] = null;
-  const open = lines.findIndex((line, i) => i >= bodyStart && line.trim() === BANNER_OPEN);
+  const open = lines.findIndex((_, i) => i >= bodyStart && marker(i, BANNER_OPEN));
   if (open >= 0) {
-    const close = lines.findIndex((line, i) => i > open && line.trim() === BANNER_CLOSE);
+    const close = lines.findIndex((_, i) => i > open && marker(i, BANNER_CLOSE));
     if (close > open) banner = { start: open, end: close + 1 };
   }
 

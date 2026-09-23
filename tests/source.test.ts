@@ -102,6 +102,13 @@ describe('the documents', () => {
     }
   });
 
+  it('the changelog counts the rules there are', () => {
+    // A count in prose is a fact with an expiry date; this one is checked.
+    const changelog = readFileSync('CHANGELOG.md', 'utf8');
+    const match = /(\d+) lint rules and (\d+) collision rules/.exec(changelog);
+    expect(match?.slice(1).map(Number)).toEqual([RULES.length, COLLISION_RULES.length]);
+  });
+
   it('every ADR has a status and a date, and the index lists them all', () => {
     const adrs = readdirSync('docs/adr').filter((f) => /^\d{4}-.+\.md$/.test(f));
     expect(adrs.length).toBeGreaterThan(0);

@@ -40,6 +40,9 @@ export default {
   // - but each one holds a worker for the whole budget.
   timeoutMS: 20000,
   concurrency: 8,
+  // The initial run is the whole suite in one process. Its git tests spawn
+  // git dozens of times, which is seconds on a host that scans every process.
+  dryRunTimeoutMinutes: 30,
 
   // `break` is a regression guard set below the measured score, never a
   // target to argue down to. See docs/adr/0009-mutation-testing.md for the

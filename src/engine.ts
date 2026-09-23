@@ -136,7 +136,8 @@ export class BriefEngine {
     const cwd = resolve(options.cwd ?? process.cwd());
     const explicit = options.config === undefined ? undefined : resolve(cwd, options.config);
     const configPath = options.noConfig === true ? undefined : (explicit ?? (await locateConfig(cwd, exists)));
-    const toplevel = await NodeGit.toplevel(cwd);
+    // Asking git costs a process; without git there is nothing to ask.
+    const toplevel = options.git === null ? null : await NodeGit.toplevel(cwd);
     const root = configPath === undefined ? (toplevel ?? cwd) : dirname(configPath);
     let config = DEFAULT_CONFIG;
     if (configPath !== undefined) {

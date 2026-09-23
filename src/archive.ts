@@ -9,12 +9,13 @@
  */
 
 import { BANNER_CLOSE, BANNER_OPEN, type Brief, lineOfField } from './brief.js';
+import type { Config } from './config.js';
 import { type Corpus, resolveDependency } from './corpus.js';
 import { readFrontMatter, removeEntry, renderScalar, setEntry } from './frontmatter.js';
 import type { CommitInfo, FileChange } from './git.js';
 import { type Glob, matchGlob, parseGlob } from './glob.js';
 import { INTEGRITY_FIELD, integrityOf } from './integrity.js';
-import { dirOf, isInside, linesLinkingTo, normalisePath, rewriteLinks } from './links.js';
+import { dirOf, linesLinkingTo, normalisePath, rewriteLinks } from './links.js';
 import type { Scan } from './markdown.js';
 import { fillTemplate, joinLines, labelMatches, lineEnding, templateHoles } from './text.js';
 import type { Finding, Severity } from './types.js';
@@ -92,13 +93,42 @@ function globs(patterns: readonly string[], isFile: (path: string) => boolean): 
   });
 }
 
-/** Whether an open box carries a note that closes it: "Delegated to ...", "Rejected ...". */
+/**
+ * Whether an open box carries a note that closes it: "Delegated to ...",
+ * "Rejected ...". The note belongs to the box above it, so the search stops at
+ * the first nested box: a child's note does not close its parent.
+ */
 function dispositioned(scanned: Scan, line: number, end: number, markers: readonly string[]): boolean {
+  const boxes = new Set(scanned.tasks.map((t) => t.line));
   for (let i = line; i < end; i += 1) {
+    if (i > line && boxes.has(i)) return false;
     const text = scanned.masked[i] as string;
     if (markers.some((marker) => text.includes(marker))) return true;
   }
   return false;
+}
+
+/** A path inside a directory that may be the root itself. */
+function within(directory: string, name: string): string {
+  return directory === '' ? name : `${directory}/${name}`;
+}
+
+/**
+ * Whether a path is a brief: a file directly in the live or archive directory
+ * whose name the configuration takes for a brief. Edits to briefs are the
+ * ceremony, not the round, and are left out of the scope and tree checks.
+ * Nothing else in those directories is: a README beside the briefs is work.
+ */
+function isBriefPath(path: string, config: Config): boolean {
+  const directory = dirOf(path);
+  if (directory !== normalisePath(config.briefs) && directory !== normalisePath(config.archive)) return false;
+  const name = path.slice(path.lastIndexOf('/') + 1);
+  const accept = parseGlob(config.files);
+  const excluded = config.exclude.some((e) => {
+    const parsed = parseGlob(e);
+    return parsed.ok && matchGlob(parsed.glob, name);
+  });
+  return accept.ok && matchGlob(accept.glob, name) && !excluded;
 }
 
 /** Task items that must be closed before a brief can be archived. */
@@ -134,24 +164,26 @@ export function renderBanner(template: readonly string[], values: Readonly<Recor
   return [BANNER_OPEN, ...kept.map((line) => (line === '' ? '>' : `> ${line}`)), BANNER_CLOSE];
 }
 
-/** Removes a banner block and the blank line it leaves doubled. */
+/**
+ * Removes a banner block and the blank line written after it. The exact
+ * reverse of {@link withBanner}, so reopening a brief leaves its blank lines
+ * as they were.
+ */
 function withoutBanner(lines: readonly string[], banner: Brief['banner']): string[] {
   if (banner === null) return [...lines];
-  const out = [...lines.slice(0, banner.start), ...lines.slice(banner.end)];
-  if (out[banner.start]?.trim() === '' && (banner.start === 0 || out[banner.start - 1]?.trim() === '')) {
-    out.splice(banner.start, 1);
-  }
-  return out;
+  const after = lines[banner.end]?.trim() === '' ? banner.end + 1 : banner.end;
+  return [...lines.slice(0, banner.start), ...lines.slice(after)];
 }
 
-/** Inserts a banner directly under the front matter, with a blank line on each side. */
+/**
+ * Inserts a banner under the front matter, after the blank line that usually
+ * follows it, and writes one blank line after the banner.
+ */
 function withBanner(lines: readonly string[], banner: readonly string[]): string[] {
   const frontMatter = readFrontMatter(lines);
-  const at = frontMatter === null || frontMatter.close < 0 ? 0 : frontMatter.close + 1;
-  const block = at > 0 ? ['', ...banner] : [...banner];
-  const next = lines[at];
-  if (next !== undefined && next.trim() !== '') block.push('');
-  return [...lines.slice(0, at), ...block, ...lines.slice(at)];
+  let at = frontMatter === null || frontMatter.close < 0 ? 0 : frontMatter.close + 1;
+  if (at > 0 && lines[at]?.trim() === '') at += 1;
+  return [...lines.slice(0, at), ...banner, '', ...lines.slice(at)];
 }
 
 /**
@@ -165,9 +197,13 @@ function withIntegrity(lines: readonly string[]): string[] {
   return setEntry(placed, readFrontMatter(placed), INTEGRITY_FIELD, hash);
 }
 
+/** Lines written back with the source's byte-order mark, line ending and final newline, or lack of one. */
 function encodeLike(source: string, lines: readonly string[]): string {
   const bom = source.charCodeAt(0) === 0xfeff ? '\ufeff' : '';
-  return `${bom}${joinLines(lines, lineEnding(source))}`;
+  const eol = lineEnding(source);
+  const text = joinLines(lines, eol);
+  const finalNewline = source === '' || source.endsWith('\n');
+  return `${bom}${finalNewline ? text : text.slice(0, text.length - eol.length)}`;
 }
 
 interface Inbound {
@@ -216,14 +252,15 @@ function donePlan(action: Plan['action'], brief: Brief): Plan {
 export function planArchive(corpus: Corpus, brief: Brief, request: ArchiveRequest): Plan {
   if (brief.phase === 'archived') return donePlan('archive', brief);
   const { config } = corpus;
-  const briefsDir = normalisePath(config.briefs);
   const archiveDir = normalisePath(config.archive);
-  const to = `${archiveDir}/${brief.name}`;
+  const to = within(archiveDir, brief.name);
   const blocking: Finding[] = [];
   const warnings: Finding[] = [];
 
+  // Under --strict a warning is an error, here as in lint.
   for (const finding of request.findings ?? []) {
-    if (finding.file === brief.file && finding.severity === 'error') blocking.push(finding);
+    const refuses = finding.severity === 'error' || (request.strict === true && finding.severity === 'warning');
+    if (finding.file === brief.file && refuses) blocking.push(finding);
   }
   if (brief.status === 'draft') {
     blocking.push(
@@ -250,7 +287,7 @@ export function planArchive(corpus: Corpus, brief: Brief, request: ArchiveReques
       );
     }
   }
-  const bookkeeping = (path: string): boolean => isInside(path, briefsDir) || isInside(path, archiveDir);
+  const bookkeeping = (path: string): boolean => isBriefPath(path, config);
   if (request.dirty !== undefined && request.allowDirty !== true) {
     const outside = request.dirty.filter((path) => !bookkeeping(path));
     if (outside.length > 0) {
@@ -356,7 +393,7 @@ export function planUnarchive(corpus: Corpus, brief: Brief): Plan {
   if (brief.phase === 'live') return donePlan('unarchive', brief);
   const { config } = corpus;
   const briefsDir = normalisePath(config.briefs);
-  const to = `${briefsDir}/${brief.name}`;
+  const to = within(briefsDir, brief.name);
   const blocking: Finding[] = [];
   if (corpus.briefs.some((b) => b.file === to)) {
     blocking.push(problem(brief, 'unarchive-exists', 'error', 1, `${to} already exists`, 'rename one of them first'));

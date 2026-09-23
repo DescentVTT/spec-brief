@@ -7,8 +7,9 @@
  * heading inside a fenced block is not a section and a template hint inside
  * `<!-- -->` is not content. Everything else is deliberately simple: ATX
  * headings only (a setext underline and a front-matter delimiter are the same
- * three characters), and no indented code blocks, because inside a list four
- * spaces of indentation is a continuation far more often than code.
+ * three characters), fences at any indentation, and no indented code blocks,
+ * because inside a list four spaces of indentation is a continuation far more
+ * often than code.
  */
 
 export interface Heading {
@@ -52,7 +53,8 @@ export interface Scan {
   readonly tasks: readonly TaskItem[];
 }
 
-const FENCE = /^ {0,3}(`{3,}|~{3,})(.*)$/;
+// Any indentation: a fence inside a nested list item is indented with the item.
+const FENCE = /^[ \t]*(`{3,}|~{3,})(.*)$/;
 const HEADING = /^ {0,3}(#{1,6})(?:[ \t]+|$)/;
 const TASK = /^([ \t]*)(?:[-*+]|\d{1,9}[.)])[ \t]+\[([ xX])\](?:[ \t]+(.*))?$/;
 const LIST_ITEM = /^[ \t]*(?:[-*+]|\d{1,9}[.)])(?:[ \t]|$)/;
@@ -258,7 +260,9 @@ export function titleOf(result: Scan): Heading | undefined {
   return result.headings.find((h) => h.level === 1);
 }
 
-const DEFINITION = /^ {0,3}\[[^\]]+\]:[ \t]*/;
+const DEFINITION = /^ {0,3}\[(?!\^)[^\]]+\]:[ \t]*/;
+/** What may follow a definition's destination: nothing, or a title. */
+const TITLE = /^(?:"[^"]*"|'[^']*'|\([^)]*\))?$/;
 
 /**
  * Link and image destinations outside code and comments: `[text](dest)`,
@@ -270,8 +274,12 @@ export function linksOf(result: Scan): LinkDestination[] {
     const original = result.lines[line] as string;
     const definition = DEFINITION.exec(masked);
     if (definition) {
+      // `[Note]: this matters` is prose that looks like a definition; a real one
+      // has nothing after its destination but an optional title.
       const found = readDestination(masked, original, definition[0].length);
-      if (found) links.push({ line, ...found });
+      if (found && TITLE.test(masked.slice(found.end + (masked.charAt(found.end) === '>' ? 1 : 0)).trim())) {
+        links.push({ line, ...found });
+      }
     }
     let from = 0;
     for (;;) {

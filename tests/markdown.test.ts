@@ -24,11 +24,17 @@ describe('masking', () => {
     expect(s.headings.map((h) => h.text)).toEqual(['heading']);
   });
 
-  it('allows up to three spaces before a fence and a heading, not four', () => {
+  it("opens a fence at any indentation, as a list item's fence is, and a heading at three spaces at most", () => {
     expect(scan(lines('   ```\n# in\n```\n# out')).headings.map((h) => h.text)).toEqual(['out']);
-    expect(scan(lines('    ```\n# visible')).headings.map((h) => h.text)).toEqual(['visible']);
+    expect(scan(lines('    ```\n# hidden\n    ```\n# visible')).headings.map((h) => h.text)).toEqual(['visible']);
     expect(scan(lines('   ## three')).headings.length).toBe(1);
     expect(scan(lines('    ## four')).headings.length).toBe(0);
+  });
+
+  it('keeps boxes and links in a fence inside a nested list item out of the structure', () => {
+    const s = scan(lines('- [x] item\n  - nested\n\n    ```md\n    - [ ] write the thing\n    [x](../foo.md)\n    ```'));
+    expect(s.tasks.map((t) => t.text)).toEqual(['item']);
+    expect(linksOf(s)).toEqual([]);
   });
 
   it('blanks comments in both masks, across lines, and resumes after them', () => {

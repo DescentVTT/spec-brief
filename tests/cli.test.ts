@@ -26,7 +26,10 @@ async function run(cwd: string, args: string[], env: Record<string, string | und
   const stdout = new Sink();
   stdout.isTTY = tty;
   const stderr = new Sink();
-  const code = await main(args, { stdout, stderr, cwd, env: { SOURCE_DATE_EPOCH: '1790208000', ...env } });
+  // A directory with no repository gets --no-git, so the suite does not spawn
+  // git to learn what it already knows. The engine tests cover discovery.
+  const git = existsSync(join(cwd, '.git')) || args.includes('--no-git') || cwd === process.cwd() ? [] : ['--no-git'];
+  const code = await main([...args, ...git], { stdout, stderr, cwd, env: { SOURCE_DATE_EPOCH: '1790208000', ...env } });
   return { code, out: stdout.text, err: stderr.text };
 }
 
