@@ -14,3 +14,4 @@ changes is superseded by a new record that says so; the old one keeps its text.
 | [0007](0007-integrations-are-plugins.md) | Integrations are plugins, owned by the tools that define their formats. |
 | [0008](0008-toolchain.md) | The toolchain, chosen by "latest is not newest", with the reason for each pin. |
 | [0009](0009-mutation-testing.md) | Mutation testing in two sweeps; the core measured at 95.75 and gated at 93. |
+| [0010](0010-releases-are-published-by-ci.md) | Releases are published by CI from a version tag, by trusted publishing, with provenance. |

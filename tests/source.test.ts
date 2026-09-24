@@ -2,6 +2,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 
 import { describe, expect, it } from 'vitest';
 
+import { releaseOf } from '../scripts/release.js';
 import { HELP } from '../src/cli.js';
 import { COLLISION_RULES, RULES } from '../src/rules.js';
 
@@ -107,6 +108,13 @@ describe('the documents', () => {
     const changelog = readFileSync('CHANGELOG.md', 'utf8');
     const match = /(\d+) lint rules and (\d+) collision rules/.exec(changelog);
     expect(match?.slice(1).map(Number)).toEqual([RULES.length, COLLISION_RULES.length]);
+  });
+
+  it('the changelog describes the version package.json names', () => {
+    // The release workflow refuses a tag without notes; this says so on the
+    // pull request that bumps the version, before anyone tags it.
+    const { version } = JSON.parse(readFileSync('package.json', 'utf8')) as { version: string };
+    expect(releaseOf(`v${version}`, version, readFileSync('CHANGELOG.md', 'utf8'))).toMatchObject({ version });
   });
 
   it('every ADR has a status and a date, and the index lists them all', () => {

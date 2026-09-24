@@ -2,6 +2,11 @@
 
 Notable changes, newest first. Versions follow [semver](https://semver.org).
 
+## Unreleased
+
+- Versions are published by CI through npm's trusted publishing, with
+  provenance that names the commit and the run (ADR-0010).
+
 ## 0.1.0
 
 The first release.

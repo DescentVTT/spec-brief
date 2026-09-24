@@ -50,6 +50,32 @@ description, add a row to the table between the markers in `README.md`
 (a test checks the two agree), and add a test for the case that fires and the
 case that must not.
 
+## Releasing
+
+Versions are published by CI from a tag, never from a workstation
+([ADR-0010](docs/adr/0010-releases-are-published-by-ci.md)).
+
+1. On a branch, set the version and give it notes:
+   `npm version <x.y.z> --no-git-tag-version`, then move the changelog's
+   `## Unreleased` entries under `## <x.y.z>`. The unit suite fails until the
+   changelog has a section for the version.
+2. Merge to main.
+3. Tag the merge commit and push the tag:
+
+   ```bash
+   git tag -a v<x.y.z> -m "spec-brief <x.y.z>"
+   git push origin v<x.y.z>
+   ```
+
+The release workflow runs CI again, packs, publishes with provenance and makes
+the GitHub release. A prerelease (`0.3.0-rc.1`) goes out under the `next`
+dist-tag. To try the workflow without publishing, run it by hand from main
+(Actions, Release, Run workflow): it does everything but the upload and the
+GitHub release.
+
+The first time, a maintainer adds the trusted publisher on npmjs.com, as
+ADR-0010 describes.
+
 ## Commits
 
 Conventional Commits, with a body that says why. Never commit on `main`
