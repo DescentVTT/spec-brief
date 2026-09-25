@@ -121,3 +121,43 @@ test read the disk or spawn a process moves that test out of the core suite,
 because under per-test coverage it would be rerun for every mutant it reaches.
 The edges are measured weekly rather than per change until the hosted runner's
 cost is known.
+
+## Amended 2026-09-26
+
+**The vendored spec-core is not mutated here.** Both sweeps and coverage leave
+`src/vendor/` out, and `tests/vendor.test.ts` holds the configurations to it:
+the copy is measured in spec-core, against its oracle, and counted here it
+would pad or dilute a number about code this repository owns.
+
+**Measured again** at the end of the branch that adopted spec-core's engine and
+added `schedule`, deferral, waivers and GitLab output: 5,670 mutants, 97.83 -
+5,023 killed, 524 timed out, 112 survived, 11 without coverage - in 26 minutes.
+Three other repositories' sweeps shared the workstation, which is what the 524
+timeouts are; the same commit an hour earlier, with less beside it, timed out
+201 and left 115. The number to compare across hosts is the survivors: 112,
+where 0.1.0 left 208.
+
+| Module | Score | | Module | Score |
+| --- | ---: | --- | --- | ---: |
+| `glob.ts` | 100.00 | | `rules.ts` | 97.91 |
+| `scope.ts` | 100.00 | | `brief.ts` | 97.61 |
+| `trigger.ts` | 100.00 | | `text.ts` | 97.45 |
+| `schedule.ts` | 99.66 | | `archive.ts` | 96.99 |
+| `collisions.ts` | 99.42 | | `lint.ts` | 95.83 |
+| `report.ts` | 98.83 | | `corpus.ts` | 94.69 |
+| `config.ts` | 98.26 | | | |
+
+Two survivors remain on the lines the branch changed, and both are
+equivalent: the matrix's diagonal read as "not the same brief" - no pair of a
+brief with itself is ever recorded - and a front matter's closing line tested
+as below zero rather than at or below it, where it is never zero.
+
+The rounds found one thing worth keeping. A test file that computes a corpus
+at `describe` level runs that code at load, and Stryker counts the lines it
+reaches as static: their mutants are then measured against the whole suite
+rather than the tests that use them, and a mutant that breaks the schedule
+outright survived that way. Build what a test needs inside the test. 1,597 of
+the 5,670 mutants are static, most of them the rule and configuration tables,
+and they are four fifths of the time.
+
+The gate stays at 93.
