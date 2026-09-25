@@ -4,6 +4,47 @@ Notable changes, newest first. Versions follow [semver](https://semver.org).
 
 ## Unreleased
 
+- Globs are spec-core's `path` dialect, matched and intersected by its
+  automaton, which is copied into `src/vendor/spec-core/` and verified by
+  hash. The syntax is unchanged; what it means changes in four places.
+  - **A literal path is read from the tree.** A file the tree holds is that
+    file, a directory it holds is everything beneath it, and a path it does
+    not hold is a file unless written with a trailing `/`. The extension
+    guess is gone: it read `Dockerfile` as a directory, so `Dockerfile` and
+    `**/x.ts` collided through `Dockerfile/x.ts`, and read `docs/v1.2` as a
+    file, missing every collision inside it. Without a tree - the library
+    called with no files - every literal is a file.
+  - **A trailing `/**` or `/` is a directory's contents**, at least one name
+    below it: `src/**` no longer matches `src`, and a collision witness is
+    always a file, `docs/adr/x` where it was `docs/adr`.
+  - **`./` alone, and a `..` segment, are refused in the core's words**
+    ("the pattern names the root itself", "a pattern cannot climb out of its
+    root"), and a lone `}` is a literal rather than an error. A leading `/`
+    and a leading `!` are refused as before.
+  - **Protection wins.** What a brief may write is `affectedFiles` less
+    `protectedFiles`, so `affectedFiles: [src/**]` with
+    `protectedFiles: [src/db/schema.ts]` is valid. `scope-contradiction` now
+    fires only for affected patterns the protections cover entirely, as one
+    finding per brief naming each; it used to fire for any file in both.
+    `matrix` leaves out a file either brief of a pair protects.
+- `literal-read-as-file`, a note: a path with no glob syntax that the tree
+  does not hold and whose name has no extension, such as `src/newmod`, is
+  read as a file, and the hint says to write `src/newmod/` for a directory.
+  `glob-matches-nothing` leaves such a pattern to it.
+- `collision-undecided`, a warning: a pair of briefs whose collision the
+  witness search could not decide within its budget. It is never reported
+  as a collision and never as clean. `matrix` marks the pair `?`, and its
+  JSON gains an `undecided` list per wave (`{ a, b, patterns }`).
+- 23 lint rules and 4 collision rules.
+- The library's `parseGlob`, `matchGlob`, `intersectGlobs` and `globBase`
+  keep their signatures over the new engine. `parseGlob`'s `isFile` option is
+  replaced by `literal` (`'file'`, `'directory'`, `'either'` or a function,
+  such as `readingIn(files)`), a `Glob` carries `compiled` and `literals` in
+  place of `alternatives`, and `intersectGlobs` throws where the search is
+  undecided. `globWitness`, `globCovers`, `globBases`, `readingIn`, `meet`,
+  `scopeOf` and `contradictions` are new. `intersectTokens` is gone.
+- A `shared-directory` finding has a hint, and a `glob` finding says what a
+  scope pattern looks like.
 - Versions are published by CI through npm's trusted publishing, with
   provenance that names the commit and the run (ADR-0010).
 - `archive` no longer passes a scope it never measured. With no `--commit`,

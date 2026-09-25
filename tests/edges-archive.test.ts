@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { openTasks, type Plan, planArchive, planUnarchive } from '../src/archive.js';
 import { BANNER_CLOSE, BANNER_OPEN } from '../src/brief.js';
 import { parseInline, readFrontMatter, renderScalar } from '../src/frontmatter.js';
-import { intersectTokens, matchGlob, parseGlob } from '../src/glob.js';
+import { matchGlob, parseGlob } from '../src/glob.js';
 import { config, corpusOf, goodBrief } from './helpers.js';
 
 /** The archival planner's and the parsers' remaining edges, one case each. */
@@ -139,13 +139,5 @@ describe('the parsers', () => {
   it('gives a star after a literal no directory beneath it', () => {
     const parsed = parseGlob('src/*');
     expect(parsed.ok && matchGlob(parsed.glob, 'src/a/b')).toBe(false);
-  });
-
-  it('never offers a slash as a witness, even where it is the only character left', () => {
-    const allButSlash: [number, number][] = [
-      [0, 0x2e],
-      [0x30, 0x10ffff],
-    ];
-    expect(intersectTokens([{ kind: 'class', negated: true, ranges: allButSlash }], [{ kind: 'any' }])).toBeNull();
   });
 });

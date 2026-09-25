@@ -1,9 +1,23 @@
 import { describe, expect, it } from 'vitest';
 
-import { type Glob, globBase, intersectGlobs, intersectTokens, MAX_ALTERNATIVES, matchGlob, parseGlob } from '../src/glob.js';
+import {
+  type Glob,
+  globBase,
+  globBases,
+  globCovers,
+  globWitness,
+  hasExtension,
+  held,
+  intersectGlobs,
+  type LiteralReading,
+  matchGlob,
+  parseGlob,
+  readingIn,
+  treeOf,
+} from '../src/glob.js';
 
-function glob(source: string): Glob {
-  const parsed = parseGlob(source);
+function glob(source: string, literal?: LiteralReading | ((path: string) => LiteralReading)): Glob {
+  const parsed = parseGlob(source, literal === undefined ? {} : { literal });
   if (!parsed.ok) throw new Error(`${source}: ${parsed.error}`);
   return parsed.glob;
 }
@@ -13,124 +27,166 @@ function error(source: string): string {
   return parsed.ok ? 'parsed' : parsed.error;
 }
 
-const matches = (pattern: string, path: string): boolean => matchGlob(glob(pattern), path);
+const matches = (pattern: string, path: string, literal?: LiteralReading): boolean => matchGlob(glob(pattern, literal), path);
 
 describe('parsing', () => {
-  it('refuses what it does not support, with a reason', () => {
+  it("refuses a leading slash and a negation with spec-brief's own reasons, before the core reads them", () => {
+    expect(error('!src/**')).toBe('negated patterns are not supported; narrow the positive pattern');
+    expect(error('  !src/**')).toBe('negated patterns are not supported; narrow the positive pattern');
+    expect(error('/src')).toBe('a pattern is relative to the repository root and cannot start with "/"');
+    expect(error(' /src')).toBe('a pattern is relative to the repository root and cannot start with "/"');
+    // Not at the start, a "!" is a character like any other.
+    expect(matches('a!b', 'a!b')).toBe(true);
+  });
+
+  it("refuses what the core refuses, in the core's words", () => {
     expect(error('')).toBe('the pattern is empty');
     expect(error('   ')).toBe('the pattern is empty');
-    expect(error('!src/**')).toBe('negated patterns are not supported; narrow the positive pattern');
-    expect(error('/src')).toBe('a pattern is relative to the repository root and cannot start with "/"');
     expect(error('src\\auth')).toBe('"\\" escapes glob syntax; separate directories with "/"');
     expect(error('src/+(a|b)')).toBe('extended globs such as "+(a|b)" are not supported');
-    expect(error('@(a)')).toBe('extended globs such as "+(a|b)" are not supported');
-    expect(error('../x')).toBe('a pattern cannot leave the repository with ".."');
+    expect(error('../x')).toBe('a pattern cannot climb out of its root with ".."');
     expect(error('.')).toBe('the pattern names no path');
-    expect(error('./.')).toBe('the pattern names no path');
+    expect(error('./')).toBe('the pattern names the root itself, not a path under it');
     expect(error('a{b')).toBe('a "{" is never closed');
-    expect(error('a}b')).toBe('a "}" closes no "{"');
     expect(error('a[b')).toBe('a "[" is never closed');
-    expect(error('a[]')).toBe('a "[" is never closed');
     expect(error('[z-a]')).toBe('the range "z-a" runs backwards');
-    expect(error('{a,b}{c,d}{e,f}{g,h}{i,j}{k,l}{m,n}{o,p}{q,r}')).toBe(`the braces expand to more than ${MAX_ALTERNATIVES} patterns`);
+    expect(error('{a,b}{c,d}{e,f}{g,h}{i,j}{k,l}{m,n}{o,p}{q,r}')).toBe('the braces expand to more than 256 patterns');
   });
 
-  it('accepts escapes of glob syntax, and an escaped paren is not an extglob', () => {
-    expect(error('a\\*b')).toBe('parsed');
-    expect(error('a\\+(b)')).toBe('parsed');
-    expect(matches('a\\*b', 'a*b')).toBe(true);
-    expect(matches('a\\*b', 'axb')).toBe(false);
-    expect(matches('\\{x\\}', '{x}')).toBe(true);
+  it('refuses a pattern too large to compile, with a reason rather than an exception', () => {
+    const wide = `{${Array.from({ length: 250 }, (_, i) => `${'?'.repeat(300)}${i}`).join(',')}}`;
+    expect(error(wide)).toBe('the pattern compiles to more than 65536 states');
   });
 
-  it('strips a leading ./, reads a trailing / as everything beneath', () => {
-    expect(matches('./src/a.ts', 'src/a.ts')).toBe(true);
-    expect(matches('src/', 'src/deep/x.ts')).toBe(true);
-    expect(matches('./', 'anything/at/all')).toBe(true);
-    expect(matches('src/*/', 'src/a/b.ts')).toBe(true);
+  it('passes on a failure of its own reading rather than calling it a malformed pattern', () => {
+    const reading = (): LiteralReading => {
+      throw new Error('the tree could not be read');
+    };
+    expect(() => parseGlob('src/a', { literal: reading })).toThrow('the tree could not be read');
   });
 
-  it('reads a literal path as a directory, unless it names a file', () => {
-    expect(matches('src/auth', 'src/auth/login.ts')).toBe(true);
-    expect(matches('src/a.ts', 'src/a.ts')).toBe(true);
-    expect(matches('src/a.ts', 'src/a.ts/x')).toBe(false);
-    expect(matches('.eslintrc.json', '.eslintrc.json/x')).toBe(false);
-    expect(matches('.github', '.github/workflows/ci.yml')).toBe(true);
-    expect(matches('v1.2/', 'v1.2/notes.md')).toBe(true);
-    const makefile = parseGlob('Makefile', { isFile: (p) => p === 'Makefile' });
-    expect(makefile.ok && matchGlob(makefile.glob, 'Makefile/x')).toBe(false);
-    expect(makefile.ok && matchGlob(makefile.glob, 'Makefile')).toBe(true);
-    expect(matches('Makefile', 'Makefile/x')).toBe(true);
-    expect(matches('a\\*b', 'a*b/c')).toBe(true);
-    const escaped = parseGlob('a\\*b', { isFile: (p) => p === 'a*b' });
-    expect(escaped.ok && matchGlob(escaped.glob, 'a*b/c')).toBe(false);
+  it('reads a lone closing brace as the literal it can only be', () => {
+    expect(matches('a}b', 'a}b')).toBe(true);
   });
 
-  it('does not let a file path overlap a pattern through a path beneath it', () => {
-    expect(intersectGlobs(glob('src/api/orders.ts'), glob('src/**/session.ts'))).toBeNull();
-    expect(intersectGlobs(glob('src/api'), glob('src/**/session.ts'))).toBe('src/api/session.ts');
+  it('keeps the source as written and records nothing literal about a pattern with glob syntax', () => {
+    const g = glob(' src/*.ts ');
+    expect(g.source).toBe(' src/*.ts ');
+    expect(g.literals).toEqual([]);
+  });
+});
+
+describe('a literal path', () => {
+  it('is a file unless something says otherwise', () => {
+    expect(matches('src/auth', 'src/auth')).toBe(true);
+    expect(matches('src/auth', 'src/auth/login.ts')).toBe(false);
   });
 
-  it('collapses repeated globstars and stars', () => {
-    const g = glob('a/**/**/b');
-    expect(g.alternatives[0]?.map((s) => s.kind)).toEqual(['pattern', 'globstar', 'pattern']);
-    const star = glob('a**b.ts');
-    const first = star.alternatives[0]?.[0];
-    expect(first?.kind === 'pattern' ? first.tokens.filter((t) => t.kind === 'star').length : 0).toBe(1);
+  it('read as a directory is what is beneath it, not the directory', () => {
+    expect(matches('src/auth', 'src/auth/login.ts', 'directory')).toBe(true);
+    expect(matches('src/auth', 'src/auth', 'directory')).toBe(false);
   });
 
-  it('expands braces, nested and next to classes', () => {
-    expect(glob('src/{a,b/{c,d}}.ts').alternatives.length).toBe(3);
-    expect(matches('src/{a,b/{c,d}}.ts', 'src/b/d.ts')).toBe(true);
-    expect(matches('[{]x', '{x')).toBe(true);
-    expect(matches('{a\\,b,c}', 'a,b')).toBe(true);
-    expect(matches('x{,y}', 'x')).toBe(true);
-    expect(matches('x{,y}', 'xy')).toBe(true);
+  it('read as either is itself and what is beneath it', () => {
+    expect(matches('src/auth', 'src/auth', 'either')).toBe(true);
+    expect(matches('src/auth', 'src/auth/login.ts', 'either')).toBe(true);
+    expect(matches('src/auth', 'src/authz', 'either')).toBe(false);
   });
 
-  it('splits a brace group on its own commas, not on one inside a class', () => {
-    expect(glob('{[,]x,y}').alternatives).toHaveLength(2);
-    expect(matches('{[,]x,y}', ',x')).toBe(true);
-    expect(matches('{[,]x,y}', 'y')).toBe(true);
-    expect(matches('{[,]x,y}', '[')).toBe(false);
-    // A brace inside a class opens or closes nothing either.
-    expect(glob('x{[}],a}').alternatives).toHaveLength(2);
-    expect(matches('x{[}],a}', 'x}')).toBe(true);
-    expect(matches('x{[}],a}', 'xa')).toBe(true);
-    expect(matches('{[{],b}', '{')).toBe(true);
-    expect(matches('{[{],b}', 'b')).toBe(true);
-    // A bracket that closes no class is a literal, and the comma after it splits.
-    expect(error('{[,b}')).toBe('a "[" is never closed');
+  it('is read once per brace alternative, and each reading is recorded', () => {
+    const asked: string[] = [];
+    const g = glob('./src/{auth,db.ts}', (path) => {
+      asked.push(path);
+      return path === 'src/auth' ? 'directory' : 'file';
+    });
+    expect(asked).toEqual(['src/auth', 'src/db.ts']);
+    expect(g.literals).toEqual([
+      { path: 'src/auth', reading: 'directory' },
+      { path: 'src/db.ts', reading: 'file' },
+    ]);
+    expect(matchGlob(g, 'src/auth/x.ts')).toBe(true);
+    expect(matchGlob(g, 'src/db.ts')).toBe(true);
+    expect(matchGlob(g, 'src/db.ts/x')).toBe(false);
+  });
+
+  it('written with a trailing slash means what is beneath it, and the reading is not asked', () => {
+    const asked: string[] = [];
+    const g = glob('src/newmod/', (path) => {
+      asked.push(path);
+      return 'file';
+    });
+    expect(asked).toEqual([]);
+    expect(g.literals).toEqual([]);
+    expect(matchGlob(g, 'src/newmod/index.ts')).toBe(true);
+    expect(matchGlob(g, 'src/newmod')).toBe(false);
+  });
+});
+
+describe('the tree', () => {
+  const files = ['Dockerfile', 'docs/v1.2/notes.md', 'src/auth/login.ts', 'src/a.ts'];
+
+  it('holds files, and every directory above one', () => {
+    const tree = treeOf(files);
+    expect([...tree.directories].sort()).toEqual(['docs', 'docs/v1.2', 'src', 'src/auth']);
+    expect(held(tree, 'Dockerfile')).toBe('file');
+    expect(held(tree, 'docs/v1.2')).toBe('directory');
+    expect(held(tree, 'src/newmod')).toBeNull();
+    expect(held(tree, 'src/a')).toBeNull();
+  });
+
+  it('is built once for a list every brief of a run shares', () => {
+    expect(treeOf(files)).toBe(treeOf(files));
+    expect(treeOf([...files])).not.toBe(treeOf(files));
+  });
+
+  it('reads a literal from what it holds, not from how it is spelt', () => {
+    const reading = readingIn(files);
+    expect(reading('Dockerfile')).toBe('file');
+    expect(reading('docs/v1.2')).toBe('directory');
+    expect(reading('src/a.ts')).toBe('file');
+    // Not held: a file, whatever the name looks like.
+    expect(reading('src/newmod')).toBe('file');
+    expect(reading('lib')).toBe('file');
+  });
+
+  it('unknown, reads every literal as a file', () => {
+    const reading = readingIn(null);
+    expect(reading('src')).toBe('file');
+  });
+
+  it('no longer lets a file overlap a pattern through a path beneath it, nor misses a dotted directory', () => {
+    const reading = readingIn(files);
+    // The extension heuristic read Dockerfile as a directory and found Dockerfile/x.ts.
+    expect(intersectGlobs(glob('Dockerfile', reading), glob('**/x.ts', reading))).toBeNull();
+    // It read docs/v1.2 as a file, and missed every note inside it.
+    expect(intersectGlobs(glob('docs/v1.2', reading), glob('docs/**/*.md', reading))).toBe('docs/v1.2/.md');
+  });
+});
+
+describe('an extension', () => {
+  it('is a dot with something before it and something after it', () => {
+    for (const name of ['a.ts', '.eslintrc.json', 'v1.2', 'a.b.c']) expect(hasExtension(name), name).toBe(true);
+    for (const name of ['Makefile', '.github', 'a.', '.', '..']) expect(hasExtension(name), name).toBe(false);
   });
 });
 
 describe('matching', () => {
   const table: [string, string, boolean][] = [
-    ['src/auth', 'src/auth', true],
-    ['src/auth', 'src/auth/login.ts', true],
-    ['src/auth', 'src/authz/x', false],
     ['src/*.ts', 'src/a.ts', true],
     ['src/*.ts', 'src/a/b.ts', false],
-    ['src/**', 'src', true],
+    // A trailing globstar is at least one segment: the contents, not the directory.
+    ['src/**', 'src', false],
     ['src/**', 'src/a/b/c', true],
+    ['src/', 'src/deep/x.ts', true],
+    ['src/', 'src', false],
     ['**/x.ts', 'x.ts', true],
     ['**/x.ts', 'a/b/x.ts', true],
-    ['**/x.ts', 'a/b/y.ts', false],
     ['a/**/b', 'a/b', true],
     ['a/**/b', 'a/x/y/b', true],
     ['a/**/b', 'a/x/y/c', false],
     ['*', '.hidden', true],
-    ['?.md', 'a.md', true],
     ['?.md', 'ab.md', false],
-    ['[abc].md', 'b.md', true],
     ['[!abc].md', 'b.md', false],
-    ['[^abc].md', 'd.md', true],
-    ['[a-c]x', 'bx', true],
-    ['[a-c]x', 'dx', false],
-    ['[]]x', ']x', true],
-    ['[!]]x', ']x', false],
-    ['[a-]x', '-x', true],
-    ['[\\]]x', ']x', true],
     ['Src/*', 'src/a', false],
     ['*a*a*a*a*a*b', 'a'.repeat(60), false],
     ['src/**/*.ts', '', false],
@@ -141,128 +197,55 @@ describe('matching', () => {
     });
   }
 
-  it('matches characters beyond the basic plane as one character', () => {
-    const face = String.fromCodePoint(0x1f600);
-    expect(matches('?.md', `${face}.md`)).toBe(true);
-    expect(matches(`[${face}]`, face)).toBe(true);
-  });
-
-  it('never lets ? or a class match a slash', () => {
-    expect(matches('a?b', 'a/b')).toBe(false);
-    expect(matches('a[!x]b', 'a/b')).toBe(false);
+  it('reads the path as a repository path, without empty or "." segments', () => {
+    expect(matches('src/a.ts', './src/./a.ts')).toBe(true);
+    expect(matches('src/a.ts', 'src//a.ts')).toBe(true);
+    expect(matches('**', '/')).toBe(false);
+    expect(matches('**', '.')).toBe(false);
   });
 });
 
-describe('intersection', () => {
-  const both = (a: string, b: string): string | null => intersectGlobs(glob(a), glob(b));
-
-  it('finds a witness both scopes cover, and checks it against both', () => {
-    const cases: [string, string][] = [
-      ['src/auth/**', 'src/**/session.ts'],
-      ['src/*.ts', 'src/a*'],
-      ['**', '**'],
-      ['*', '*'],
-      ['**/*.md', 'docs/**'],
-      ['a/[b-d]x', 'a/?x'],
-      ['a/[!b]', 'a/[a-c]'],
-      ['src/auth', 'src/auth/login.ts'],
-      ['x/{a,b}.ts', 'x/b.*'],
-      ['**/a/**', 'b/**/c'],
-    ];
-    for (const [a, b] of cases) {
-      const witness = both(a, b);
-      expect(witness, `${a} and ${b}`).not.toBeNull();
-      expect(matches(a, witness as string), `${witness} in ${a}`).toBe(true);
-      expect(matches(b, witness as string), `${witness} in ${b}`).toBe(true);
-    }
+describe('the set questions', () => {
+  it('name a file as the witness: a trailing globstar is never the directory', () => {
+    expect(globWitness([glob('docs/adr/**'), glob('docs/adr/**')])).toEqual({ kind: 'found', path: 'docs/adr/x' });
+    expect(intersectGlobs(glob('src/auth/**'), glob('src/**/session.ts'))).toBe('src/auth/session.ts');
   });
 
-  it('proves scopes apart when no file can be in both', () => {
-    const cases: [string, string][] = [
-      ['src/auth/**', 'src/db/**'],
-      ['*.ts', '*.md'],
-      ['a/*', 'a/*/b'],
-      ['a/[abc]', 'a/[!abc]'],
-      ['a/[a-c]', 'a/[x-z]'],
-      ['a/b?', 'a/b'],
-      ['src/auth', 'src/authz'],
-      ['x/*a', 'x/*b'],
-    ];
-    for (const [a, b] of cases) expect(both(a, b), `${a} and ${b}`).toBeNull();
+  it('leave out what a scope protects', () => {
+    const schema = glob('src/db/schema.ts');
+    expect(globWitness([glob('src/db/*.ts'), glob('src/db/*.ts')], [schema])).toEqual({ kind: 'found', path: 'src/db/.ts' });
+    expect(globWitness([schema, glob('src/**')], [schema])).toEqual({ kind: 'none' });
   });
 
-  it('finds a character two negated classes both leave out', () => {
-    expect(intersectTokens([{ kind: 'class', negated: true, ranges: [[0x61, 0x7a]] }], [{ kind: 'class', negated: true, ranges: [[0x30, 0x39]] }])).toBe('_');
+  it('prove two scopes apart', () => {
+    expect(intersectGlobs(glob('src/auth/**'), glob('src/db/**'))).toBeNull();
+    expect(globWitness([glob('*.ts'), glob('*.md')])).toEqual({ kind: 'none' });
   });
 
-  it('searches past the usual candidates when a class excludes all of them', () => {
-    const everything: [number, number][] = [[0x0, 0x10fff]];
-    expect(intersectTokens([{ kind: 'class', negated: true, ranges: everything }], [{ kind: 'any' }])).toBe(String.fromCodePoint(0x11000));
+  it('decide whether one scope lies inside others', () => {
+    expect(globCovers([glob('src/**')], glob('src/db/schema.ts'))).toBe(true);
+    expect(globCovers([glob('src/db/schema.ts')], glob('src/**'))).toBe(false);
+    expect(globCovers([glob('src/*.ts'), glob('src/*.md')], glob('src/*.{ts,md}'))).toBe(true);
   });
 
-  it('returns nothing when a class admits no character at all', () => {
-    expect(intersectTokens([{ kind: 'class', negated: true, ranges: [[0x0, 0x10ffff]] }], [{ kind: 'any' }])).toBeNull();
-  });
-
-  /**
-   * Checked against brute force. Over a two-letter alphabet, every path of up
-   * to three segments of up to three letters is enumerated and matched against
-   * both globs; the intersection must be non-null exactly when some path
-   * matches both, and its witness must match both. Seeded, so a failure
-   * reproduces.
-   */
-  it('agrees with brute force over a generated corpus of pattern pairs', () => {
-    let seed = 20260924;
-    const random = (n: number): number => {
-      seed = (seed * 1103515245 + 12345) % 2147483648;
-      return seed % n;
-    };
-    const atoms = ['a', 'b', '*', '?', '[ab]', '[!a]'];
-    const segment = (): string => {
-      if (random(6) === 0) return '**';
-      return Array.from({ length: 1 + random(3) }, () => atoms[random(atoms.length)] as string).join('');
-    };
-    const pattern = (): string => Array.from({ length: 1 + random(3) }, segment).join('/');
-    const names: string[] = [];
-    for (const length of [1, 2, 3]) {
-      const grow = (prefix: string): void => {
-        if (prefix.length === length) names.push(prefix);
-        else for (const c of ['a', 'b']) grow(prefix + c);
-      };
-      grow('');
-    }
-    const paths: string[] = [];
-    const build = (prefix: string[], depth: number): void => {
-      if (prefix.length > 0) paths.push(prefix.join('/'));
-      if (depth === 0) return;
-      for (const name of names) build([...prefix, name], depth - 1);
-    };
-    build([], 3);
-
-    for (let i = 0; i < 150; i += 1) {
-      const a = pattern();
-      const b = pattern();
-      const ga = glob(a);
-      const gb = glob(b);
-      const common = paths.some((p) => matchGlob(ga, p) && matchGlob(gb, p));
-      const witness = intersectGlobs(ga, gb);
-      if (witness !== null) {
-        expect(matchGlob(ga, witness), `${witness} in ${a}`).toBe(true);
-        expect(matchGlob(gb, witness), `${witness} in ${b}`).toBe(true);
-      }
-      // Brute force only sees short paths, so it can miss an intersection but never invent one.
-      if (common) expect(witness, `${a} and ${b}`).not.toBeNull();
-    }
+  it('say undecided when the budget runs out, and the 0.1 interface refuses to guess', () => {
+    expect(globWitness([glob('src/**'), glob('**/*.ts')], [], 1)).toEqual({ kind: 'undecided' });
+    expect(globCovers([glob('src/*.ts')], glob('src/**'), 1)).toBe('undecided');
+    expect(() => intersectGlobs(glob('src/**'), glob('**/*.ts'), 1)).toThrow(
+      'whether "src/**" and "**/*.ts" meet is undecided within the search\'s budget',
+    );
   });
 });
 
-describe('the base directory', () => {
-  it('is the literal prefix, or a literal file path\'s directory', () => {
-    expect(globBase(glob('src/auth/*.ts'))).toBe('src/auth');
-    expect(globBase(glob('src/auth/login.ts'))).toBe('src/auth');
-    expect(globBase(glob('src/auth'))).toBe('src/auth');
-    expect(globBase(glob('**/*.ts'))).toBe('');
-    expect(globBase(glob('src/**'))).toBe('src');
+describe('the base directories', () => {
+  it('are the literal prefix of each alternative, or a literal file path\'s directory', () => {
+    expect(globBases(glob('src/auth/*.ts'))).toEqual(['src/auth']);
+    expect(globBases(glob('src/auth/login.ts'))).toEqual(['src/auth']);
+    expect(globBases(glob('src/auth', 'directory'))).toEqual(['src/auth']);
+    expect(globBases(glob('src/auth'))).toEqual(['src']);
+    expect(globBases(glob('**/*.ts'))).toEqual(['']);
+    expect(globBases(glob('{src,lib}/a.ts'))).toEqual(['src', 'lib']);
+    expect(globBase(glob('{src,lib}/a.ts'))).toBe('src');
     expect(globBase(glob('x.ts'))).toBe('');
   });
 });

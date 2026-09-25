@@ -12,10 +12,11 @@ import { BUILT_IN_FIELDS, type Brief, knownFields, lineOfField } from './brief.j
 import type { Config, SectionRule } from './config.js';
 import { type Corpus, dependencyCycles, duplicateIds, idKey, resolveDependency } from './corpus.js';
 import { integrityOf } from './integrity.js';
-import { type Glob, intersectGlobs, matchGlob, parseGlob } from './glob.js';
+import { type Glob, hasExtension, held, isGlobSyntax, matchGlob, parseGlob, readingIn, treeOf, WITNESS_BUDGET } from './glob.js';
 import { hasContent, type Section } from './markdown.js';
 import { closest } from './schema.js';
-import { labelMatches } from './text.js';
+import { contradictions, patternsOf, scopeOf, type ScopePattern } from './scope.js';
+import { inWords, labelMatches } from './text.js';
 import type { Severity, SeveritySetting } from './types.js';
 
 export interface RuleResult {
@@ -106,15 +107,47 @@ function live(check: (context: RuleContext) => RuleResult[]): (context: RuleCont
   return (context) => (context.brief.phase === 'live' ? check(context) : []);
 }
 
-function globsOf(
-  patterns: readonly string[],
-  repoFiles: readonly string[] | null,
-): { pattern: string; glob: Glob | null; error: string | null }[] {
-  const files = repoFiles === null ? null : new Set(repoFiles);
-  return patterns.map((pattern) => {
-    const parsed = parseGlob(pattern, { isFile: files === null ? undefined : (path) => files.has(path) });
-    return parsed.ok ? { pattern, glob: parsed.glob, error: null } : { pattern, glob: null, error: parsed.error };
-  });
+const SCOPE_FIELDS = ['affectedFiles', 'protectedFiles'] as const;
+
+const quoted = (items: readonly string[]): string => inWords(items.map((item) => `"${item}"`));
+
+/**
+ * The paths a pattern names with no glob syntax that the tree does not hold
+ * and whose names carry no extension. The tree reads each as a file, and the
+ * spelling cannot say whether a directory was meant.
+ */
+export function unheldLiterals(glob: Glob, files: readonly string[]): string[] {
+  const tree = treeOf(files);
+  return glob.literals
+    .map((literal) => literal.path)
+    .filter((path) => held(tree, path) === null && !hasExtension(path.slice(path.lastIndexOf('/') + 1)));
+}
+
+/**
+ * Affected patterns a brief's own protections cover entirely: one error for
+ * all of them, and a warning for those the search could not decide.
+ */
+export function scopeContradiction(brief: Brief, repoFiles: readonly string[] | null, budget: number = WITNESS_BUDGET): RuleResult[] {
+  const { covered, undecided } = contradictions(scopeOf(brief, readingIn(repoFiles)), budget);
+  const line = at(lineOfField(brief, 'protectedFiles'));
+  const results: RuleResult[] = [];
+  if (covered.length > 0) {
+    const one = covered.length === 1;
+    results.push({
+      line,
+      message: `${quoted(covered)} in affectedFiles ${one ? 'is' : 'are'} entirely protected, so nothing of ${one ? 'it' : 'them'} is writable`,
+      hint: `drop ${one ? 'it' : 'them'} from affectedFiles, or narrow protectedFiles so that some of ${one ? 'it' : 'each'} is writable`,
+    });
+  }
+  if (undecided.length > 0) {
+    results.push({
+      line,
+      message: `whether ${quoted(undecided)} in affectedFiles ${undecided.length === 1 ? 'is' : 'are'} entirely protected is undecided: the search met its budget`,
+      hint: 'simplify the patterns until the question can be answered',
+      severity: 'warning',
+    });
+  }
+  return results;
 }
 
 export const RULES: readonly Rule[] = [
@@ -454,34 +487,26 @@ export const RULES: readonly Rule[] = [
     severity: 'error',
     description: 'Every scope pattern is a glob spec-brief can read.',
     check: live(({ brief }) =>
-      (['affectedFiles', 'protectedFiles'] as const).flatMap((field) =>
-        globsOf(brief[field], null)
-          .filter((g) => g.error !== null)
-          .map((g) => ({ line: at(lineOfField(brief, field)), message: `"${g.pattern}" in ${field}: ${g.error as string}` })),
+      SCOPE_FIELDS.flatMap((field) =>
+        brief[field].flatMap((pattern) => {
+          const parsed = parseGlob(pattern);
+          if (parsed.ok) return [];
+          return [
+            {
+              line: at(lineOfField(brief, field)),
+              message: `"${pattern}" in ${field}: ${parsed.error}`,
+              hint: 'a scope is a glob relative to the repository root: "src/auth/", "src/**/*.ts", "docs/{a,b}.md"',
+            },
+          ];
+        }),
       ),
     ),
   },
   {
     id: 'scope-contradiction',
     severity: 'error',
-    description: 'No file is both in scope and protected.',
-    check: live(({ brief, repoFiles }) => {
-      const affected = globsOf(brief.affectedFiles, repoFiles).filter((g) => g.glob !== null);
-      const protectedGlobs = globsOf(brief.protectedFiles, repoFiles).filter((g) => g.glob !== null);
-      const results: RuleResult[] = [];
-      for (const a of affected) {
-        for (const p of protectedGlobs) {
-          const witness = intersectGlobs(a.glob as Glob, p.glob as Glob);
-          if (witness === null) continue;
-          results.push({
-            line: at(lineOfField(brief, 'protectedFiles')),
-            message: `"${a.pattern}" is in scope and "${p.pattern}" is protected, and both cover ${witness}`,
-            hint: 'narrow the scope, or the protection, so that no file is both',
-          });
-        }
-      }
-      return results;
-    }),
+    description: 'Something of every affected pattern is writable: no pattern lies wholly inside protectedFiles.',
+    check: live(({ brief, repoFiles }) => scopeContradiction(brief, repoFiles)),
   },
   {
     id: 'glob-matches-nothing',
@@ -489,14 +514,48 @@ export const RULES: readonly Rule[] = [
     description: 'A scope pattern matches at least one file in the tree.',
     check: live(({ brief, repoFiles }) => {
       if (repoFiles === null) return [];
-      return (['affectedFiles', 'protectedFiles'] as const).flatMap((field) =>
-        globsOf(brief[field], repoFiles)
-          .filter((g) => g.glob !== null && !repoFiles.some((file) => matchGlob(g.glob as Glob, file)))
-          .map((g) => ({
+      const reading = readingIn(repoFiles);
+      return SCOPE_FIELDS.flatMap((field) =>
+        patternsOf(brief[field], reading)
+          // A literal the tree does not hold is literal-read-as-file's finding.
+          .filter((p) => unheldLiterals(p.glob, repoFiles).length === 0 && !repoFiles.some((file) => matchGlob(p.glob, file)))
+          .map((p) => ({
             line: at(lineOfField(brief, field)),
-            message: `"${g.pattern}" in ${field} matches no file in the tree`,
+            message: `"${p.pattern}" in ${field} matches no file in the tree`,
             hint: 'expected when the round creates it; otherwise check the spelling',
           })),
+      );
+    }),
+  },
+  {
+    id: 'literal-read-as-file',
+    severity: 'note',
+    description: 'A path with no glob syntax that the tree does not hold, and whose name has no extension, says whether it is a directory.',
+    check: live(({ brief, repoFiles }) => {
+      if (repoFiles === null) return [];
+      const reading = readingIn(repoFiles);
+      return SCOPE_FIELDS.flatMap((field) =>
+        patternsOf(brief[field], reading).flatMap(({ pattern, glob }: ScopePattern) => {
+          const paths = unheldLiterals(glob, repoFiles);
+          if (paths.length === 0) return [];
+          const line = at(lineOfField(brief, field));
+          if (!isGlobSyntax(pattern)) {
+            return [
+              {
+                line,
+                message: `"${pattern}" in ${field} is not in the tree and is read as a file`,
+                hint: `write "${pattern.trim()}/" for a directory`,
+              },
+            ];
+          }
+          return [
+            {
+              line,
+              message: `"${pattern}" in ${field} names ${inWords(paths)}, which ${paths.length === 1 ? 'is' : 'are'} not in the tree and ${paths.length === 1 ? 'is' : 'are'} read as ${paths.length === 1 ? 'a file' : 'files'}`,
+              hint: 'write a directory with a trailing "/", in an entry of its own',
+            },
+          ];
+        }),
       );
     }),
   },
@@ -525,6 +584,11 @@ export const RULES: readonly Rule[] = [
  */
 export const COLLISION_RULES: readonly RuleInfo[] = [
   { id: 'collision', severity: 'error', description: 'Briefs in one wave do not write the same file.' },
+  {
+    id: 'collision-undecided',
+    severity: 'warning',
+    description: 'Whether two briefs in one wave can write the same file is decided within the search budget.',
+  },
   { id: 'unscoped', severity: 'note', description: 'A brief sharing a wave declares the files it writes.' },
   { id: 'shared-directory', severity: 'off', description: 'Briefs in one wave do not write into the same directory.' },
 ];

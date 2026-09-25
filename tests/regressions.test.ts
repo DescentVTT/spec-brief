@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { planArchive, planUnarchive, type Plan } from '../src/archive.js';
 import { BANNER_CLOSE, BANNER_OPEN } from '../src/brief.js';
-import { collisionFindings, collisions, inWords } from '../src/collisions.js';
+import { collisionFindings, collisions } from '../src/collisions.js';
 import { type Corpus, findBriefs } from '../src/corpus.js';
 import { BriefEngine } from '../src/engine.js';
 import { MemoryFileSystem } from '../src/fs.js';
@@ -10,6 +10,7 @@ import type { Git } from '../src/git.js';
 import { checkRuleIds, lint, ruleIds } from '../src/lint.js';
 import { linksOf, scan } from '../src/markdown.js';
 import { matrixJson, prettyMatrix } from '../src/report.js';
+import { inWords } from '../src/text.js';
 import type { Finding } from '../src/types.js';
 import { brief, config, corpusOf, goodBrief } from './helpers.js';
 
@@ -401,6 +402,7 @@ describe('collisions, after 0.1.0', () => {
               ],
             },
           ],
+          undecided: [],
           sharedDirectories: [],
           unscoped: [],
         },
@@ -432,7 +434,7 @@ describe('collisions, after 0.1.0', () => {
     expect(prettyMatrix(report, { color: false })).toContain('  ~ 001 and 002 both write into x/, y/ and z/');
     const unscoped = collisions(corpusOf({ [A]: goodBrief({ wave: '1', affectedFiles: '[x/1.ts]' }), [B]: goodBrief({ wave: '1', affectedFiles: '[x/2.ts]' }), 'briefs/003_c.md': goodBrief({ wave: '1' }) }));
     expect(matrixJson(unscoped)).toEqual({
-      waves: [{ wave: 1, briefs: ['001', '002', '003'], collisions: [], sharedDirectories: [{ a: '001', b: '002', directories: ['x'] }], unscoped: ['003'] }],
+      waves: [{ wave: 1, briefs: ['001', '002', '003'], collisions: [], undecided: [], sharedDirectories: [{ a: '001', b: '002', directories: ['x'] }], unscoped: ['003'] }],
       unscheduled: [],
     });
     expect(inWords(['a/', 'b/'])).toBe('a/ and b/');

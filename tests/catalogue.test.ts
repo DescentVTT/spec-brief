@@ -51,8 +51,10 @@ describe('the rule catalogue', () => {
       glob: 'error',
       'scope-contradiction': 'error',
       'glob-matches-nothing': 'note',
+      'literal-read-as-file': 'note',
       'archive-freeze': 'error',
       collision: 'error',
+      'collision-undecided': 'warning',
       unscoped: 'note',
       'shared-directory': 'off',
       'scope-unmeasured': 'warning',
@@ -166,11 +168,20 @@ describe('what lint says', () => {
   });
 
   it('about scopes', async () => {
-    const corpus = corpusOf({ 'briefs/001_a.md': goodBrief({ affectedFiles: '[src/**, "/x"]', protectedFiles: '[src/db.ts, new/**]' }) });
-    expect(table(await lint(corpus, { repoFiles: ['src/db.ts', 'README.md'] }))).toEqual([
-      'briefs/001_a.md:3 error glob: "/x" in affectedFiles: a pattern is relative to the repository root and cannot start with "/"',
+    const corpus = corpusOf({
+      'briefs/001_a.md': goodBrief({ affectedFiles: '[src/**, "/x", src/db/**, src/db/a.ts, newmod, "lib/{util,new}"]', protectedFiles: '[src/db, new/**]' }),
+    });
+    const tree = ['src/db/a.ts', 'src/auth/x.ts', 'lib/util/a.ts', 'README.md'];
+    expect(table(await lint(corpus, { repoFiles: tree }))).toEqual([
+      'briefs/001_a.md:3 error glob: "/x" in affectedFiles: a pattern is relative to the repository root and cannot start with "/" | a scope is a glob relative to the repository root: "src/auth/", "src/**/*.ts", "docs/{a,b}.md"',
+      'briefs/001_a.md:3 note literal-read-as-file: "lib/{util,new}" in affectedFiles names lib/new, which is not in the tree and is read as a file | write a directory with a trailing "/", in an entry of its own',
+      'briefs/001_a.md:3 note literal-read-as-file: "newmod" in affectedFiles is not in the tree and is read as a file | write "newmod/" for a directory',
       'briefs/001_a.md:4 note glob-matches-nothing: "new/**" in protectedFiles matches no file in the tree | expected when the round creates it; otherwise check the spelling',
-      'briefs/001_a.md:4 error scope-contradiction: "src/**" is in scope and "src/db.ts" is protected, and both cover src/db.ts | narrow the scope, or the protection, so that no file is both',
+      'briefs/001_a.md:4 error scope-contradiction: "src/db/**" and "src/db/a.ts" in affectedFiles are entirely protected, so nothing of them is writable | drop them from affectedFiles, or narrow protectedFiles so that some of each is writable',
+    ]);
+    const one = corpusOf({ 'briefs/001_a.md': goodBrief({ affectedFiles: '[src/**, src/db/a.ts]', protectedFiles: '[src/db/a.ts]' }) });
+    expect(table(await lint(one))).toEqual([
+      'briefs/001_a.md:4 error scope-contradiction: "src/db/a.ts" in affectedFiles is entirely protected, so nothing of it is writable | drop it from affectedFiles, or narrow protectedFiles so that some of it is writable',
     ]);
   });
 
@@ -194,8 +205,18 @@ describe('what lint says', () => {
     );
     expect(table(collisionFindings(corpus, collisions(corpus)))).toEqual([
       'briefs/002_b.md:4 error collision: "src/a/x.ts" overlaps 001\'s "src/a/**" in wave 1; both cover src/a/x.ts | run them in different waves, make one depend on the other, or narrow a scope',
-      'briefs/004_d.md:4 note shared-directory: writes into src/, as 003 does in wave 1',
+      'briefs/004_d.md:4 note shared-directory: writes into src/, as 003 does in wave 1 | check that the two do not depend on one decision in that directory; if they do, order them',
       'briefs/005_e.md:1 note unscoped: declares no affectedFiles, so it cannot be checked against the 4 other brief(s) in wave 1 | list the files or globs this round writes under "affectedFiles"',
+    ]);
+  });
+
+  it('about collisions it could not decide', () => {
+    const corpus = corpusOf({
+      'briefs/001_a.md': goodBrief({ wave: '1', affectedFiles: '[src/**, docs/**]' }),
+      'briefs/002_b.md': goodBrief({ wave: '1', affectedFiles: '["**/*.ts", "**/*.md"]' }),
+    });
+    expect(table(collisionFindings(corpus, collisions(corpus, { budget: 1 })))).toEqual([
+      'briefs/002_b.md:4 warning collision-undecided: whether it can write a file 001 writes in wave 1 is undecided: the search met its budget for "**/*.ts" and 001\'s "src/**", "**/*.md" and 001\'s "src/**", "**/*.ts" and 001\'s "docs/**" and "**/*.md" and 001\'s "docs/**" | narrow one of the patterns, or run the two in different waves',
     ]);
   });
 });

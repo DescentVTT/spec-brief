@@ -44,3 +44,15 @@ repository that writes nested front matter gets a finding, not a silent
 misreading. The sibling tools `spec-graph` and `spec-guard` made the same
 decision for the same reason, and their dialect decisions were read before
 these were written.
+
+## Amended 2026-09-26
+
+The glob engine is spec-core's `pattern` module, with the `path` module it
+imports, copied byte for byte into `src/vendor/spec-core/` (spec-core
+ADR-0001). A copy is not a dependency: `dependencies` stays empty, every
+import is still relative, and a test hashes each copied file against
+`VENDOR.json`, so the copy changes only by a diff someone reviews. It is never
+edited here; it changes in spec-core and is copied again. `src/glob.ts` keeps
+what is spec-brief's own - the refusals, the reading of a literal from the
+tree ([ADR-0005](0005-scopes-collide-by-intersection.md)) - and the 0.1
+functions of the library, over the new engine.

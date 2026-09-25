@@ -153,12 +153,14 @@ function unmeasuredScope(brief: Brief, request: ArchiveRequest, severity: Severi
 
 /**
  * Scope patterns, for matching the files a round changed. A changed path is a
- * file, and a literal pattern matches its own path whether it is read as a
- * file or as a directory, so the tree is not asked.
+ * file that exists or existed, so a literal pattern is read as either: its own
+ * path, and everything beneath it. Nothing can lie beneath a file, so the
+ * reading cannot invent a match, and the tree need not be asked - it has
+ * changed since the scope was written, by the round itself.
  */
 function globs(patterns: readonly string[]): Glob[] {
   return patterns.flatMap((p) => {
-    const parsed = parseGlob(p);
+    const parsed = parseGlob(p, { literal: 'either' });
     return parsed.ok ? [parsed.glob] : [];
   });
 }

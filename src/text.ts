@@ -87,6 +87,11 @@ export function slugify(title: string, maxLength = 80): string {
   return lastBreak > 0 ? cut.slice(0, lastBreak) : cut;
 }
 
+/** `a`, `a and b`, `a, b and c`. */
+export function inWords(items: readonly string[]): string {
+  return items.length < 2 ? (items[0] ?? '') : `${items.slice(0, -1).join(', ')} and ${items[items.length - 1] as string}`;
+}
+
 /** Fills `{name}` holes. An unknown name is left as written. */
 export function fillTemplate(template: string, values: Readonly<Record<string, string>>): string {
   return template.replace(/\{([A-Za-z]+)\}/g, (hole, name: string) => values[name] ?? hole);

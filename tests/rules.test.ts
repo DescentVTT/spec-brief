@@ -2,9 +2,9 @@ import { describe, expect, it } from 'vitest';
 
 import { integrityOf } from '../src/integrity.js';
 import { checkRuleIds, failing, lint, ruleIds, severityOf, sortFindings, summarise } from '../src/lint.js';
-import type { Rule } from '../src/rules.js';
+import { type Rule, scopeContradiction } from '../src/rules.js';
 import type { Finding } from '../src/types.js';
-import { config, corpusOf, goodBrief } from './helpers.js';
+import { brief, config, corpusOf, goodBrief } from './helpers.js';
 
 async function findings(files: Record<string, string>, cfg = config(), repoFiles: string[] | null = null): Promise<Finding[]> {
   return lint(corpusOf(files, cfg), { repoFiles });
@@ -258,9 +258,69 @@ describe('scopes', () => {
     ]);
   });
 
-  it('reports a file both in scope and protected, naming it', async () => {
+  it('lets protection carve a file out of a scope: what is writable is affected less protected', async () => {
     const found = await findings({ [A]: goodBrief({ affectedFiles: '[src/**]', protectedFiles: '[src/db/schema.ts, docs/**]' }) });
-    expect(found.map((f) => f.message)).toEqual(['"src/**" is in scope and "src/db/schema.ts" is protected, and both cover src/db/schema.ts']);
+    expect(found).toEqual([]);
+  });
+
+  it('reports, once, every affected pattern the protections cover entirely', async () => {
+    const found = await findings({
+      [A]: goodBrief({ affectedFiles: '[src/db/**, src/**, src/db/schema.ts, "docs/*.md"]', protectedFiles: '[src/db/**, docs/a.md, docs/b.md]' }),
+    });
+    expect(found.map((f) => [f.rule, f.line, f.message])).toEqual([
+      ['scope-contradiction', 4, '"src/db/**" and "src/db/schema.ts" in affectedFiles are entirely protected, so nothing of them is writable'],
+    ]);
+    // Covered by the protections together, not by any one of them.
+    const together = await findings({ [A]: goodBrief({ affectedFiles: '["docs/{a,b}.md"]', protectedFiles: '[docs/a.md, docs/b.md]' }) });
+    expect(together.map((f) => f.message)).toEqual(['"docs/{a,b}.md" in affectedFiles is entirely protected, so nothing of it is writable']);
+  });
+
+  it('says so when it cannot decide whether a pattern is entirely protected, and never guesses', () => {
+    const b = brief(goodBrief({ affectedFiles: '[src/**, lib/a.ts]', protectedFiles: '["**/*.ts", lib/a.ts]' }));
+    expect(scopeContradiction(b, null, 1)).toEqual([
+      {
+        line: 4,
+        message: 'whether "src/**" and "lib/a.ts" in affectedFiles are entirely protected is undecided: the search met its budget',
+        hint: 'simplify the patterns until the question can be answered',
+        severity: 'warning',
+      },
+    ]);
+    expect(scopeContradiction(b, null)).toEqual([
+      {
+        line: 4,
+        message: '"lib/a.ts" in affectedFiles is entirely protected, so nothing of it is writable',
+        hint: 'drop it from affectedFiles, or narrow protectedFiles so that some of it is writable',
+      },
+    ]);
+    const single = brief(goodBrief({ affectedFiles: '[src/**]', protectedFiles: '["**/*.ts"]' }));
+    expect(scopeContradiction(single, null, 1)[0]?.message).toBe('whether "src/**" in affectedFiles is entirely protected is undecided: the search met its budget');
+  });
+
+  it('notes a literal the tree does not hold and that could be a directory, and nothing else', async () => {
+    const tree = ['src/auth/login.ts', 'Makefile', 'lib/x/a.ts'];
+    const noted = async (pattern: string, repoFiles: string[] | null = tree): Promise<string[]> =>
+      (await findings({ [A]: goodBrief({ affectedFiles: JSON.stringify([pattern]) }) }, config(), repoFiles))
+        .filter((f) => f.rule === 'literal-read-as-file')
+        .map((f) => `${f.message} | ${f.hint}`);
+    expect(await noted('src/newmod')).toEqual(['"src/newmod" in affectedFiles is not in the tree and is read as a file | write "src/newmod/" for a directory']);
+    expect(await noted('Dockerfile')).toEqual(['"Dockerfile" in affectedFiles is not in the tree and is read as a file | write "Dockerfile/" for a directory']);
+    expect(await noted('.github')).toHaveLength(1);
+    expect(await noted('lib/{a,b}')).toEqual([
+      '"lib/{a,b}" in affectedFiles names lib/a and lib/b, which are not in the tree and are read as files | write a directory with a trailing "/", in an entry of its own',
+    ]);
+    // Held, spelt as a file, written as a directory, or a glob: nothing to ask.
+    for (const pattern of ['src/auth', 'Makefile', 'src/new.ts', 'docs/v1.2', 'src/newmod/', 'src/new*', 'lib/{x,y.ts}']) {
+      expect(await noted(pattern), pattern).toEqual([]);
+    }
+    // Without a tree nothing is known to be missing from it.
+    expect(await noted('src/newmod', null)).toEqual([]);
+    // One note per pattern: a literal it names is not also said to match nothing.
+    const all = await findings({ [A]: goodBrief({ affectedFiles: '[src/newmod, docs/v1.2]', protectedFiles: '[gone]' }) }, config(), tree);
+    expect(all.map((f) => `${f.rule}: ${f.message}`)).toEqual([
+      'glob-matches-nothing: "docs/v1.2" in affectedFiles matches no file in the tree',
+      'literal-read-as-file: "src/newmod" in affectedFiles is not in the tree and is read as a file',
+      'literal-read-as-file: "gone" in protectedFiles is not in the tree and is read as a file',
+    ]);
   });
 
   it('notes a pattern that matches no file in the tree, only when files are known', async () => {

@@ -18,9 +18,13 @@ These are not preferences. Breaking one is a decision that needs an ADR.
   `plugins.ts` meet the disk, git or the process. Everything else is a pure
   function of its arguments. `tests/source.test.ts` holds that list.
 - **Nothing takes longer than its input.** No user-supplied pattern compiles
-  to a `RegExp`; globs are matched and intersected by dynamic programming
-  ([ADR-0005](docs/adr/0005-scopes-collide-by-intersection.md)). Every loop
-  ends by construction.
+  to a `RegExp`; globs run on spec-core's automata, and a question about two
+  scopes has a budget and answers `undecided` at it, which is reported, never
+  resolved by a guess ([ADR-0005](docs/adr/0005-scopes-collide-by-intersection.md)).
+  Every loop ends by construction.
+- **`src/vendor/` is spec-core's.** Never edited here: change spec-core and
+  run its `scripts/vendor.mjs --into`. `tests/vendor.test.ts` holds every file
+  to its hash, and neither coverage nor mutation counts it.
 - **A run that cannot be trusted exits 2.** A configuration that does not
   load, an unknown key or rule, a briefs directory that does not exist. Never
   fall back to defaults and report clean.

@@ -187,10 +187,13 @@ describe('rules at their edges', () => {
     }
   });
 
-  it('asks the tree whether a scope pattern names a file', async () => {
-    const files = { [A]: goodBrief({ affectedFiles: '[Makefile]', protectedFiles: '["Makefile/x"]' }) };
-    expect((await lint(corpusOf(files), { repoFiles: null })).map((f) => f.rule)).toEqual(['scope-contradiction']);
-    expect((await lint(corpusOf(files), { repoFiles: ['Makefile'] })).map((f) => f.rule)).toEqual(['glob-matches-nothing']);
+  it('asks the tree whether a scope literal names a directory', async () => {
+    const files = { [A]: goodBrief({ affectedFiles: '[build]', protectedFiles: '["build/**"]' }) };
+    // Unknown, or a file: the literal is that file, which the protection does not cover.
+    expect((await lint(corpusOf(files), { repoFiles: null })).map((f) => f.rule)).toEqual([]);
+    expect((await lint(corpusOf(files), { repoFiles: ['build'] })).map((f) => f.rule)).toEqual(['glob-matches-nothing']);
+    // A directory: everything beneath it, all of which is protected.
+    expect((await lint(corpusOf(files), { repoFiles: ['build/a'] })).map((f) => f.rule)).toEqual(['scope-contradiction']);
   });
 
   it('reads a brief with no front matter at all', async () => {

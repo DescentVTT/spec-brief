@@ -26,6 +26,7 @@ export {
   collisions,
   type Overlap,
   type SharedDirectory,
+  type UndecidedPair,
   type WaveMatrix,
 } from './collisions.js';
 export {
@@ -54,13 +55,29 @@ export {
 export { type ArchiveOptions, BriefEngine, EngineError, type EngineSetup, type NewOptions, type OpenOptions, today } from './engine.js';
 export { type FileSystem, MemoryFileSystem, NodeFileSystem } from './fs.js';
 export { type CommitInfo, type FileChange, type Git, NodeGit } from './git.js';
-export { type Glob, globBase, intersectGlobs, matchGlob, parseGlob } from './glob.js';
+export {
+  type Glob,
+  globBase,
+  globBases,
+  globCovers,
+  globWitness,
+  intersectGlobs,
+  type Literal,
+  type LiteralReading,
+  matchGlob,
+  parseGlob,
+  type ParseOptions,
+  readingIn,
+  WITNESS_BUDGET,
+  type Witness,
+} from './glob.js';
 export { integrityOf } from './integrity.js';
 export { failing, lint, type LintOptions, type Plugin, ruleIds, sortFindings, summarise } from './lint.js';
 export { asPlugin, loadPlugins } from './plugins.js';
 export { type Format, FORMATS, githubCommands, JSON_SCHEMA_VERSION, matrixJson, sarif, sectionsJson } from './report.js';
 export { ARCHIVE_RULES, COLLISION_RULES, type Rule, type RuleContext, type RuleInfo, type RuleResult, RULES } from './rules.js';
 export { nextId, renderNewBrief } from './scaffold.js';
+export { contradictions, meet, type Meeting, type Scope, scopeOf, type ScopePattern } from './scope.js';
 export type { Finding, Phase, Severity, SeveritySetting, Status } from './types.js';
 
 /** Types a plugin author writes against, with inference for the rule list. */
