@@ -76,3 +76,24 @@ nested box closed its parent; and with the briefs at the root, every path
 counted as bookkeeping, which silenced the tree and scope checks. The last is
 why bookkeeping is now "a file the configuration takes for a brief" rather
 than "anything in the brief directories".
+
+## Amended 2026-09-26
+
+A review after 0.1.0 found two gaps in the preflight and one in the links.
+
+**A scope is never passed by a check that measured nothing.** The diff was
+read only when a commit was named or `archiving.base` set, so without either
+the protected-file and out-of-scope checks did not run, and said nothing. With
+a base configured and the archival run on that branch after the merge, the
+merge base was the commit itself and the empty diff passed every check. A brief
+with a scope whose round's changes are unknown now gets `scope-unmeasured`: a
+warning, a refusal under `--strict`, and a hint naming what to pass.
+
+**A disposition is a note that starts with a marker**, on a line under the box
+and within its item. A marker anywhere in the item used to count, the box's own
+text included.
+
+**`archiving.rewriteLinks` governs both directions.** The links live briefs
+hold to the moving brief were rewritten whatever the switch said. Off, no other
+brief is written, and the links they are left holding are reported as
+`stale-link`, a warning with every file and line.

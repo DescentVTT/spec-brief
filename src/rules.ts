@@ -531,4 +531,9 @@ export const ARCHIVE_RULES: readonly RuleInfo[] = [
     severity: 'warning',
     description: 'A brief that declares a scope is archived against the changes its round made.',
   },
+  {
+    id: 'stale-link',
+    severity: 'warning',
+    description: 'No live brief is left linking to where a moved brief used to be.',
+  },
 ];

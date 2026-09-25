@@ -16,6 +16,11 @@ Notable changes, newest first. Versions follow [semver](https://semver.org).
   disposition marker. A marker anywhere in the item used to count, the box's
   own text included, so `- [ ] Explain why the **Rejected** designs failed`
   archived as dispositioned.
+- `archiving.rewriteLinks: false` now holds for the links other briefs hold
+  to a moving brief, which were rewritten regardless. Those left pointing at
+  the old path are reported as `stale-link`, a warning naming each file and
+  line, on `archive` and `unarchive` alike; `unarchive --strict` refuses on
+  it, as `archive --strict` does.
 
 ## 0.1.0
 

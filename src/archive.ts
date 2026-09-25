@@ -290,22 +290,35 @@ function encodeLike(source: string, lines: readonly string[]): string {
   return `${bom}${finalNewline ? text : text.slice(0, text.length - eol.length)}`;
 }
 
+interface Place {
+  readonly file: string;
+  readonly line: number;
+}
+
 interface Inbound {
   readonly ops: FileOp[];
   readonly rewritten: string[];
-  readonly frozen: { file: string; line: number }[];
+  readonly frozen: Place[];
+  /** Links live briefs hold to it, left as they are because rewriting is off. */
+  readonly stale: Place[];
 }
 
-/** Links other briefs hold to a file that is moving: rewritten in live briefs, reported in frozen ones. */
+/**
+ * Links other briefs hold to a file that is moving: rewritten in live briefs,
+ * reported in frozen ones. `archiving.rewriteLinks` governs these as it does
+ * the moving brief's own links, so with it off a live brief is not written,
+ * and the links it is left holding are reported instead.
+ */
 function inbound(corpus: Corpus, moving: Brief, to: string): Inbound {
-  const result: Inbound = { ops: [], rewritten: [], frozen: [] };
+  const result: Inbound = { ops: [], rewritten: [], frozen: [], stale: [] };
   for (const other of corpus.briefs) {
     if (other === moving) continue;
     const directory = dirOf(other.file);
     const lines = linesLinkingTo(other.scan, directory, moving.file);
     if (lines.length === 0) continue;
-    if (other.phase === 'archived') {
-      for (const line of lines) result.frozen.push({ file: other.file, line: line + 1 });
+    if (other.phase === 'archived' || !corpus.config.archiving.rewriteLinks) {
+      const left = other.phase === 'archived' ? result.frozen : result.stale;
+      for (const line of lines) left.push({ file: other.file, line: line + 1 });
       continue;
     }
     const rewritten = rewriteLinks(other.scan, directory, directory, (p) => (p === moving.file ? to : p));
@@ -313,6 +326,29 @@ function inbound(corpus: Corpus, moving: Brief, to: string): Inbound {
     result.rewritten.push(other.file);
   }
   return result;
+}
+
+/** Five items, and a count of the rest. */
+function listed(items: readonly string[]): string {
+  return items.slice(0, 5).join(', ') + (items.length > 5 ? `, and ${items.length - 5} more` : '');
+}
+
+/**
+ * Links live briefs will hold to nothing once the brief moves, when rewriting
+ * is off: the move is what breaks them, so the move says where they are.
+ */
+function staleLinks(corpus: Corpus, brief: Brief, stale: readonly Place[], strict: boolean, blocking: Finding[], warnings: Finding[]): void {
+  const severity = archiveSeverity(corpus, 'stale-link');
+  if (severity === null || stale.length === 0) return;
+  const finding = problem(
+    brief,
+    'stale-link',
+    severity,
+    1,
+    `links on ${stale.length} line(s) of other live briefs will stop resolving when it moves: ${listed(stale.map((s) => `${s.file}:${s.line}`))}`,
+    'turn "archiving.rewriteLinks" on to have them rewritten, or fix them by hand',
+  );
+  place(finding, strict, blocking, warnings);
 }
 
 function donePlan(action: Plan['action'], brief: Brief): Plan {
@@ -377,9 +413,8 @@ export function planArchive(corpus: Corpus, brief: Brief, request: ArchiveReques
   if (request.dirty !== undefined && request.allowDirty !== true) {
     const outside = request.dirty.filter((path) => !bookkeeping(path));
     if (outside.length > 0) {
-      const shown = outside.slice(0, 5).join(', ') + (outside.length > 5 ? `, and ${outside.length - 5} more` : '');
       blocking.push(
-        problem(brief, 'dirty-tree', 'error', 1, `the working tree has uncommitted changes outside the briefs: ${shown}`, 'commit them so the recorded commit holds the round, or pass --allow-dirty'),
+        problem(brief, 'dirty-tree', 'error', 1, `the working tree has uncommitted changes outside the briefs: ${listed(outside)}`, 'commit them so the recorded commit holds the round, or pass --allow-dirty'),
       );
     }
   }
@@ -398,13 +433,12 @@ export function planArchive(corpus: Corpus, brief: Brief, request: ArchiveReques
   const unprotected = work.filter((c) => !protectedGlobs.some((g) => matchGlob(g, c.path)));
   const outside = affectedGlobs.length === 0 ? [] : unprotected.filter((c) => !affectedGlobs.some((g) => matchGlob(g, c.path)));
   if (outside.length > 0) {
-    const shown = outside.slice(0, 5).map((c) => c.path).join(', ') + (outside.length > 5 ? `, and ${outside.length - 5} more` : '');
     const finding = problem(
       brief,
       'out-of-scope',
       request.strict === true ? 'error' : 'warning',
       lineOf(brief, 'affectedFiles'),
-      `the round changed ${outside.length} file(s) outside affectedFiles: ${shown}`,
+      `the round changed ${outside.length} file(s) outside affectedFiles: ${listed(outside.map((c) => c.path))}`,
       'widen affectedFiles if the scope was wrong, or say why in the summary',
     );
     (request.strict === true ? blocking : warnings).push(finding);
@@ -449,6 +483,7 @@ export function planArchive(corpus: Corpus, brief: Brief, request: ArchiveReques
   if (config.archiving.freeze) lines = withIntegrity(lines);
 
   const incoming = inbound(corpus, brief, to);
+  staleLinks(corpus, brief, incoming.stale, request.strict === true, blocking, warnings);
   return {
     action: 'archive',
     brief,
@@ -470,17 +505,23 @@ export function planArchive(corpus: Corpus, brief: Brief, request: ArchiveReques
   };
 }
 
+export interface UnarchiveRequest {
+  /** Warnings refuse the reopening, as they fail lint. */
+  readonly strict?: boolean | undefined;
+}
+
 /**
  * Reopens an archived brief: the banner and the freeze come off, the status
  * goes back to the live word, and the links are rewritten for the directory
  * it returns to. What the round wrote stays in history, where it belongs.
  */
-export function planUnarchive(corpus: Corpus, brief: Brief): Plan {
+export function planUnarchive(corpus: Corpus, brief: Brief, request: UnarchiveRequest = {}): Plan {
   if (brief.phase === 'live') return donePlan('unarchive', brief);
   const { config } = corpus;
   const briefsDir = normalisePath(config.briefs);
   const to = within(briefsDir, brief.name);
   const blocking: Finding[] = [];
+  const warnings: Finding[] = [];
   if (corpus.briefs.some((b) => b.file === to)) {
     blocking.push(problem(brief, 'unarchive-exists', 'error', 1, `${to} already exists`, 'rename one of them first'));
   }
@@ -499,6 +540,7 @@ export function planUnarchive(corpus: Corpus, brief: Brief): Plan {
   }
 
   const incoming = inbound(corpus, brief, to);
+  staleLinks(corpus, brief, incoming.stale, request.strict === true, blocking, warnings);
   return {
     action: 'unarchive',
     brief,
@@ -511,7 +553,7 @@ export function planUnarchive(corpus: Corpus, brief: Brief): Plan {
       { kind: 'remove', path: brief.file, before: brief.source },
     ],
     blocking,
-    warnings: [],
+    warnings,
     linksRewritten,
     inboundRewritten: incoming.rewritten,
     inboundFrozen: incoming.frozen,

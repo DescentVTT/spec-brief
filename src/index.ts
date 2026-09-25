@@ -13,6 +13,7 @@ export {
   planUnarchive,
   type PullRequest,
   renderBanner,
+  type UnarchiveRequest,
   type Unmeasured,
 } from './archive.js';
 export { BANNER_CLOSE, BANNER_OPEN, type Brief, BUILT_IN_FIELDS, type FieldProblem, idFromName, parseBrief } from './brief.js';
