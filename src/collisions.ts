@@ -64,6 +64,8 @@ export interface CollisionReport {
   readonly waves: readonly WaveMatrix[];
   /** Live briefs with no wave, which the matrix does not place. */
   readonly unscheduled: readonly Brief[];
+  /** Deferred briefs, which wait for their trigger and run in no wave. */
+  readonly deferred: readonly Brief[];
 }
 
 export interface CollisionOptions {
@@ -105,9 +107,10 @@ function matrix(wave: number | null, briefs: readonly Brief[], scopes: ReadonlyM
 export function collisions(corpus: Corpus, options: CollisionOptions = {}): CollisionReport {
   const reading = readingIn(options.repoFiles ?? null);
   const budget = options.budget ?? WITNESS_BUDGET;
-  const live = corpus.live;
+  const deferred = corpus.live.filter((b) => b.status === 'deferred');
+  const live = corpus.live.filter((b) => b.status !== 'deferred');
   const scopes = new Map(live.map((brief) => [brief, scopeOf(brief, reading)]));
-  if (options.all === true) return { waves: [matrix(null, live, scopes, budget)], unscheduled: [] };
+  if (options.all === true) return { waves: [matrix(null, live, scopes, budget)], unscheduled: [], deferred };
   const byWave = new Map<number, Brief[]>();
   const unscheduled: Brief[] = [];
   for (const brief of live) {
@@ -115,7 +118,7 @@ export function collisions(corpus: Corpus, options: CollisionOptions = {}): Coll
     else byWave.set(brief.wave, [...(byWave.get(brief.wave) ?? []), brief]);
   }
   const waves = [...byWave.keys()].sort((a, b) => a - b).map((wave) => matrix(wave, byWave.get(wave) as Brief[], scopes, budget));
-  return { waves, unscheduled };
+  return { waves, unscheduled, deferred };
 }
 
 function label(brief: Brief): string {

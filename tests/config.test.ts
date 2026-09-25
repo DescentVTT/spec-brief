@@ -112,7 +112,7 @@ describe('resolving a configuration', () => {
       rules: { title: 'off' },
       plugins: ['./p.js', { module: 'q', options: { level: 2 } }],
     });
-    expect(config.status).toEqual({ field: 'status', draft: null, active: 'proposed', archived: 'archived' });
+    expect(config.status).toEqual({ field: 'status', draft: null, active: 'proposed', deferred: 'deferred', archived: 'archived' });
     expect(config.sections).toEqual([
       { name: 'Mission', aliases: [], mustContain: [], checklist: false, optional: false },
       { name: 'Deliverables', aliases: ['Tasks'], mustContain: ['x'], checklist: true, optional: true },
@@ -137,7 +137,7 @@ describe('resolving a configuration', () => {
   it('refuses relationships the schema cannot express', () => {
     expect(problems({ briefs: 'b', archive: './b/' })).toEqual(['"briefs" and "archive" must be different directories']);
     expect(problems({ briefs: 'b', archive: 'b\\' })).toEqual(['"briefs" and "archive" must be different directories']);
-    expect(problems({ status: { active: 'Done', archived: 'done' } })).toEqual(['the status words for draft, active and archived must differ']);
+    expect(problems({ status: { active: 'Done', archived: 'done' } })).toEqual(['the status words for draft, active, deferred and archived must differ']);
     expect(problems({ files: '[' })).toEqual(['"files" pattern "[": a "[" is never closed']);
     expect(problems({ exclude: ['ok.md', '{'] })).toEqual(['"exclude" pattern "{": a "{" is never closed']);
     expect(problems({ archiving: { banner: ['{date} {sumary}'] } })).toEqual([

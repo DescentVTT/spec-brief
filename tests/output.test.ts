@@ -203,7 +203,7 @@ describe('rules at their edges', () => {
 
   it('names only the status words the repository uses', async () => {
     const cfg = config({ status: { draft: null, active: 'proposed' } });
-    expect(table(await lint(corpusOf({ [A]: goodBrief({ status: 'done' }) }, cfg)))).toEqual(['2 status: "done" is not a status here | use one of "proposed", "archived"']);
+    expect(table(await lint(corpusOf({ [A]: goodBrief({ status: 'done' }) }, cfg)))).toEqual(['2 status: "done" is not a status here | use one of "proposed", "deferred", "archived"']);
   });
 
   it('gives no hint for a file name with no id', async () => {

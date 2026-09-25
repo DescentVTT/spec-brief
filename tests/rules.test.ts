@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { isReady } from '../src/corpus.js';
 import { integrityOf } from '../src/integrity.js';
 import { checkRuleIds, failing, lint, ruleIds, severityOf, sortFindings, summarise } from '../src/lint.js';
 import { type Rule, scopeContradiction } from '../src/rules.js';
@@ -65,7 +66,7 @@ describe('status', () => {
   it('requires the field, knows the words, and checks it against the directory', async () => {
     const noStatus = goodBrief().replace('status: active\n', 'date: 2026-09-24\n');
     expect((await findings({ [A]: noStatus }))[0]?.message).toBe('declares no "status"');
-    expect((await findings({ [A]: goodBrief({ status: 'done' }) }))[0]?.hint).toBe('use one of "draft", "active", "archived"');
+    expect((await findings({ [A]: goodBrief({ status: 'done' }) }))[0]?.hint).toBe('use one of "draft", "active", "deferred", "archived"');
     expect((await findings({ [A]: goodBrief({ status: 'archived' }) }))[0]?.message).toBe('is marked "archived" but lives in briefs/');
     const archived = await findings({ 'briefs/archive/001_a.md': goodBrief({ status: 'active' }) });
     expect(archived.map((f) => f.message)).toEqual(['lives in briefs/archive/ but is marked "active"']);
@@ -84,6 +85,60 @@ describe('status', () => {
   it('suggests the archived word for an archived brief with no status', async () => {
     const text = '---\ndate: 2026-09-24\n---\n# T\n';
     expect((await findings({ 'briefs/archive/001_a.md': text }))[0]?.hint).toBe('add "status: archived" to the front matter');
+  });
+});
+
+describe('deferral', () => {
+  const deferred = (front: Record<string, string>): string => goodBrief({ status: 'deferred', ...front });
+
+  it('keeps a deferred brief live and never ready, with its trigger read', () => {
+    const corpus = corpusOf({ [A]: deferred({ trigger: 'when the second tenant signs' }) });
+    expect(corpus.live[0]?.status).toBe('deferred');
+    expect(corpus.live[0]?.trigger).toBe('when the second tenant signs');
+    expect(isReady(corpus, corpus.live[0]!)).toBe(false);
+  });
+
+  it('passes a trigger that names an event', async () => {
+    expect(await findings({ [A]: deferred({ trigger: 'when the second tenant signs' }) })).toEqual([]);
+    expect(await findings({ [A]: deferred({ trigger: '"when p95 > 200 ms"' }) })).toEqual([]);
+  });
+
+  it('requires a trigger, at the status line when there is none and at its own when it is empty', async () => {
+    const hint = 'add "trigger: <the event that brings it back>", such as "when the second tenant signs" or "when p95 exceeds 200 ms"';
+    expect((await findings({ [A]: deferred({}) })).map((f) => [f.rule, f.line, f.message, f.hint])).toEqual([
+      ['deferral-trigger', 2, 'is deferred and names no "trigger"', hint],
+    ]);
+    expect((await findings({ [A]: deferred({ wave: '1', trigger: '""' }) })).map((f) => [f.rule, f.line])).toEqual([['deferral-trigger', 4]]);
+    expect((await findings({ [A]: deferred({ trigger: '' }) })).map((f) => [f.rule, f.line])).toEqual([['deferral-trigger', 3]]);
+  });
+
+  it('refuses a date, a time or a placeholder for an event', async () => {
+    const says = async (trigger: string): Promise<string[]> =>
+      (await findings({ [A]: deferred({ trigger }) })).map((f) => `${f.rule}@${f.line}: ${f.message} | ${f.hint}`);
+    const event = 'name what must happen before the work resumes, such as "when the second tenant signs" or "when p95 exceeds 200 ms"';
+    expect(await says('2026-10')).toEqual([
+      `deferral-trigger@3: the trigger "2026-10" is a date or a time, not an event | ${event}; a date arrives whether or not the reason for the work has`,
+    ]);
+    expect(await says('next month')).toHaveLength(1);
+    expect(await says('Q3')).toHaveLength(1);
+    expect(await says('tbd')).toEqual([`deferral-trigger@3: the trigger "tbd" is a placeholder, not an event | ${event}`]);
+    // A placeholder word inside an event is only a word.
+    expect(await says('"TBD: when the vendor answers"')).toEqual([]);
+  });
+
+  it('leaves a trigger of the wrong shape to the field rule, and a brief that is not deferred alone', async () => {
+    expect((await findings({ [A]: deferred({ trigger: '[a, b]' }) })).map((f) => f.rule)).toEqual(['field']);
+    expect(await findings({ [A]: goodBrief({ trigger: '2026-10' }) })).toEqual([]);
+    expect(await findings({ [A]: goodBrief({ status: 'draft', trigger: 'Q3' }) })).toEqual([]);
+  });
+
+  it('holds a deferred brief to the live directory, and has no word for it when configured off', async () => {
+    const archived = await findings({ 'briefs/archive/001_a.md': goodBrief({ status: 'deferred' }) });
+    expect(archived.map((f) => f.message)).toEqual(['lives in briefs/archive/ but is marked "deferred"']);
+    const off = await findings({ [A]: deferred({ trigger: 'when x' }) }, config({ status: { deferred: null } }));
+    expect(off.map((f) => [f.rule, f.message, f.hint])).toEqual([['status', '"deferred" is not a status here', 'use one of "draft", "active", "archived"']]);
+    const own = config({ status: { deferred: 'parked' } });
+    expect(corpusOf({ [A]: goodBrief({ status: 'Parked' }) }, own).live[0]?.status).toBe('deferred');
   });
 });
 

@@ -163,6 +163,7 @@ export function briefJson(brief: Brief, extra: Record<string, unknown> = {}): Re
     dependsOn: brief.dependsOn,
     affectedFiles: brief.affectedFiles,
     protectedFiles: brief.protectedFiles,
+    trigger: brief.trigger,
     tasks: { total: brief.tasks.length, checked: brief.tasks.filter((t) => t.checked).length },
     ...extra,
   };
@@ -277,7 +278,10 @@ export function prettyMatrix(report: CollisionReport, style: Style): string {
   if (report.unscheduled.length > 0) {
     out.push(paint(style, 'dim', `no wave: ${report.unscheduled.map(label).join(', ')}`));
   }
-  if (report.waves.length === 0 && report.unscheduled.length === 0) out.push('no live briefs');
+  if (report.deferred.length > 0) {
+    out.push(paint(style, 'dim', `deferred: ${report.deferred.map(label).join(', ')}`));
+  }
+  if (report.waves.length === 0 && report.unscheduled.length === 0 && report.deferred.length === 0) out.push('no live briefs');
   return out.join('\n').trimEnd();
 }
 
@@ -297,6 +301,7 @@ export function matrixJson(report: CollisionReport): Record<string, unknown> {
       unscoped: w.unscoped.map((b) => b.id),
     })),
     unscheduled: report.unscheduled.map((b) => b.id),
+    deferred: report.deferred.map((b) => b.id),
   };
 }
 

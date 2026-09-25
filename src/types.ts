@@ -11,12 +11,14 @@ export type SeveritySetting = Severity | 'off';
 export type Phase = 'live' | 'archived';
 
 /**
- * The lifecycle a brief moves through. `draft` is optional: a repository that
- * never writes one maps no word to it. There is no persisted "archiving" state;
- * archival is a transaction, and a transaction that stops half-way is rolled
- * back rather than recorded.
+ * The lifecycle a brief moves through. `draft` and `deferred` are optional: a
+ * repository that never writes one maps no word to it. A deferred brief waits
+ * in the live directory for an event its `trigger` names, and runs in no wave
+ * until then. There is no persisted "archiving" state; archival is a
+ * transaction, and a transaction that stops half-way is rolled back rather
+ * than recorded.
  */
-export type Status = 'draft' | 'active' | 'archived';
+export type Status = 'draft' | 'active' | 'deferred' | 'archived';
 
 /**
  * One problem, located. Lines are 1-based; a finding about a file as a whole

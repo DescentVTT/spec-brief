@@ -23,6 +23,7 @@ export const BUILT_IN_FIELDS: readonly string[] = [
   'dependsOn',
   'affectedFiles',
   'protectedFiles',
+  'trigger',
   'integrity',
 ];
 
@@ -60,6 +61,8 @@ export interface Brief {
   readonly dependsOn: readonly string[];
   readonly affectedFiles: readonly string[];
   readonly protectedFiles: readonly string[];
+  /** For deferred work: the observable event that brings it back. */
+  readonly trigger: string | null;
   readonly integrity: string | null;
   /** The frozen banner's lines, markers included, end exclusive. */
   readonly banner: { readonly start: number; readonly end: number } | null;
@@ -94,6 +97,7 @@ function statusFrom(word: string | null, config: Config, phase: Phase): Status |
   if (lower === config.status.archived.toLowerCase()) return 'archived';
   if (lower === config.status.active.toLowerCase()) return 'active';
   if (config.status.draft !== null && lower === config.status.draft.toLowerCase()) return 'draft';
+  if (config.status.deferred !== null && lower === config.status.deferred.toLowerCase()) return 'deferred';
   return null;
 }
 
@@ -174,6 +178,7 @@ export function parseBrief(file: string, text: string, config: Config, phase: Ph
     dependsOn: list('dependsOn'),
     affectedFiles: list('affectedFiles'),
     protectedFiles: list('protectedFiles'),
+    trigger: text1('trigger'),
     integrity: text1('integrity'),
     banner,
     problems,

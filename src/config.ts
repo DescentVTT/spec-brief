@@ -63,6 +63,8 @@ export interface Config {
     readonly field: string | null;
     readonly draft: string | null;
     readonly active: string;
+    /** The word for work put off until an event its `trigger` names; `null` when a repository has none. */
+    readonly deferred: string | null;
     readonly archived: string;
   };
   readonly sections: readonly SectionRule[];
@@ -149,6 +151,11 @@ export const CONFIG_SCHEMA: Schema = {
         field: { type: 'string', nullable: true, description: 'Front-matter key holding the status; null uses location only.' },
         draft: { type: 'string', nullable: true, description: 'The word for a brief still being written, or null.' },
         active: { type: 'string', minLength: 1, description: 'The word for a live brief.' },
+        deferred: {
+          type: 'string',
+          nullable: true,
+          description: 'The word for a live brief put off until the event its "trigger" names, or null. A deferred brief is never ready and runs in no wave.',
+        },
         archived: { type: 'string', minLength: 1, description: 'The word for an archived brief.' },
       },
     },
@@ -210,7 +217,7 @@ export const DEFAULT_CONFIG: Config = {
   exclude: [],
   template: null,
   id: { source: 'filename', separator: '_', digits: 3 },
-  status: { field: 'status', draft: 'draft', active: 'active', archived: 'archived' },
+  status: { field: 'status', draft: 'draft', active: 'active', deferred: 'deferred', archived: 'archived' },
   sections: [
     section('Intent', {
       aliases: ["Commander's Intent", 'Mission', 'Objective'],
@@ -336,6 +343,12 @@ export function resolveConfig(raw: unknown, file = 'configuration'): Config {
   return config;
 }
 
+/** The status words a repository uses, in lifecycle order. */
+export function statusWords(config: Config): string[] {
+  const { draft, active, deferred, archived } = config.status;
+  return [draft, active, deferred, archived].filter((w) => w !== null);
+}
+
 /** What the schema cannot say: relationships between values. */
 function checkConfig(config: Config): string[] {
   const problems: string[] = [];
@@ -350,9 +363,9 @@ function checkConfig(config: Config): string[] {
   const briefs = inside('briefs', config.briefs);
   const archive = inside('archive', config.archive);
   if (briefs !== null && briefs === archive) problems.push('"briefs" and "archive" must be different directories');
-  const words = [config.status.draft, config.status.active, config.status.archived].filter((w) => w !== null);
+  const words = statusWords(config);
   if (new Set(words.map((w) => w.toLowerCase())).size !== words.length) {
-    problems.push('the status words for draft, active and archived must differ');
+    problems.push('the status words for draft, active, deferred and archived must differ');
   }
   // A pattern that does not parse would match nothing, and a run over no briefs reads as clean.
   for (const [key, pattern] of [['files', config.files], ...config.exclude.map((e) => ['exclude', e] as const)] as const) {

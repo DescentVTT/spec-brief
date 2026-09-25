@@ -9,14 +9,16 @@
  */
 
 import { BUILT_IN_FIELDS, type Brief, knownFields, lineOfField } from './brief.js';
-import type { Config, SectionRule } from './config.js';
+import { type Config, type SectionRule, statusWords } from './config.js';
 import { type Corpus, dependencyCycles, duplicateIds, idKey, resolveDependency } from './corpus.js';
+import { findEntry } from './frontmatter.js';
 import { integrityOf } from './integrity.js';
 import { type Glob, hasExtension, held, isGlobSyntax, matchGlob, parseGlob, readingIn, treeOf, WITNESS_BUDGET } from './glob.js';
 import { hasContent, type Section } from './markdown.js';
 import { closest } from './schema.js';
 import { contradictions, patternsOf, scopeOf, type ScopePattern } from './scope.js';
 import { inWords, labelMatches } from './text.js';
+import { namesAnEvent } from './trigger.js';
 import type { Severity, SeveritySetting } from './types.js';
 
 export interface RuleResult {
@@ -208,7 +210,7 @@ export const RULES: readonly Rule[] = [
         ];
       }
       if (brief.status === null) {
-        const words = [config.status.draft, config.status.active, config.status.archived].filter((w) => w !== null);
+        const words = statusWords(config);
         return [
           {
             line,
@@ -480,6 +482,36 @@ export const RULES: readonly Rule[] = [
           },
         ];
       });
+    }),
+  },
+  {
+    id: 'deferral-trigger',
+    severity: 'error',
+    description: 'A deferred brief names in "trigger" the observable event that brings it back, not a date.',
+    check: live(({ brief, config }) => {
+      // A trigger of the wrong shape is the field rule's finding.
+      if (brief.status !== 'deferred' || brief.problems.some((p) => p.field === 'trigger')) return [];
+      const example = 'such as "when the second tenant signs" or "when p95 exceeds 200 ms"';
+      const trigger = brief.trigger?.trim() ?? '';
+      if (trigger === '') {
+        const declared = findEntry(brief.frontMatter, 'trigger') !== undefined;
+        return [
+          {
+            line: at(lineOfField(brief, declared ? 'trigger' : (config.status.field as string))),
+            message: 'is deferred and names no "trigger"',
+            hint: `add "trigger: <the event that brings it back>", ${example}`,
+          },
+        ];
+      }
+      const line = at(lineOfField(brief, 'trigger'));
+      const hint = `name what must happen before the work resumes, ${example}`;
+      if (config.placeholders.some((p) => p.toLowerCase() === trigger.toLowerCase())) {
+        return [{ line, message: `the trigger "${trigger}" is a placeholder, not an event`, hint }];
+      }
+      if (!namesAnEvent(trigger)) {
+        return [{ line, message: `the trigger "${trigger}" is a date or a time, not an event`, hint: `${hint}; a date arrives whether or not the reason for the work has` }];
+      }
+      return [];
     }),
   },
   {

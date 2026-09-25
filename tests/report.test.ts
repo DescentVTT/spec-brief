@@ -115,6 +115,7 @@ describe('lists, matrices and plans', () => {
       dependsOn: [],
       affectedFiles: ['src/api/a.ts'],
       protectedFiles: [],
+      trigger: null,
       tasks: { total: 1, checked: 1 },
       ready: true,
     });

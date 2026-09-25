@@ -24,6 +24,14 @@ describe('archiving', () => {
     expect(planArchive(corpus, corpus.briefs[0]!, { date: '2026-09-24' }).blocking.map((f) => f.brief)).toEqual(['001']);
   });
 
+  it('refuses a deferred brief, whose work has not run', () => {
+    const corpus = corpusOf({ [A]: goodBrief({ status: 'deferred', trigger: 'when the second tenant signs' }) });
+    const plan = planArchive(corpus, corpus.briefs[0]!, { date: '2026-09-24' });
+    expect(plan.blocking.map((f) => [f.rule, f.line, f.message, f.hint])).toEqual([
+      ['archive-deferred', 2, 'is deferred, and deferred work has not been executed', 'set "status: active" when its trigger fires and the round runs'],
+    ]);
+  });
+
   it('points a link a brief holds to itself at its new place, and plans no second write of it', () => {
     const corpus = corpusOf({ [A]: goodBrief({}, '\n[me](001_a.md#top)\n') });
     const plan = planArchive(corpus, corpus.briefs[0]!, { date: '2026-09-24' });
