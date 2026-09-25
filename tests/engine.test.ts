@@ -305,6 +305,31 @@ describe('opening a repository', () => {
     expect(archived).toContain('> Recorded at commit `');
     expect(await engine.lint()).toEqual([]);
   });
+
+  it('does not pass the scope of a round archived on the branch it merged into', async () => {
+    const root = dir('open-merged');
+    initRepo(root);
+    writeTree(root, {
+      '.spec-brief.json': JSON.stringify({ archiving: { base: 'main' } }),
+      'briefs/001_a.md': goodBrief({ affectedFiles: '[src/ok.ts]', protectedFiles: '[src/locked.ts]' }),
+      'src/locked.ts': 'one\n',
+    });
+    commitAll(root, 'init');
+    writeTree(root, { 'src/locked.ts': 'two\n' });
+    commitAll(root, 'work');
+    const engine = await BriefEngine.open({ cwd: root });
+    const plan = await engine.planArchive('1', { date: '2026-09-24' });
+    expect(plan.blocking).toEqual([]);
+    expect(plan.warnings.map((f) => [f.rule, f.message])).toEqual([
+      ['scope-unmeasured', expect.stringMatching(/^protectedFiles and affectedFiles went unchecked: [0-9a-f]{7} is already in main, /)],
+    ]);
+    const strict = await engine.planArchive('1', { date: '2026-09-24', strict: true });
+    expect(strict.blocking.map((f) => f.rule)).toEqual(['scope-unmeasured']);
+    // Named, the commit is measured against its parent, and the protected file is caught.
+    const named = await engine.planArchive('1', { date: '2026-09-24', commit: 'HEAD', base: 'HEAD~1' });
+    expect(named.blocking.map((f) => f.rule)).toEqual(['protected-file']);
+    expect(named.warnings).toEqual([]);
+  });
 });
 
 describe('plugins', () => {

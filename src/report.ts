@@ -11,7 +11,7 @@ import type { Plan } from './archive.js';
 import type { Brief } from './brief.js';
 import type { CollisionReport } from './collisions.js';
 import { summarise } from './lint.js';
-import { COLLISION_RULES, RULES } from './rules.js';
+import { ARCHIVE_RULES, COLLISION_RULES, RULES } from './rules.js';
 import type { Finding, Severity } from './types.js';
 
 export type Format = 'pretty' | 'json' | 'sarif' | 'github';
@@ -81,7 +81,7 @@ export function findingJson(f: Finding): Record<string, unknown> {
 const SARIF_LEVEL: Readonly<Record<Severity, string>> = { error: 'error', warning: 'warning', note: 'note' };
 
 export function sarif(findings: readonly Finding[], version: string): string {
-  const described = new Map([...RULES, ...COLLISION_RULES].map((r) => [r.id, r]));
+  const described = new Map([...RULES, ...COLLISION_RULES, ...ARCHIVE_RULES].map((r) => [r.id, r]));
   const ids = [...new Set(findings.map((f) => f.rule))].sort();
   const document = {
     $schema: 'https://json.schemastore.org/sarif-2.1.0.json',

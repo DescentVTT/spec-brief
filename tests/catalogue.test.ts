@@ -4,7 +4,7 @@ import { planArchive, planUnarchive } from '../src/archive.js';
 import { collisionFindings, collisions } from '../src/collisions.js';
 import { lint } from '../src/lint.js';
 import { prettyFindings, prettyList, prettyMatrix, prettyPlan } from '../src/report.js';
-import { COLLISION_RULES, RULES } from '../src/rules.js';
+import { ARCHIVE_RULES, COLLISION_RULES, RULES } from '../src/rules.js';
 import type { Finding } from '../src/types.js';
 import { config, corpusOf, goodBrief } from './helpers.js';
 
@@ -20,7 +20,7 @@ const table = (findings: readonly Finding[]): string[] =>
 
 describe('the rule catalogue', () => {
   it('names every rule once, in kebab case, with a sentence describing it', () => {
-    const all = [...RULES, ...COLLISION_RULES];
+    const all = [...RULES, ...COLLISION_RULES, ...ARCHIVE_RULES];
     expect(new Set(all.map((r) => r.id)).size).toBe(all.length);
     for (const rule of all) {
       expect(rule.id, rule.id).toMatch(/^[a-z]+(?:-[a-z]+)*$/);
@@ -29,7 +29,7 @@ describe('the rule catalogue', () => {
   });
 
   it('gives each rule the default severity the README documents', () => {
-    expect(Object.fromEntries([...RULES, ...COLLISION_RULES].map((r) => [r.id, r.severity]))).toEqual({
+    expect(Object.fromEntries([...RULES, ...COLLISION_RULES, ...ARCHIVE_RULES].map((r) => [r.id, r.severity]))).toEqual({
       'front-matter': 'error',
       field: 'error',
       'unknown-field': 'warning',
@@ -55,6 +55,7 @@ describe('the rule catalogue', () => {
       collision: 'error',
       unscoped: 'note',
       'shared-directory': 'off',
+      'scope-unmeasured': 'warning',
     });
   });
 });

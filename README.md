@@ -103,7 +103,7 @@ Closes a round. Refused, with every reason, when:
 - the working tree holds uncommitted work outside the brief directories (`--allow-dirty` to proceed);
 - the round's commit changed a file in `protectedFiles`.
 
-Changes outside `affectedFiles` are a warning, and an error under `--strict`. Otherwise it writes the archived brief with its status set, a frozen banner under the front matter, every relative link rewritten for the archive directory, and an `integrity` hash; rewrites the links other live briefs hold to it; and removes the original. `--commit <rev>` records the commit and the files it changed; `--base <rev>` measures from the merge base instead, for a branch of several commits; `--pr <n>` links the pull request; `--summary <text>` is what the round did, in the banner. `--dry-run` prints the plan and the banner and writes nothing. Archiving an archived brief does nothing and exits 0.
+Changes outside `affectedFiles` are a warning, and an error under `--strict`. A scope is never passed by checks that measured nothing: when the files the round changed are unknown - no `--commit`, `--base` or `archiving.base`, `--no-git`, or a commit already in the base branch, as on `main` after the merge - a brief that declares one gets `scope-unmeasured`, a warning, and a refusal under `--strict`. Otherwise it writes the archived brief with its status set, a frozen banner under the front matter, every relative link rewritten for the archive directory, and an `integrity` hash; rewrites the links other live briefs hold to it; and removes the original. `--commit <rev>` records the commit and the files it changed; `--base <rev>` measures from the merge base instead, for a branch of several commits; `--pr <n>` links the pull request; `--summary <text>` is what the round did, in the banner. `--dry-run` prints the plan and the banner and writes nothing. Archiving an archived brief does nothing and exits 0.
 
 spec-brief reads git and never writes it. Review the change and commit it with the round.
 
@@ -202,9 +202,10 @@ Section names compare without case, typographic quotes, emphasis, a leading numb
 | `collision` | error | Two briefs in one wave whose scopes can name the same file (`matrix`). |
 | `unscoped` | note | A brief sharing a wave that declares no scope (`matrix`). |
 | `shared-directory` | off | Two briefs in one wave writing into the same directory (`matrix`). |
+| `scope-unmeasured` | warning | A brief with a scope archived without the files its round changed, so nothing checked the scope (`archive`). |
 <!-- rules:end -->
 
-`archive` refuses with its own reasons - `open-task`, `archive-draft`, `dependency-open`, `dirty-tree`, `protected-file`, `out-of-scope`, `archive-exists` - which are not lint rules: they are about whether this round is done, not whether the brief is well written.
+`archive` refuses with its own reasons - `open-task`, `archive-draft`, `dependency-open`, `dirty-tree`, `protected-file`, `out-of-scope`, `archive-exists` - which are not lint rules: they are about whether this round is done, not whether the brief is well written. The rules marked `archive` above are raised by archival too, and configuration sets their severity like any other.
 
 ## In CI
 
