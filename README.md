@@ -98,6 +98,28 @@ wave 1 · 3 briefs
 
 Scopes are intersected as globs, not compared as strings: the two above share no prefix and still meet, and the file named is one both patterns match and neither brief protects - always a file, never a directory. Two briefs whose scopes meet in several places are one collision, listing every pair of patterns that meets. A brief with no scope is reported as unscoped rather than counted as safe. The search for a shared file has a budget; a pair it cannot decide within it is marked `?` and reported as `collision-undecided`, a warning, never as a collision and never as clean. Exit 1 on a collision.
 
+### `spec-brief schedule`
+
+Computes the waves the live briefs can run in, drafts included, and sets each beside the wave it declares. A brief runs after every dependency that is still live - an archived one is done - and shares a wave with no brief whose writable scope meets its own. Briefs are taken in dependency order, ties broken by id, and each goes into the lowest wave that is after its dependencies and holds nothing it collides with. A brief with no `affectedFiles` cannot be proved apart from anything, so it runs in a wave of its own and is reported as `unscoped`. The first wave is the lowest any brief declares, or 1.
+
+```text
+wave 1 · 2 briefs
+  001  Rotate session tokens
+  003  Audit log            moves from wave 2
+         nothing holds it later
+wave 2 · 1 brief
+  002  Store sessions       moves from wave 1
+         not wave 1, where 001 also writes src/auth/session.ts ("src/**/session.ts" and "src/auth/**")
+
+waits: 007 on 006, which is deferred
+deferred: 006
+2 briefs would move; "spec-brief schedule --write" writes the waves
+```
+
+Each move says why: the dependency that sets the earliest wave, and for every wave passed over, the brief there and the file both would write. A deferred brief, and one that waits on it, is placed nowhere; a dependency cycle is an error, and nothing in or after it is placed. `--write` sets `wave` in the front matter of each brief whose wave changes - every other line as it was, in one transaction - and writes nothing over a cycle. `--format json` gives an orchestrator the waves, each brief's declared and proposed wave with the reasons, and what waits on what; `sarif` and `github` carry a `wave-schedule` finding per move.
+
+Exit 0 when the declared waves already hold, 1 when they would change or the dependencies form a cycle, 2 when the run cannot be trusted. The result is the same every time for the same briefs. It is a valid schedule, not always the shortest: no fast method promises the fewest waves, and a person can always move a brief later by hand, which `lint` and `matrix` then check.
+
 ### `spec-brief archive <brief>`
 
 Closes a round. Refused, with every reason, when:
@@ -206,9 +228,10 @@ Section names compare without case, typographic quotes, emphasis, a leading numb
 | `literal-read-as-file` | note | A path with no glob syntax that the tree does not hold and whose name has no extension, such as `src/newmod`: read as a file, and `src/newmod/` if a directory was meant. |
 | `archive-freeze` | error | An archived brief that changed after it was archived. |
 | `collision` | error | Two briefs in one wave whose scopes can name the same file (`matrix`). |
-| `collision-undecided` | warning | Two briefs in one wave whose collision the search could not decide within its budget (`matrix`). |
-| `unscoped` | note | A brief sharing a wave that declares no scope (`matrix`). |
+| `collision-undecided` | warning | Two briefs in one wave whose collision the search could not decide within its budget (`matrix`), or a wave `schedule` passed over for it. |
+| `unscoped` | note | A brief sharing a wave that declares no scope (`matrix`), or one `schedule` runs alone. |
 | `shared-directory` | off | Two briefs in one wave writing into the same directory (`matrix`). |
+| `wave-schedule` | error | A brief whose declared wave is not the one `schedule` computes, with the reason (`schedule`). |
 | `scope-unmeasured` | warning | A brief with a scope archived without the files its round changed, so nothing checked the scope (`archive`). |
 | `stale-link` | warning | Links in live briefs left pointing where a brief used to be, when `archiving.rewriteLinks` is off (`archive`, `unarchive`). |
 <!-- rules:end -->
@@ -220,6 +243,7 @@ Section names compare without case, typographic quotes, emphasis, a leading numb
 ```yaml
 - run: npx spec-brief lint --format github
 - run: npx spec-brief matrix --format github
+- run: npx spec-brief schedule --format github
 ```
 
 `github` writes workflow commands, which annotate the pull request with no upload and no permission. `sarif` writes SARIF 2.1.0 for code-scanning upload. `json` is a versioned document for anything else: `schemaVersion` changes when a field changes meaning, and is 2 since a collision became a pair of briefs rather than a pair of patterns.
@@ -233,6 +257,7 @@ const engine = await BriefEngine.open({ cwd: process.cwd() });
 const findings = await engine.lint();
 const ready = engine.ready();                        // what can run now
 const { report } = await engine.collisions();        // who collides with whom
+const { schedule } = await engine.schedule();        // the waves, computed
 const plan = await engine.planArchive('012', { commit: 'HEAD', pr: 41 });
 if (plan.blocking.length === 0) await engine.apply(plan);
 ```

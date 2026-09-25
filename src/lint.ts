@@ -6,7 +6,7 @@
 import type { Brief } from './brief.js';
 import { ConfigError } from './config.js';
 import type { Corpus } from './corpus.js';
-import { analyse, ARCHIVE_RULES, COLLISION_RULES, type Rule, RULES } from './rules.js';
+import { analyse, ARCHIVE_RULES, COLLISION_RULES, type Rule, type RuleInfo, RULES } from './rules.js';
 import type { Finding, Severity, SeveritySetting } from './types.js';
 
 export interface Plugin {
@@ -51,6 +51,13 @@ export function ruleIds(plugins: readonly Plugin[] = []): string[] {
 /** The severity configuration assigns a rule, or its own. */
 export function severityOf(corpus: Corpus, id: string, fallback: SeveritySetting): SeveritySetting {
   return corpus.config.rules[id] ?? fallback;
+}
+
+/** The severity of a built-in rule as configured, or `null` when it is off. */
+export function configuredSeverity(corpus: Corpus, id: string): Severity | null {
+  const rule = [...RULES, ...COLLISION_RULES, ...ARCHIVE_RULES].find((r) => r.id === id) as RuleInfo;
+  const setting = severityOf(corpus, id, rule.severity);
+  return setting === 'off' ? null : setting;
 }
 
 /** Refuses a configuration that names a rule nobody defines: a typo there silences nothing. */

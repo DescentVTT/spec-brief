@@ -45,7 +45,19 @@ Notable changes, newest first. Versions follow [semver](https://semver.org).
   that is only a date or a time - `2026-10`, `Q3`, `next month`, `October`,
   `in two weeks` - or a placeholder. "when the second tenant signs" and
   "when p95 > 200 ms" pass.
-- 24 lint rules and 4 collision rules.
+- `spec-brief schedule` computes the waves the live briefs can run in
+  (ADR-0011): dependency order, ties by id, each brief in the lowest wave
+  after its live dependencies that holds nothing it collides with, a brief
+  with no scope in a wave of its own. Each brief's proposed wave is shown
+  beside its declared one with the reason for a move - the dependency, or the
+  brief and the file that kept it out of a wave - and deferred briefs, the
+  briefs waiting on them, and dependency cycles are listed. `--write` sets
+  `wave` in the front matter of each brief that moves, every other line
+  untouched, as one transaction, and writes nothing over a cycle. Exit 0 when
+  the declared waves hold, 1 when they would change or on a cycle. Pretty,
+  JSON, SARIF and GitHub output; `wave-schedule`, an error by default, is the
+  finding per move.
+- 24 lint rules and 5 collision rules.
 - The library's `parseGlob`, `matchGlob`, `intersectGlobs` and `globBase`
   keep their signatures over the new engine. `parseGlob`'s `isFile` option is
   replaced by `literal` (`'file'`, `'directory'`, `'either'` or a function,

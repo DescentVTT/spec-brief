@@ -16,8 +16,8 @@ tests: Vitest reads `src/` directly.
 ## The pipeline
 
 ```text
-files -> brief.ts -> corpus.ts -> rules.ts / collisions.ts / archive.ts -> report.ts
-         one file    all files    findings, the matrix, a plan              render
+files -> brief.ts -> corpus.ts -> rules.ts / collisions.ts / schedule.ts / archive.ts -> report.ts
+         one file    all files    findings, the matrix, the waves, a plan                 render
 ```
 
 | Module | Responsibility |
@@ -36,6 +36,8 @@ files -> brief.ts -> corpus.ts -> rules.ts / collisions.ts / archive.ts -> repor
 | `rules.ts` | The built-in rules. |
 | `lint.ts` | Running rules and plugins with configured severities. |
 | `collisions.ts` | The collision matrix. |
+| `schedule.ts` | Waves by precedence-constrained greedy colouring, the reason for each, and the writes `--write` makes. |
+| `trigger.ts` | Whether a deferral's trigger names an event or only a time. |
 | `integrity.ts` | The freeze hash. |
 | `archive.ts` | Planning archival and its reverse. |
 | `apply.ts` | Executing a plan as a transaction. |

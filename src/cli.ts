@@ -31,7 +31,9 @@ import {
   prettyList,
   prettyMatrix,
   prettyPlan,
+  prettySchedule,
   sarif,
+  scheduleJson,
   sectionsJson,
   type Style,
   summaryLine,
@@ -67,6 +69,7 @@ Commands:
   lint [brief...]       check briefs against the configuration
   list                  briefs with their status, wave and readiness
   matrix                scope collisions between briefs in the same wave
+  schedule              the waves the live briefs can run in, computed
   archive <brief>       close a round: check it, stamp it, freeze it, move it
   unarchive <brief>     reopen an archived brief
 
@@ -98,6 +101,9 @@ list:
 
 matrix:
   --all-waves           compare every live brief, whatever its wave
+
+schedule:
+  --write               write each proposed wave into its brief's front matter
 
 archive:
   --pr <number>         the pull request the round merged in
@@ -144,6 +150,7 @@ const COMMANDS: Readonly<Record<string, { options: NonNullable<ParseArgsConfig['
   lint: { options: {}, formats: FORMATS },
   list: { options: { ready: { type: 'boolean' }, archived: { type: 'boolean' } }, formats: ['pretty', 'json'] },
   matrix: { options: { 'all-waves': { type: 'boolean' } }, formats: FORMATS },
+  schedule: { options: { write: { type: 'boolean' } }, formats: FORMATS },
   archive: {
     options: {
       pr: { type: 'string' },
@@ -363,6 +370,36 @@ async function runMatrix(run: Run): Promise<number> {
   return emitFindings(run, 'matrix', sorted, engine.corpus.live.length, matrixJson(report));
 }
 
+/**
+ * The waves, computed. The view shows the moves, their reasons and the
+ * cycles; the other findings - briefs that run alone, pairs the search could
+ * not decide, a front matter that cannot take a wave - print beneath it.
+ */
+async function runSchedule(run: Run): Promise<number> {
+  const engine = await openEngine(run);
+  engine.requireBriefs();
+  const { schedule: computed, findings } = await engine.schedule();
+  let written: string[] | null = null;
+  let reported: Finding[] = findings;
+  if (flag(run.values, 'write')) {
+    const result = await engine.writeWaves(computed);
+    written = result.written;
+    // Written, the waves hold, and the findings that said they did not are answered.
+    reported = [...(written.length > 0 ? findings.filter((f) => f.rule !== 'wave-schedule') : findings), ...result.refused];
+  }
+  const sorted = sortFindings(reported);
+  if (run.format === 'pretty') {
+    run.out(`${prettySchedule(computed, written, run.style)}
+`);
+    const rest = sorted.filter((f) => f.rule !== 'wave-schedule' && f.rule !== 'dependency-cycle');
+    if (rest.length > 0) run.out(`
+${prettyFindings(rest, run.style)}
+`);
+    return failing(sorted, run.strict) ? EXIT_FAILED : EXIT_OK;
+  }
+  return emitFindings(run, 'schedule', sorted, engine.corpus.live.length, { ...scheduleJson(computed), written });
+}
+
 async function runTransition(run: Run, action: 'archive' | 'unarchive'): Promise<number> {
   const reference = run.positionals[0];
   if (reference === undefined || run.positionals.length > 1) throw new UsageError(`${action} takes one brief: spec-brief ${action} <brief>`);
@@ -442,6 +479,8 @@ export async function main(argv: readonly string[] = process.argv.slice(2), io: 
         return await runList(run);
       case 'matrix':
         return await runMatrix(run);
+      case 'schedule':
+        return await runSchedule(run);
       case 'archive':
         return await runTransition(run, 'archive');
       default:

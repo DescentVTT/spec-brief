@@ -74,9 +74,22 @@ export {
 export { integrityOf } from './integrity.js';
 export { failing, lint, type LintOptions, type Plugin, ruleIds, sortFindings, summarise } from './lint.js';
 export { asPlugin, loadPlugins } from './plugins.js';
-export { type Format, FORMATS, githubCommands, JSON_SCHEMA_VERSION, matrixJson, sarif, sectionsJson } from './report.js';
+export { type Format, FORMATS, githubCommands, JSON_SCHEMA_VERSION, matrixJson, sarif, scheduleJson, sectionsJson } from './report.js';
 export { ARCHIVE_RULES, COLLISION_RULES, type Rule, type RuleContext, type RuleInfo, type RuleResult, RULES } from './rules.js';
 export { nextId, renderNewBrief } from './scaffold.js';
+export {
+  moves,
+  type Passed,
+  type Placement,
+  planWaves,
+  reasons,
+  type Schedule,
+  schedule,
+  scheduleFindings,
+  type ScheduleOptions,
+  type Unplaced,
+  type WavePlan,
+} from './schedule.js';
 export { contradictions, meet, type Meeting, type Scope, scopeOf, type ScopePattern } from './scope.js';
 export type { Finding, Phase, Severity, SeveritySetting, Status } from './types.js';
 

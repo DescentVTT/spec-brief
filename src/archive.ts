@@ -16,10 +16,9 @@ import type { CommitInfo, FileChange } from './git.js';
 import { type Glob, matchGlob, parseGlob } from './glob.js';
 import { INTEGRITY_FIELD, integrityOf } from './integrity.js';
 import { dirOf, linesLinkingTo, normalisePath, rewriteLinks } from './links.js';
-import { severityOf } from './lint.js';
+import { configuredSeverity } from './lint.js';
 import type { Scan } from './markdown.js';
-import { ARCHIVE_RULES, type RuleInfo } from './rules.js';
-import { fillTemplate, joinLines, labelMatches, lineEnding, templateHoles } from './text.js';
+import { encodeLike, fillTemplate, joinLines, labelMatches, templateHoles } from './text.js';
 import type { Finding, Severity } from './types.js';
 
 export interface PullRequest {
@@ -104,13 +103,6 @@ function problem(
 
 function lineOf(brief: Brief, key: string): number {
   return lineOfField(brief, key) + 1;
-}
-
-/** The severity configuration gives an archive rule; `null` when it is off. */
-function archiveSeverity(corpus: Corpus, id: string): Severity | null {
-  const rule = ARCHIVE_RULES.find((r) => r.id === id) as RuleInfo;
-  const setting = severityOf(corpus, id, rule.severity);
-  return setting === 'off' ? null : setting;
 }
 
 /** Where an archive rule's finding goes: an error refuses, and under --strict a warning refuses as an error, as out-of-scope does. */
@@ -283,15 +275,6 @@ function withIntegrity(lines: readonly string[]): string[] {
   return setEntry(placed, readFrontMatter(placed), INTEGRITY_FIELD, hash);
 }
 
-/** Lines written back with the source's byte-order mark, line ending and final newline, or lack of one. */
-function encodeLike(source: string, lines: readonly string[]): string {
-  const bom = source.charCodeAt(0) === 0xfeff ? '\ufeff' : '';
-  const eol = lineEnding(source);
-  const text = joinLines(lines, eol);
-  const finalNewline = source === '' || source.endsWith('\n');
-  return `${bom}${finalNewline ? text : text.slice(0, text.length - eol.length)}`;
-}
-
 interface Place {
   readonly file: string;
   readonly line: number;
@@ -340,7 +323,7 @@ function listed(items: readonly string[]): string {
  * is off: the move is what breaks them, so the move says where they are.
  */
 function staleLinks(corpus: Corpus, brief: Brief, stale: readonly Place[], strict: boolean, blocking: Finding[], warnings: Finding[]): void {
-  const severity = archiveSeverity(corpus, 'stale-link');
+  const severity = configuredSeverity(corpus, 'stale-link');
   if (severity === null || stale.length === 0) return;
   const finding = problem(
     brief,
@@ -457,7 +440,7 @@ export function planArchive(corpus: Corpus, brief: Brief, request: ArchiveReques
     );
     (request.strict === true ? blocking : warnings).push(finding);
   }
-  const scopeSeverity = archiveSeverity(corpus, 'scope-unmeasured');
+  const scopeSeverity = configuredSeverity(corpus, 'scope-unmeasured');
   const unmeasured = scopeSeverity === null ? null : unmeasuredScope(brief, request, scopeSeverity);
   if (unmeasured !== null) place(unmeasured, request.strict === true, blocking, warnings);
   if (corpus.briefs.some((b) => b.file === to)) {
