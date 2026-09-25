@@ -383,17 +383,17 @@ describe('collisions', () => {
       'briefs/001_a.md': goodBrief({ wave: '1', affectedFiles: '[Makefile]' }),
       'briefs/002_b.md': goodBrief({ wave: '1', affectedFiles: '["**/x"]' }),
     });
-    expect(collisions(corpus).waves[0]?.collisions.map((c) => c.witness)).toEqual(['Makefile/x']);
+    expect(collisions(corpus).waves[0]?.collisions.flatMap((c) => c.overlaps.map((o) => o.witness))).toEqual(['Makefile/x']);
     expect(collisions(corpus, { repoFiles: ['Makefile'] }).waves[0]?.collisions).toEqual([]);
     expect(collisions(corpus, { repoFiles: null }).waves[0]?.collisions).toHaveLength(1);
   });
 
-  it('reports no shared directory at the root, and several in order', () => {
+  it('reports no shared directory at the root, and several in order, as one pair', () => {
     const corpus = corpusOf({
       'briefs/001_a.md': goodBrief({ wave: '1', affectedFiles: '["**/a.ts", y/1.ts, x/1.ts]' }),
       'briefs/002_b.md': goodBrief({ wave: '1', affectedFiles: '["**/b.ts", y/2.ts, x/2.ts]' }),
     });
-    expect(collisions(corpus).waves[0]?.shared.map((s) => s.directory)).toEqual(['x', 'y']);
+    expect(collisions(corpus).waves[0]?.shared.map((s) => s.directories)).toEqual([['x', 'y']]);
   });
 
   it('orders waves by number, and reports no unscoped brief alone in its wave', () => {

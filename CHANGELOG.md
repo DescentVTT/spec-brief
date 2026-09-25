@@ -21,6 +21,14 @@ Notable changes, newest first. Versions follow [semver](https://semver.org).
   the old path are reported as `stale-link`, a warning naming each file and
   line, on `archive` and `unarchive` alike; `unarchive --strict` refuses on
   it, as `archive --strict` does.
+- `matrix` reports two briefs whose scopes meet once, however many pairs of
+  their patterns meet, and the finding lists every pair with a path both
+  cover. A pair writing into several shared directories is likewise one
+  `shared-directory` finding.
+- JSON documents are `schemaVersion: 2`. In `matrix --format json` a
+  collision carries `overlaps`, a list of `{ patterns, witness }`, in place of
+  `patterns` and `witness`, and a `sharedDirectories` entry carries
+  `directories` in place of `directory`.
 
 ## 0.1.0
 

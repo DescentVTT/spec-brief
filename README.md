@@ -92,7 +92,7 @@ wave 1 · 3 briefs
   ? 003 declares no affectedFiles and cannot be checked
 ```
 
-Scopes are intersected as globs, not compared as strings: the two above share no prefix and still meet, and the file named is one both patterns match. A brief with no scope is reported as unscoped rather than counted as safe. Exit 1 on a collision.
+Scopes are intersected as globs, not compared as strings: the two above share no prefix and still meet, and the file named is one both patterns match. Two briefs whose scopes meet in several places are one collision, listing every pair of patterns that meets. A brief with no scope is reported as unscoped rather than counted as safe. Exit 1 on a collision.
 
 ### `spec-brief archive <brief>`
 
@@ -215,7 +215,7 @@ Section names compare without case, typographic quotes, emphasis, a leading numb
 - run: npx spec-brief matrix --format github
 ```
 
-`github` writes workflow commands, which annotate the pull request with no upload and no permission. `sarif` writes SARIF 2.1.0 for code-scanning upload. `json` is a versioned document (`schemaVersion`) for anything else.
+`github` writes workflow commands, which annotate the pull request with no upload and no permission. `sarif` writes SARIF 2.1.0 for code-scanning upload. `json` is a versioned document for anything else: `schemaVersion` changes when a field changes meaning, and is 2 since a collision became a pair of briefs rather than a pair of patterns.
 
 ## As a library
 

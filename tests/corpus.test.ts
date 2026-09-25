@@ -102,10 +102,10 @@ describe('the collision matrix', () => {
       [2, ['005']],
     ]);
     const wave1 = report.waves[0]!;
-    expect(wave1.collisions.map((c) => [c.a.id, c.b.id, c.patterns, c.witness])).toEqual([
-      ['001', '002', ['src/auth/**', 'src/**/session.ts'], 'src/auth/session.ts'],
+    expect(wave1.collisions.map((c) => [c.a.id, c.b.id, c.overlaps])).toEqual([
+      ['001', '002', [{ patterns: ['src/auth/**', 'src/**/session.ts'], witness: 'src/auth/session.ts' }]],
     ]);
-    expect(wave1.shared.map((s) => [s.a.id, s.b.id, s.directory])).toEqual([['002', '003', 'src/api']]);
+    expect(wave1.shared.map((s) => [s.a.id, s.b.id, s.directories])).toEqual([['002', '003', ['src/api']]]);
     expect(wave1.unscoped.map((b) => b.id)).toEqual(['004']);
     expect(report.waves[1]?.unscoped).toEqual([]);
     expect(report.unscheduled.map((b) => b.id)).toEqual(['006']);
@@ -116,7 +116,7 @@ describe('the collision matrix', () => {
       'briefs/001_a.md': goodBrief({ wave: '1', affectedFiles: '["/abs", src/**]' }),
       'briefs/002_b.md': goodBrief({ wave: '1', affectedFiles: '[src/x]' }),
     });
-    expect(collisions(bad).waves[0]?.collisions.map((c) => c.patterns)).toEqual([['src/**', 'src/x']]);
+    expect(collisions(bad).waves[0]?.collisions.flatMap((c) => c.overlaps.map((o) => o.patterns))).toEqual([['src/**', 'src/x']]);
   });
 
   it('compares across waves when asked', () => {

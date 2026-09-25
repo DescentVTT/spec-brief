@@ -2,12 +2,14 @@ import { describe, expect, it } from 'vitest';
 
 import { planArchive, planUnarchive, type Plan } from '../src/archive.js';
 import { BANNER_CLOSE, BANNER_OPEN } from '../src/brief.js';
+import { collisionFindings, collisions, inWords } from '../src/collisions.js';
 import { type Corpus, findBriefs } from '../src/corpus.js';
 import { BriefEngine } from '../src/engine.js';
 import { MemoryFileSystem } from '../src/fs.js';
 import type { Git } from '../src/git.js';
 import { lint } from '../src/lint.js';
 import { linksOf, scan } from '../src/markdown.js';
+import { matrixJson, prettyMatrix } from '../src/report.js';
 import type { Finding } from '../src/types.js';
 import { brief, config, corpusOf, goodBrief } from './helpers.js';
 
@@ -332,5 +334,92 @@ describe('links with rewriting off, after 0.1.0', () => {
     expect(planArchive(corpus, the(corpus, '001'), { date: DATE }).warnings[0]?.message).toBe(
       'links on 6 line(s) of other live briefs will stop resolving when it moves: briefs/002_b.md:19, briefs/003_c.md:19, briefs/004_d.md:19, briefs/005_e.md:19, briefs/006_f.md:19, and 1 more',
     );
+  });
+});
+
+describe('collisions, after 0.1.0', () => {
+  // Three pairs of patterns meet between two briefs: one defect, fixed once.
+  const files = {
+    [A]: goodBrief({ wave: '1', affectedFiles: '[src/**, docs/**, lib/a.ts]' }),
+    [B]: goodBrief({ wave: '1', affectedFiles: '[src/x.ts, docs/y.md, "lib/**"]' }),
+    'briefs/003_c.md': goodBrief({ wave: '1', affectedFiles: '[etc/c.ts]' }),
+  };
+
+  it('reports a pair of briefs once, with every pair of patterns that meets', () => {
+    const corpus = corpusOf(files);
+    const report = collisions(corpus);
+    expect(report.waves[0]?.collisions.map((c) => [c.a.id, c.b.id, c.overlaps])).toEqual([
+      [
+        '001',
+        '002',
+        [
+          { patterns: ['src/**', 'src/x.ts'], witness: 'src/x.ts' },
+          { patterns: ['docs/**', 'docs/y.md'], witness: 'docs/y.md' },
+          { patterns: ['lib/a.ts', 'lib/**'], witness: 'lib/a.ts' },
+        ],
+      ],
+    ]);
+    expect(table(collisionFindings(corpus, report))).toEqual([
+      'briefs/002_b.md:4 error collision: overlaps 001 in wave 1 through 3 pairs of patterns: ' +
+        '"src/x.ts" and 001\'s "src/**" both cover src/x.ts; "docs/y.md" and 001\'s "docs/**" both cover docs/y.md; "lib/**" and 001\'s "lib/a.ts" both cover lib/a.ts' +
+        ' | run them in different waves, make one depend on the other, or narrow a scope',
+    ]);
+    expect(prettyMatrix(report, { color: false }).split('\n')).toEqual([
+      'wave 1 \u00b7 3 briefs',
+      '       001  002  003',
+      '  001    \u00b7    X    \u00b7',
+      '  002    X    \u00b7    \u00b7',
+      '  003    \u00b7    \u00b7    \u00b7',
+      '  X 001 "src/**" and 002 "src/x.ts" both cover src/x.ts',
+      '    001 "docs/**" and 002 "docs/y.md" both cover docs/y.md',
+      '    001 "lib/a.ts" and 002 "lib/**" both cover lib/a.ts',
+    ]);
+    expect(matrixJson(report)).toEqual({
+      waves: [
+        {
+          wave: 1,
+          briefs: ['001', '002', '003'],
+          collisions: [
+            {
+              a: '001',
+              b: '002',
+              overlaps: [
+                { patterns: ['src/**', 'src/x.ts'], witness: 'src/x.ts' },
+                { patterns: ['docs/**', 'docs/y.md'], witness: 'docs/y.md' },
+                { patterns: ['lib/a.ts', 'lib/**'], witness: 'lib/a.ts' },
+              ],
+            },
+          ],
+          sharedDirectories: [],
+          unscoped: [],
+        },
+      ],
+      unscheduled: [],
+    });
+  });
+
+  it('reports a pair writing into several directories once, naming them all', () => {
+    const corpus = corpusOf(
+      {
+        [A]: goodBrief({ wave: '1', affectedFiles: '[x/1.ts, y/1.ts, z/1.ts]' }),
+        [B]: goodBrief({ wave: '1', affectedFiles: '[x/2.ts, y/2.ts, z/2.ts]' }),
+        'briefs/003_c.md': goodBrief({ wave: '1', affectedFiles: '[y/3.ts]' }),
+      },
+      config({ rules: { 'shared-directory': 'warning' } }),
+    );
+    const report = collisions(corpus);
+    expect(report.waves[0]?.shared.map((s) => [s.a.id, s.b.id, s.directories])).toEqual([
+      ['001', '002', ['x', 'y', 'z']],
+      ['001', '003', ['y']],
+      ['002', '003', ['y']],
+    ]);
+    expect(collisionFindings(corpus, report).map((f) => [f.file, f.message])).toEqual([
+      [B, 'writes into x/, y/ and z/, as 001 does in wave 1'],
+      ['briefs/003_c.md', 'writes into y/, as 001 does in wave 1'],
+      ['briefs/003_c.md', 'writes into y/, as 002 does in wave 1'],
+    ]);
+    expect(prettyMatrix(report, { color: false })).toContain('  ~ 001 and 002 both write into x/, y/ and z/');
+    expect(inWords(['a/', 'b/'])).toBe('a/ and b/');
+    expect(inWords([])).toBe('');
   });
 });
