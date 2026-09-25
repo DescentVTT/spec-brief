@@ -83,6 +83,8 @@ export function findingJson(f: Finding): Record<string, unknown> {
   const out: Record<string, unknown> = { rule: f.rule, severity: f.severity, file: f.file, line: f.line, message: f.message };
   if (f.brief !== undefined) out['brief'] = f.brief;
   if (f.hint !== undefined) out['hint'] = f.hint;
+  if (f.path !== undefined) out['path'] = f.path;
+  if (f.paths !== undefined) out['paths'] = f.paths;
   return out;
 }
 

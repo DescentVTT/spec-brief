@@ -3,11 +3,29 @@
  * built-in rules, findings in a stable order.
  */
 
+import type { Waiver } from './archive.js';
 import type { Brief } from './brief.js';
 import { ConfigError } from './config.js';
 import type { Corpus } from './corpus.js';
 import { analyse, ARCHIVE_RULES, COLLISION_RULES, type Rule, type RuleInfo, RULES } from './rules.js';
 import type { Finding, Severity, SeveritySetting } from './types.js';
+
+/** What a plugin's `waive` hook is asked about: one archival, refused. */
+export interface WaiveContext {
+  /** The absolute root: the directory holding the configuration. */
+  readonly root: string;
+  readonly brief: { readonly id: string | null; readonly file: string; readonly text: string };
+  /**
+   * Every finding that refuses the archival. A `protected-file` finding names
+   * its `path`; an `out-of-scope` one lists its `paths`. Only those two can be
+   * waived.
+   */
+  readonly findings: readonly Finding[];
+  /** The base the round is measured from, as it was given; `null` when none was. */
+  readonly base: string | null;
+  /** The commit the round landed as; `null` when none was read. */
+  readonly commit: string | null;
+}
 
 export interface Plugin {
   /** Prefixes the plugin's rule ids: `<name>/<rule>`. */
@@ -15,6 +33,12 @@ export interface Plugin {
   readonly rules: readonly Rule[];
   /** The plugin's entry in the configuration, handed to each rule. */
   readonly options?: unknown;
+  /**
+   * Lifts refusals of an archival that the plugin's own check allows - a
+   * protected file a verified ruling covers - by rule and path. Asked only
+   * when the plan has a refusal it could lift.
+   */
+  readonly waive?: ((context: WaiveContext) => readonly Waiver[] | Promise<readonly Waiver[]>) | undefined;
 }
 
 export interface LintOptions {

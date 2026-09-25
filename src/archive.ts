@@ -105,6 +105,31 @@ function lineOf(brief: Brief, key: string): number {
   return lineOfField(brief, key) + 1;
 }
 
+function protectedFinding(brief: Brief, path: string): Finding {
+  return {
+    ...problem(brief, 'protected-file', 'error', lineOf(brief, 'protectedFiles'), `the round changed ${path}, which this brief protects`, 'revert the change, or record the departure in the brief before archiving it'),
+    path,
+  };
+}
+
+/**
+ * The files a round changed outside its scope: one finding, since the scope
+ * is one defect however many files show it - widened once, or explained once.
+ */
+function outOfScopeFinding(brief: Brief, paths: readonly string[], strict: boolean): Finding {
+  return {
+    ...problem(
+      brief,
+      'out-of-scope',
+      strict ? 'error' : 'warning',
+      lineOf(brief, 'affectedFiles'),
+      `the round changed ${paths.length} file(s) outside affectedFiles: ${listed(paths)}`,
+      'widen affectedFiles if the scope was wrong, or say why in the summary',
+    ),
+    paths,
+  };
+}
+
 /** Where an archive rule's finding goes: an error refuses, and under --strict a warning refuses as an error, as out-of-scope does. */
 function place(finding: Finding, strict: boolean, blocking: Finding[], warnings: Finding[]): void {
   if (finding.severity === 'error') blocking.push(finding);
@@ -419,25 +444,16 @@ export function planArchive(corpus: Corpus, brief: Brief, request: ArchiveReques
   const work = (request.changes ?? []).filter((change) => !bookkeeping(change.path));
   const protectedGlobs = globs(brief.protectedFiles);
   const affectedGlobs = globs(brief.affectedFiles);
+  // Each protected file changed is its own defect - reverted, or ruled on,
+  // one file at a time - so each is a finding that names its path.
   for (const change of work) {
-    if (protectedGlobs.some((g) => matchGlob(g, change.path))) {
-      blocking.push(
-        problem(brief, 'protected-file', 'error', lineOf(brief, 'protectedFiles'), `the round changed ${change.path}, which this brief protects`, 'revert the change, or record the departure in the brief before archiving it'),
-      );
-    }
+    if (protectedGlobs.some((g) => matchGlob(g, change.path))) blocking.push(protectedFinding(brief, change.path));
   }
   // A protected file is reported once, as protected, and not again as out of scope.
   const unprotected = work.filter((c) => !protectedGlobs.some((g) => matchGlob(g, c.path)));
   const outside = affectedGlobs.length === 0 ? [] : unprotected.filter((c) => !affectedGlobs.some((g) => matchGlob(g, c.path)));
   if (outside.length > 0) {
-    const finding = problem(
-      brief,
-      'out-of-scope',
-      request.strict === true ? 'error' : 'warning',
-      lineOf(brief, 'affectedFiles'),
-      `the round changed ${outside.length} file(s) outside affectedFiles: ${listed(outside.map((c) => c.path))}`,
-      'widen affectedFiles if the scope was wrong, or say why in the summary',
-    );
+    const finding = outOfScopeFinding(brief, outside.map((c) => c.path), request.strict === true);
     (request.strict === true ? blocking : warnings).push(finding);
   }
   const scopeSeverity = configuredSeverity(corpus, 'scope-unmeasured');
@@ -500,6 +516,58 @@ export function planArchive(corpus: Corpus, brief: Brief, request: ArchiveReques
     banner,
     changes: request.changes ?? [],
   };
+}
+
+/** A plugin's answer to a refusal it may lift: which rule, for which path, and why. */
+export interface Waiver {
+  readonly rule: string;
+  readonly path: string;
+  readonly reason: string;
+}
+
+/**
+ * The refusals a plugin may lift. A tool that verifies a ruling can say a
+ * protected file was allowed to change, or that a file outside the scope was;
+ * whether a round is done is spec-brief's to say.
+ */
+export const WAIVABLE: readonly string[] = ['protected-file', 'out-of-scope'];
+
+/**
+ * The plan with the refusals plugins waived turned into notes. A waiver
+ * matches a blocking finding by rule and path: a protected-file finding is
+ * replaced by the note, and an out-of-scope finding loses the path and goes
+ * when none is left. A waiver that matches nothing changes nothing, and one
+ * for any other rule is ignored with a warning, which refuses under --strict
+ * as any warning does.
+ */
+export function applyWaivers(plan: Plan, waivers: readonly { readonly plugin: string; readonly waiver: Waiver }[], strict = false): Plan {
+  const { brief } = plan;
+  const blocking = [...plan.blocking];
+  const warnings = [...plan.warnings];
+  for (const { plugin, waiver } of waivers) {
+    if (!WAIVABLE.includes(waiver.rule)) {
+      const ignored = problem(
+        brief,
+        'waiver-ignored',
+        'warning',
+        1,
+        `${plugin} asked to waive ${waiver.rule} for ${waiver.path}; a plugin may waive only ${WAIVABLE.join(' and ')}`,
+        `report it to the plugin's authors: ${waiver.rule} is spec-brief's to decide`,
+      );
+      place(ignored, strict, blocking, warnings);
+      continue;
+    }
+    const at = blocking.findIndex((f) => f.rule === waiver.rule && (f.path === waiver.path || f.paths?.includes(waiver.path) === true));
+    if (at < 0) continue;
+    const found = blocking[at] as Finding;
+    const rest = (found.paths ?? []).filter((p) => p !== waiver.path);
+    blocking.splice(at, 1, ...(rest.length > 0 ? [outOfScopeFinding(brief, rest, true)] : []));
+    warnings.push({
+      ...problem(brief, 'waived', 'note', found.line, `${plugin} waives ${waiver.rule} for ${waiver.path}: ${waiver.reason}`, 'review the waiver with the round; it stands where the refusal was'),
+      path: waiver.path,
+    });
+  }
+  return { ...plan, blocking, warnings };
 }
 
 export interface UnarchiveRequest {

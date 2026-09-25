@@ -7,7 +7,8 @@ import { ConfigError, DEFAULT_CONFIG, resolveConfig } from '../src/config.js';
 import { BriefEngine, EngineError, isDate, today } from '../src/engine.js';
 import { MemoryFileSystem } from '../src/fs.js';
 import type { Git } from '../src/git.js';
-import { asPlugin, exportsTarget, loadPlugins } from '../src/plugins.js';
+import type { Plugin, WaiveContext } from '../src/lint.js';
+import { asPlugin, asWaivers, exportsTarget, loadPlugins } from '../src/plugins.js';
 import { commitAll, goodBrief, initRepo, tempDir, writeTree } from './helpers.js';
 
 const made: string[] = [];
@@ -445,6 +446,121 @@ describe('plugins', () => {
     const bad = [{ id: 'Upper', description: 'd', severity: 'note', check: () => [] }, { id: 'ok', description: 'd', severity: 'loud', check: () => [] }, 'x'];
     expect(() => asPlugin({ name: 'p', rules: bad }, 'm', undefined)).toThrow(/rules\[0\].*rules\[1\].*rules\[2\]/);
     expect(asPlugin({ name: '@scope/p', rules: [] }, 'm', 2)).toEqual({ name: '@scope/p', rules: [], options: 2 });
+    expect('waive' in asPlugin({ name: 'p', rules: [] }, 'm', undefined)).toBe(false);
+    const waive = (): never[] => [];
+    expect(asPlugin({ name: 'p', rules: [], waive }, 'm', undefined).waive).toBe(waive);
+    expect(() => asPlugin({ name: 'p', rules: [], waive: 'yes' }, 'm', undefined)).toThrow(new ConfigError('m', ['"waive" must be a function']));
+  });
+
+  it('checks the shape of what a waive hook answers', () => {
+    expect(asWaivers([{ rule: 'protected-file', path: 'a', reason: 'r', extra: 1 }], 'p')).toEqual([{ rule: 'protected-file', path: 'a', reason: 'r' }]);
+    expect(asWaivers([], 'p')).toEqual([]);
+    const refusal = new ConfigError('plugin "p"', ['"waive" must return a list of { rule, path, reason }, each a string']);
+    for (const answer of [undefined, {}, [null], ['x'], [{ rule: 'r', path: 'a' }], [{ rule: 'r', path: 1, reason: 'x' }], [{ rule: 1, path: 'a', reason: 'x' }]]) {
+      expect(() => asWaivers(answer, 'p'), JSON.stringify(answer)).toThrow(refusal);
+    }
+  });
+
+  it('asks a waive hook about the refusals it may lift, and turns what it lifts into notes', async () => {
+    const asked: WaiveContext[] = [];
+    const harness: Plugin = {
+      name: 'harness',
+      rules: [],
+      waive: (context) => {
+        asked.push(context);
+        return [{ rule: 'protected-file', path: 'src/a.ts', reason: 'ruling R1 allows it' }];
+      },
+    };
+    const silent: Plugin = { name: 'silent', rules: [] };
+    const git: Git = {
+      commit: () => Promise.resolve({ sha: '1234567890ab', author: 'A', date: '' }),
+      mergeBase: () => Promise.resolve('base0'),
+      changes: () => Promise.resolve(['src/a.ts', 'src/b.ts'].map((path) => ({ path, insertions: 1, deletions: 0 }))),
+      dirty: () => Promise.resolve([]),
+      files: () => Promise.resolve(['src/a.ts', 'src/b.ts']),
+      remoteUrl: () => Promise.resolve(null),
+    };
+    const files = { 'briefs/001_a.md': goodBrief({ protectedFiles: '[src/a.ts, src/b.ts]' }) };
+    const engine = new BriefEngine({ root: '/virtual', config: DEFAULT_CONFIG, configFile: null, fs: new MemoryFileSystem(files), git, plugins: [silent, harness] });
+    await engine.load();
+    const plan = await engine.planArchive('1', { base: 'main', date: '2026-09-26' });
+    expect(plan.blocking.map((f) => [f.rule, f.path])).toEqual([['protected-file', 'src/b.ts']]);
+    expect(plan.warnings.map((f) => [f.rule, f.severity, f.message])).toEqual([['waived', 'note', 'harness waives protected-file for src/a.ts: ruling R1 allows it']]);
+    expect(asked).toHaveLength(1);
+    expect(asked[0]).toMatchObject({ root: '/virtual', brief: { id: '001', file: 'briefs/001_a.md', text: files['briefs/001_a.md'] }, base: 'main', commit: '1234567890ab' });
+    expect(asked[0]?.findings.map((f) => [f.rule, f.path])).toEqual([
+      ['protected-file', 'src/a.ts'],
+      ['protected-file', 'src/b.ts'],
+    ]);
+    // Without a base, the context says so; with nothing to lift, the hook is not asked.
+    const noBase = await engine.planArchive('1', { commit: 'HEAD', date: '2026-09-26' });
+    expect(asked[1]).toMatchObject({ base: null, commit: '1234567890ab' });
+    expect(noBase.blocking).toHaveLength(1);
+    const calm = new BriefEngine({ root: '/v', config: DEFAULT_CONFIG, configFile: null, fs: new MemoryFileSystem({ 'briefs/001_a.md': goodBrief() }), git, plugins: [harness] });
+    await calm.load();
+    await calm.planArchive('1', { commit: 'HEAD', date: '2026-09-26' });
+    expect(asked).toHaveLength(2);
+    const draft = new BriefEngine({ root: '/v', config: DEFAULT_CONFIG, configFile: null, fs: new MemoryFileSystem({ 'briefs/001_a.md': goodBrief({ status: 'draft' }) }), git: null, plugins: [harness] });
+    await draft.load();
+    expect((await draft.planArchive('1', { date: '2026-09-26' })).blocking.map((f) => f.rule)).toEqual(['archive-draft']);
+    expect(asked).toHaveLength(2);
+  });
+
+  it('stops the run when a waive hook throws or answers in the wrong shape', async () => {
+    const git: Git = {
+      commit: () => Promise.resolve({ sha: '1234567890ab', author: 'A', date: '' }),
+      mergeBase: () => Promise.resolve(null),
+      changes: () => Promise.resolve([{ path: 'src/a.ts', insertions: 1, deletions: 0 }]),
+      dirty: () => Promise.resolve([]),
+      files: () => Promise.resolve([]),
+      remoteUrl: () => Promise.resolve(null),
+    };
+    const engineWith = async (waive: NonNullable<Plugin['waive']>): Promise<BriefEngine> => {
+      const fs = new MemoryFileSystem({ 'briefs/001_a.md': goodBrief({ protectedFiles: '[src/a.ts]' }) });
+      const engine = new BriefEngine({ root: '/v', config: DEFAULT_CONFIG, configFile: null, fs, git, plugins: [{ name: 'shaky', rules: [], waive }] });
+      await engine.load();
+      return engine;
+    };
+    const throwing = await engineWith(() => {
+      throw new Error('no signers file');
+    });
+    await expect(throwing.planArchive('1', { commit: 'HEAD', date: '2026-09-26' })).rejects.toThrow(
+      new ConfigError('plugin "shaky"', ['"waive" failed: no signers file']),
+    );
+    const rejecting = await engineWith(() => Promise.reject('down'));
+    await expect(rejecting.planArchive('1', { commit: 'HEAD', date: '2026-09-26' })).rejects.toThrow('"waive" failed: down');
+    const odd = await engineWith(() => [{ rule: 'protected-file' }] as never);
+    await expect(odd.planArchive('1', { commit: 'HEAD', date: '2026-09-26' })).rejects.toThrow('"waive" must return a list');
+  });
+
+  it('loads a waiving plugin from a subpath of a scoped package, and the archive takes what it waives and refuses what it does not', async () => {
+    const root = dir('plugins-waive');
+    initRepo(root);
+    cpSync(join('tests', 'fixtures', 'waiving-plugin'), join(root, 'node_modules', '@fixture', 'waiver'), { recursive: true });
+    writeTree(root, {
+      '.gitignore': 'node_modules/\n',
+      '.spec-brief.json': JSON.stringify({ plugins: [{ module: '@fixture/waiver/spec-brief-plugin', options: { allow: ['src/a.ts'] } }] }),
+      'briefs/001_a.md': goodBrief({ affectedFiles: '[src/**]', protectedFiles: '[src/a.ts, src/b.ts]' }),
+      'src/a.ts': 'a\n',
+      'src/b.ts': 'b\n',
+    });
+    commitAll(root, 'start');
+    writeTree(root, { 'src/a.ts': 'a2\n', 'src/b.ts': 'b2\n' });
+    commitAll(root, 'the round');
+    const engine = await BriefEngine.open({ cwd: root });
+    const plan = await engine.planArchive('1', { commit: 'HEAD', date: '2026-09-26' });
+    expect(plan.blocking.map((f) => [f.rule, f.path])).toEqual([['protected-file', 'src/b.ts']]);
+    const sha = (await engine.git?.commit('HEAD'))?.sha.slice(0, 7);
+    expect(plan.warnings.map((f) => f.message)).toEqual([`waiver waives protected-file for src/a.ts: allowed for 001 (briefs/001_a.md, read) at ${sha} from no base`]);
+    const allowed = join(root, '.spec-brief.json');
+    writeFileSync(allowed, JSON.stringify({ plugins: [{ module: '@fixture/waiver/spec-brief-plugin', options: { allow: ['src/a.ts', 'src/b.ts'] } }] }));
+    const both = await BriefEngine.open({ cwd: root });
+    const accepted = await both.planArchive('1', { commit: 'HEAD', date: '2026-09-26', allowDirty: true });
+    expect(accepted.blocking).toEqual([]);
+    expect(accepted.warnings.map((f) => [f.rule, f.path])).toEqual([
+      ['waived', 'src/a.ts'],
+      ['waived', 'src/b.ts'],
+    ]);
   });
 
   it('runs a configured plugin inside lint', async () => {

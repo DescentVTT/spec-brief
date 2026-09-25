@@ -1,0 +1,13 @@
+{
+  "name": "@fixture/waiver",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./spec-brief-plugin": {
+      "types": "./plugin.d.ts",
+      "require": "./missing.cjs",
+      "import": "./plugin.js"
+    },
+    "./package.json": "./package.json"
+  }
+}

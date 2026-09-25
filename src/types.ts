@@ -34,4 +34,11 @@ export interface Finding {
   readonly brief?: string | undefined;
   /** The concrete next action, where there is one. */
   readonly hint?: string | undefined;
+  /**
+   * The one repository path a finding is about, where it is about one: a
+   * protected file the round changed is one finding per file, and names it.
+   */
+  readonly path?: string | undefined;
+  /** The paths of a finding about several, such as the files a round changed outside its scope. */
+  readonly paths?: readonly string[] | undefined;
 }

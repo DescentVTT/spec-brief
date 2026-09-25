@@ -13,17 +13,27 @@ import { access } from 'node:fs/promises';
 import { dirname, relative, resolve, sep } from 'node:path';
 
 import { applyPlan } from './apply.js';
-import { planArchive, type Plan, planUnarchive, type PullRequest, type UnarchiveRequest, type Unmeasured } from './archive.js';
+import {
+  applyWaivers,
+  planArchive,
+  type Plan,
+  planUnarchive,
+  type PullRequest,
+  type UnarchiveRequest,
+  type Unmeasured,
+  WAIVABLE,
+  type Waiver,
+} from './archive.js';
 import type { Brief } from './brief.js';
 import { collisionFindings, collisions, type CollisionOptions, type CollisionReport } from './collisions.js';
-import { type Config, DEFAULT_CONFIG, locateConfig, parseConfig } from './config.js';
+import { type Config, ConfigError, DEFAULT_CONFIG, locateConfig, parseConfig } from './config.js';
 import { buildCorpus, type Corpus, findBriefs, isReady, pendingDependencies, type SourceFile } from './corpus.js';
 import { canonicalPath, type FileSystem, NodeFileSystem } from './fs.js';
 import { type CommitInfo, type FileChange, type Git, NodeGit, pullRequestUrl } from './git.js';
 import { matchGlob, parseGlob } from './glob.js';
 import { normalisePath } from './links.js';
 import { lint, type Plugin } from './lint.js';
-import { loadPlugins } from './plugins.js';
+import { asWaivers, loadPlugins } from './plugins.js';
 import { fileNameFor, nextId, renderNewBrief } from './scaffold.js';
 import { planWaves, type Schedule, schedule, scheduleFindings, type ScheduleOptions } from './schedule.js';
 import type { Finding, Phase } from './types.js';
@@ -315,7 +325,7 @@ export class BriefEngine {
     if (options.pr !== undefined) {
       pr = { number: options.pr, url: git === null ? null : pullRequestUrl(await git.remoteUrl('origin'), options.pr) };
     }
-    return planArchive(this.corpus, brief, {
+    const plan = planArchive(this.corpus, brief, {
       date,
       summary: options.summary,
       pr,
@@ -327,6 +337,38 @@ export class BriefEngine {
       strict: options.strict,
       findings,
     });
+    return this.waive(plan, base ?? null, commit?.sha ?? null, options.strict === true);
+  }
+
+  /**
+   * Asks each plugin with a `waive` hook which of a plan's refusals its own
+   * check lifts, and turns those into notes. Asked only when the plan has a
+   * refusal a plugin may lift: a hook may read git and verify signatures, and a
+   * plan with nothing to waive has no question for it. A hook that throws, or
+   * answers in the wrong shape, stops the run as a plugin that fails to load
+   * does: an archival decided without the check it asked for is not one to
+   * trust.
+   */
+  private async waive(plan: Plan, base: string | null, commit: string | null, strict: boolean): Promise<Plan> {
+    if (!plan.blocking.some((f) => WAIVABLE.includes(f.rule))) return plan;
+    const waivers: { plugin: string; waiver: Waiver }[] = [];
+    for (const plugin of await this.loadedPlugins()) {
+      if (plugin.waive === undefined) continue;
+      let answer: unknown;
+      try {
+        answer = await plugin.waive({
+          root: this.root,
+          brief: { id: plan.brief.id, file: plan.brief.file, text: plan.brief.text },
+          findings: plan.blocking,
+          base,
+          commit,
+        });
+      } catch (error) {
+        throw new ConfigError(`plugin "${plugin.name}"`, [`"waive" failed: ${error instanceof Error ? error.message : String(error)}`]);
+      }
+      for (const waiver of asWaivers(answer, plugin.name)) waivers.push({ plugin: plugin.name, waiver });
+    }
+    return applyWaivers(plan, waivers, strict);
   }
 
   planUnarchive(reference: string, options: UnarchiveRequest = {}): Plan {

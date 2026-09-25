@@ -15,6 +15,7 @@ import { createRequire } from 'node:module';
 import { dirname, isAbsolute, join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
+import type { Waiver } from './archive.js';
 import type { PluginReference } from './config.js';
 import { ConfigError } from './config.js';
 import type { Plugin } from './lint.js';
@@ -150,6 +151,7 @@ export function asPlugin(value: unknown, module: string, options: unknown): Plug
   const candidate = value as Record<string, unknown>;
   const name = candidate['name'];
   const rules = candidate['rules'];
+  const waive = candidate['waive'];
   if (typeof name !== 'string' || !/^[a-z0-9@][a-z0-9@/._-]*$/i.test(name)) problems.push('"name" must be a plain identifier');
   if (!Array.isArray(rules)) problems.push('"rules" must be a list');
   else {
@@ -157,8 +159,23 @@ export function asPlugin(value: unknown, module: string, options: unknown): Plug
       if (!isRule(rule)) problems.push(`rules[${i}] needs a lower-case "id", a "description", a "severity" and a "check" function`);
     });
   }
+  if (waive !== undefined && typeof waive !== 'function') problems.push('"waive" must be a function');
   if (problems.length > 0) throw new ConfigError(module, problems);
-  return { name: name as string, rules: rules as Rule[], options };
+  const plugin: Plugin = { name: name as string, rules: rules as Rule[], options };
+  return waive === undefined ? plugin : { ...plugin, waive: waive as NonNullable<Plugin['waive']> };
+}
+
+/** Checks what a `waive` hook returned: a list of `{ rule, path, reason }`, each a string. */
+export function asWaivers(value: unknown, plugin: string): Waiver[] {
+  const isWaiver = (item: unknown): item is Waiver => {
+    if (typeof item !== 'object' || item === null) return false;
+    const w = item as Record<string, unknown>;
+    return typeof w['rule'] === 'string' && typeof w['path'] === 'string' && typeof w['reason'] === 'string';
+  };
+  if (!Array.isArray(value) || !value.every(isWaiver)) {
+    throw new ConfigError(`plugin "${plugin}"`, ['"waive" must return a list of { rule, path, reason }, each a string']);
+  }
+  return value.map((w) => ({ rule: w.rule, path: w.path, reason: w.reason }));
 }
 
 export async function loadPlugins(references: readonly PluginReference[], root: string): Promise<Plugin[]> {

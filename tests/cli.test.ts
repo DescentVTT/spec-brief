@@ -403,4 +403,38 @@ describe('archive and unarchive', () => {
     expect(result.code).toBe(EXIT_ERROR);
     expect(result.err).toMatch(/^spec-brief: /);
   });
+
+  it('stops with exit 2 when a plugin asked to waive a refusal fails, and reports the waivers it makes as JSON', async () => {
+    const plugin = (body: string): string => `export default { name: 'rulings', rules: [], waive: async ({ findings }) => { ${body} } };\n`;
+    const root = repo('cli-archive-waive', {
+      '.spec-brief.json': JSON.stringify({ plugins: ['./rulings.mjs'] }),
+      'rulings.mjs': plugin("throw new Error('the allowed signers file is missing');"),
+      'briefs/001_a.md': goodBrief({ protectedFiles: '[src/a.ts]' }),
+      'src/a.ts': 'a\n',
+    });
+    writeTree(root, { 'src/a.ts': 'a2\n' });
+    commitAll(root, 'the round');
+    const failed = await run(root, ['archive', '1', '--commit', 'HEAD', '--dry-run']);
+    expect(failed).toEqual({ code: EXIT_ERROR, out: '', err: 'spec-brief: plugin "rulings": "waive" failed: the allowed signers file is missing\n' });
+    // A module is loaded once per process, so the answering plugin is a second file.
+    writeTree(root, {
+      '.spec-brief.json': JSON.stringify({ plugins: ['./answers.mjs'] }),
+      'answers.mjs': plugin("return findings.map((f) => ({ rule: f.rule, path: f.path, reason: 'ruled' }));"),
+    });
+    const json = await run(root, ['archive', '1', '--commit', 'HEAD', '--dry-run', '--allow-dirty', '--format', 'json']);
+    expect(json.code).toBe(EXIT_OK);
+    const plan = (JSON.parse(json.out) as { plan: { warnings: unknown[] } }).plan;
+    expect(plan.warnings).toEqual([
+      {
+        rule: 'waived',
+        severity: 'note',
+        file: 'briefs/001_a.md',
+        line: 3,
+        message: 'rulings waives protected-file for src/a.ts: ruled',
+        brief: '001',
+        hint: 'review the waiver with the round; it stands where the refusal was',
+        path: 'src/a.ts',
+      },
+    ]);
+  });
 });
