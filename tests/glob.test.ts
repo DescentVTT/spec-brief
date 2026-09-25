@@ -87,6 +87,21 @@ describe('parsing', () => {
     expect(matches('x{,y}', 'x')).toBe(true);
     expect(matches('x{,y}', 'xy')).toBe(true);
   });
+
+  it('splits a brace group on its own commas, not on one inside a class', () => {
+    expect(glob('{[,]x,y}').alternatives).toHaveLength(2);
+    expect(matches('{[,]x,y}', ',x')).toBe(true);
+    expect(matches('{[,]x,y}', 'y')).toBe(true);
+    expect(matches('{[,]x,y}', '[')).toBe(false);
+    // A brace inside a class opens or closes nothing either.
+    expect(glob('x{[}],a}').alternatives).toHaveLength(2);
+    expect(matches('x{[}],a}', 'x}')).toBe(true);
+    expect(matches('x{[}],a}', 'xa')).toBe(true);
+    expect(matches('{[{],b}', '{')).toBe(true);
+    expect(matches('{[{],b}', 'b')).toBe(true);
+    // A bracket that closes no class is a literal, and the comma after it splits.
+    expect(error('{[,b}')).toBe('a "[" is never closed');
+  });
 });
 
 describe('matching', () => {
