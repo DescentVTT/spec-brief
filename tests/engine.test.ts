@@ -376,6 +376,9 @@ describe('plugins', () => {
     );
     writeTree(root, { 'node_modules/broken/package.json': '{' });
     await expect(loadPlugins([{ module: 'broken', options: undefined }], root)).rejects.toThrow('broken: could not be loaded');
+    await expect(loadPlugins([{ module: 'no-such-plugin-anywhere', options: undefined }], root)).rejects.toThrow(
+      "no-such-plugin-anywhere: could not be loaded: Cannot find module 'no-such-plugin-anywhere'",
+    );
   });
 
   it('reads "exports" under the conditions of an import', () => {
@@ -384,6 +387,7 @@ describe('plugins', () => {
     expect(exportsTarget(null, '.')).toBeNull();
     expect(exportsTarget({ require: './r.cjs', import: './i.mjs' }, '.')).toBe('./i.mjs');
     expect(exportsTarget({ node: { import: './n.mjs' }, default: './d.js' }, '.')).toBe('./n.mjs');
+    expect(exportsTarget({ node: { require: './r.cjs' }, default: './d.js' }, '.')).toBe('./d.js');
     expect(exportsTarget({ browser: './b.js', default: './d.js' }, '.')).toBe('./d.js');
     expect(exportsTarget({ require: './r.cjs' }, '.')).toBeNull();
     expect(exportsTarget({ import: null, default: './d.js' }, '.')).toBeNull();
@@ -400,6 +404,8 @@ describe('plugins', () => {
     expect(exportsTarget(map, './b')).toBeNull();
     // Of two patterns with one prefix the longer key wins, and a pattern needs a match.
     expect(exportsTarget({ './a*': './y/*.js', './a*b': './x/*.js' }, './a1b')).toBe('./x/1.js');
+    expect(exportsTarget({ './a*b': './x/*.js', './a*': './y/*.js' }, './a1b')).toBe('./x/1.js');
+    expect(exportsTarget({ './p/x/*': './x/*.js', './p/*': './dist/p/*.js' }, './p/x/z')).toBe('./x/z.js');
     expect(exportsTarget({ './a*': './y/*.js' }, './a')).toBeNull();
     expect(exportsTarget({ './a*b*': './z.js' }, './a1b2')).toBeNull();
     // A target may not leave the package or reach into another.
