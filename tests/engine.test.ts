@@ -124,7 +124,7 @@ describe('an engine over memory', () => {
       },
       mergeBase: (a, b) => {
         calls.push(`merge-base ${a} ${b}`);
-        return Promise.resolve(a === 'orphan' ? null : 'base0');
+        return Promise.resolve(a === 'orphan' || a === 'missing' ? null : 'base0');
       },
       changes: (from, to) => {
         calls.push(`changes ${from ?? 'parent'} ${to}`);
@@ -142,7 +142,13 @@ describe('an engine over memory', () => {
     expect(plan.banner).toContain('> Recorded at commit `1234567`: 1 file changed, +2 \u22121.');
     calls.length = 0;
     await engine.planArchive('1', { base: 'orphan', commit: 'v1', date: '2026-09-24' });
-    expect(calls).toEqual(['commit v1', 'merge-base orphan 1234567890ab', 'changes orphan 1234567890ab']);
+    expect(calls).toEqual(['commit v1', 'merge-base orphan 1234567890ab', 'commit orphan', 'changes orphan 1234567890ab']);
+    // A base that names nothing is a typo, reported as one rather than as a diff git could not make.
+    calls.length = 0;
+    await expect(engine.planArchive('1', { base: 'missing', commit: 'v1', date: '2026-09-24' })).rejects.toThrow(
+      new EngineError('not-found', 'the base "missing" names no commit; check --base and "archiving.base"'),
+    );
+    expect(calls).toEqual(['commit v1', 'merge-base missing 1234567890ab', 'commit missing']);
     calls.length = 0;
     await engine.planArchive('1', { commit: 'v1', date: '2026-09-24' });
     expect(calls).toEqual(['commit v1', 'changes parent 1234567890ab']);

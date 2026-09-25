@@ -268,7 +268,19 @@ export class BriefEngine {
       if (revision !== undefined) {
         commit = (await git.commit(revision)) ?? undefined;
         if (commit === undefined) throw new EngineError('not-found', `"${revision}" names no commit`);
-        const from = base === undefined ? null : ((await git.mergeBase(base, commit.sha)) ?? base);
+        let from: string | null = null;
+        if (base !== undefined) {
+          from = await git.mergeBase(base, commit.sha);
+          // No merge base: a base with a history of its own is diffed from
+          // directly, and one that names nothing is a typo to report, not a
+          // diff for git to fail.
+          if (from === null) {
+            if ((await git.commit(base)) === null) {
+              throw new EngineError('not-found', `the base "${base}" names no commit; check --base and "archiving.base"`);
+            }
+            from = base;
+          }
+        }
         // A commit that is its own merge base with the base branch is already
         // in it: the diff is empty whatever the round changed, and an empty
         // diff would pass every scope check without measuring one.
