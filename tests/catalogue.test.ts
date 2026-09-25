@@ -58,6 +58,7 @@ describe('the rule catalogue', () => {
       'collision-undecided': 'warning',
       unscoped: 'note',
       'shared-directory': 'off',
+      'wave-schedule': 'error',
       'scope-unmeasured': 'warning',
       'stale-link': 'warning',
     });

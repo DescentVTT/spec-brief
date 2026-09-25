@@ -15,3 +15,4 @@ changes is superseded by a new record that says so; the old one keeps its text.
 | [0008](0008-toolchain.md) | The toolchain, chosen by "latest is not newest", with the reason for each pin. |
 | [0009](0009-mutation-testing.md) | Mutation testing in two sweeps; the core measured at 95.75 and gated at 93. |
 | [0010](0010-releases-are-published-by-ci.md) | Releases are published by CI from a version tag, by trusted publishing, with provenance. |
+| [0011](0011-waves-are-computed-not-guessed.md) | Waves are computed, not guessed: `schedule` places briefs by precedence-constrained greedy colouring, explains every move, and writes waves only when asked. |

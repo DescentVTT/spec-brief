@@ -610,9 +610,9 @@ export const RULES: readonly Rule[] = [
 ];
 
 /**
- * The rules the collision analysis reports under. They are not run per brief,
- * so they carry no check: they exist so configuration can set their severity
- * and reports can describe them.
+ * The rules the wave analyses - `matrix` and `schedule` - report under. They
+ * are not run per brief, so they carry no check: they exist so configuration
+ * can set their severity and reports can describe them.
  */
 export const COLLISION_RULES: readonly RuleInfo[] = [
   { id: 'collision', severity: 'error', description: 'Briefs in one wave do not write the same file.' },
@@ -623,6 +623,7 @@ export const COLLISION_RULES: readonly RuleInfo[] = [
   },
   { id: 'unscoped', severity: 'note', description: 'A brief sharing a wave declares the files it writes.' },
   { id: 'shared-directory', severity: 'off', description: 'Briefs in one wave do not write into the same directory.' },
+  { id: 'wave-schedule', severity: 'error', description: 'A brief declares the wave the schedule computes for it.' },
 ];
 
 /**

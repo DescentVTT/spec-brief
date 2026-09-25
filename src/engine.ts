@@ -25,6 +25,7 @@ import { normalisePath } from './links.js';
 import { lint, type Plugin } from './lint.js';
 import { loadPlugins } from './plugins.js';
 import { fileNameFor, nextId, renderNewBrief } from './scaffold.js';
+import { planWaves, type Schedule, schedule, scheduleFindings, type ScheduleOptions } from './schedule.js';
 import type { Finding, Phase } from './types.js';
 
 export class EngineError extends Error {
@@ -235,6 +236,24 @@ export class BriefEngine {
   async collisions(options: CollisionOptions = {}): Promise<{ report: CollisionReport; findings: Finding[] }> {
     const report = collisions(this.corpus, { repoFiles: await this.repoFiles(), ...options });
     return { report, findings: collisionFindings(this.corpus, report) };
+  }
+
+  async schedule(options: ScheduleOptions = {}): Promise<{ schedule: Schedule; findings: Finding[] }> {
+    const computed = schedule(this.corpus, { repoFiles: await this.repoFiles(), ...options });
+    return { schedule: computed, findings: scheduleFindings(this.corpus, computed) };
+  }
+
+  /**
+   * Writes each brief's proposed wave into its front matter, every other line
+   * as it was, as one transaction. Refused, with nothing written, when the
+   * dependencies form a cycle or a front matter cannot be edited.
+   */
+  async writeWaves(computed: Schedule): Promise<{ written: string[]; refused: Finding[] }> {
+    const plan = planWaves(computed);
+    if (computed.cycles.length > 0 || plan.refused.length > 0) return { written: [], refused: [...plan.refused] };
+    await applyPlan(this.fs, plan.ops);
+    await this.load();
+    return { written: plan.ops.map((op) => op.path), refused: [] };
   }
 
   /** Live briefs that can run now: not drafts, every dependency archived. */

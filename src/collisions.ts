@@ -20,8 +20,7 @@ import type { Brief } from './brief.js';
 import { lineOfField } from './brief.js';
 import type { Corpus } from './corpus.js';
 import { globBases, readingIn, WITNESS_BUDGET } from './glob.js';
-import { severityOf } from './lint.js';
-import { COLLISION_RULES, type RuleInfo } from './rules.js';
+import { configuredSeverity } from './lint.js';
 import { meet, type Overlap, type Scope, scopeOf } from './scope.js';
 import { inWords } from './text.js';
 import type { Finding, Severity } from './types.js';
@@ -138,13 +137,6 @@ function collisionMessage(c: Collision, wave: number | null): string {
   return `overlaps ${label(c.a)} ${where(wave)} through ${c.overlaps.length} pairs of patterns: ${each.join('; ')}`;
 }
 
-/** The severity configuration gives a collision rule; `null` when it is off. */
-export function collisionSeverity(corpus: Corpus, id: string): Severity | null {
-  const rule = COLLISION_RULES.find((r) => r.id === id) as RuleInfo;
-  const setting = severityOf(corpus, id, rule.severity);
-  return setting === 'off' ? null : setting;
-}
-
 /** A pair whose collision the search could not decide, as one finding on the later brief. */
 export function undecidedFinding(severity: Severity, a: Brief, b: Brief, patterns: readonly (readonly [string, string])[], wave: number | null): Finding {
   const pairs = patterns.map(([x, y]) => `"${y}" and ${label(a)}'s "${x}"`);
@@ -165,10 +157,10 @@ export function undecidedFinding(severity: Severity, a: Brief, b: Brief, pattern
  */
 export function collisionFindings(corpus: Corpus, report: CollisionReport): Finding[] {
   const findings: Finding[] = [];
-  const collision = collisionSeverity(corpus, 'collision');
-  const undecided = collisionSeverity(corpus, 'collision-undecided');
-  const unscoped = collisionSeverity(corpus, 'unscoped');
-  const sharedDirectory = collisionSeverity(corpus, 'shared-directory');
+  const collision = configuredSeverity(corpus, 'collision');
+  const undecided = configuredSeverity(corpus, 'collision-undecided');
+  const unscoped = configuredSeverity(corpus, 'unscoped');
+  const sharedDirectory = configuredSeverity(corpus, 'shared-directory');
   for (const wave of report.waves) {
     if (collision !== null) {
       for (const c of wave.collisions) {

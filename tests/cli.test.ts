@@ -249,6 +249,80 @@ describe('list and matrix', () => {
   });
 });
 
+describe('schedule', () => {
+  const files = {
+    'briefs/001_a.md': goodBrief({ wave: '1', affectedFiles: '[src/auth/**]' }),
+    'briefs/002_b.md': goodBrief({ wave: '1', affectedFiles: '["src/**/session.ts"]' }),
+    'briefs/003_c.md': goodBrief({ wave: '1', affectedFiles: '[docs/**]' }),
+  };
+
+  it('shows the waves, exits 1 while they would change, and 0 once written', async () => {
+    const root = plain('cli-schedule', files);
+    const pretty = await run(root, ['schedule', '--no-color']);
+    expect(pretty.code).toBe(EXIT_FAILED);
+    expect(pretty.out.split('\n')).toEqual([
+      'wave 1 · 2 briefs',
+      '  001  A brief',
+      '  003  A brief',
+      'wave 2 · 1 brief',
+      '  002  A brief  moves from wave 1',
+      '         not wave 1, where 001 also writes src/auth/session.ts ("src/**/session.ts" and "src/auth/**")',
+      '',
+      '1 brief would move; "spec-brief schedule --write" writes the waves',
+      '',
+    ]);
+    const json = JSON.parse((await run(root, ['schedule', '--format', 'json'])).out) as Record<string, unknown>;
+    expect(json).toEqual(expect.objectContaining({ command: 'schedule', ok: false, checked: 3, written: null }));
+    expect(json['waves']).toEqual([
+      { wave: 1, briefs: ['001', '003'] },
+      { wave: 2, briefs: ['002'] },
+    ]);
+    expect((await run(root, ['schedule', '--format', 'github'])).out).toMatch(/^::error file=briefs\/002_b\.md,line=3,title=spec-brief wave-schedule::/);
+    expect(JSON.parse((await run(root, ['schedule', '--format', 'sarif'])).out).runs[0].results).toHaveLength(1);
+
+    const write = await run(root, ['schedule', '--write', '--no-color']);
+    expect(write.code).toBe(EXIT_OK);
+    expect(write.out).toContain('wrote the wave of 1 brief: briefs/002_b.md\n');
+    expect(readFileSync(join(root, 'briefs/002_b.md'), 'utf8')).toBe(files['briefs/002_b.md'].replace('wave: 1', 'wave: 2'));
+    expect(readFileSync(join(root, 'briefs/001_a.md'), 'utf8')).toBe(files['briefs/001_a.md']);
+    const again = await run(root, ['schedule', '--no-color']);
+    expect(again.code).toBe(EXIT_OK);
+    expect(again.out.split('\n').at(-2)).toBe('the declared waves hold');
+    expect((await run(root, ['matrix'])).code).toBe(EXIT_OK);
+  });
+
+  it('reports the written files as JSON, and prints the findings the view does not show', async () => {
+    const root = plain('cli-schedule-json', { ...files, 'briefs/004_d.md': goodBrief({ wave: '3' }) });
+    const doc = JSON.parse((await run(root, ['schedule', '--write', '--format', 'json'])).out) as { ok: boolean; written: string[]; findings: { rule: string }[] };
+    expect(doc.written).toEqual(['briefs/002_b.md']);
+    expect(doc.findings.map((f) => f.rule)).toEqual(['unscoped']);
+    expect(doc.ok).toBe(true);
+    const pretty = await run(root, ['schedule', '--no-color']);
+    expect(pretty.out).toContain('briefs/004_d.md\n  1  note     declares no affectedFiles');
+    expect((await run(root, ['schedule', '--strict'])).code).toBe(EXIT_OK);
+  });
+
+  it('writes nothing, and exits 1, over a cycle or a front matter it cannot edit', async () => {
+    const cycle = plain('cli-schedule-cycle', {
+      'briefs/001_a.md': goodBrief({ affectedFiles: '[a]', dependsOn: '[2]' }),
+      'briefs/002_b.md': goodBrief({ affectedFiles: '[b]', dependsOn: '[1]' }),
+      'briefs/003_c.md': goodBrief({ affectedFiles: '[c]' }),
+    });
+    const refused = await run(cycle, ['schedule', '--write', '--no-color']);
+    expect(refused.code).toBe(EXIT_FAILED);
+    expect(refused.out).toContain('cycle: 001 -> 002 -> 001\n');
+    expect(refused.out).toContain('nothing was written: the dependencies form a cycle\n');
+    expect(readFileSync(join(cycle, 'briefs/003_c.md'), 'utf8')).toBe(goodBrief({ affectedFiles: '[c]' }));
+    const open = plain('cli-schedule-open', { 'briefs/001_a.md': '---\nstatus: active\n' });
+    const edit = await run(open, ['schedule', '--write', '--no-color']);
+    expect(edit.code).toBe(EXIT_FAILED);
+    expect(edit.out).toContain('nothing was written: a front matter cannot be edited\n');
+    expect(edit.out).toContain('the front matter is never closed, so wave 1 cannot be written into it  front-matter');
+    expect(readFileSync(join(open, 'briefs/001_a.md'), 'utf8')).toBe('---\nstatus: active\n');
+    expect((await run(plain('cli-schedule-missing', {}), ['schedule'])).code).toBe(EXIT_ERROR);
+  });
+});
+
 describe('archive and unarchive', () => {
   it('dry-runs, archives, is idempotent, and reopens', async () => {
     const root = repo('cli-archive', { 'briefs/001_a.md': goodBrief({ affectedFiles: '[src/**]' }), 'src/a.ts': 'x\n' });

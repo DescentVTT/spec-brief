@@ -121,7 +121,7 @@ describe('the documents', () => {
     const options = [...HELP.matchAll(/--([a-z-]+)/g)].map((m) => `--${m[1] as string}`);
     const missing = [...new Set(options)].filter((o) => !readme.includes(o));
     expect(missing).toEqual([]);
-    for (const command of ['init', 'new', 'lint', 'list', 'matrix', 'archive', 'unarchive']) {
+    for (const command of ['init', 'new', 'lint', 'list', 'matrix', 'schedule', 'archive', 'unarchive']) {
       expect(readme.includes(`spec-brief ${command}`), command).toBe(true);
     }
   });

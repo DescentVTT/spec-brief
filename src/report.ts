@@ -13,6 +13,7 @@ import type { Config, SectionRule } from './config.js';
 import type { CollisionReport } from './collisions.js';
 import { summarise } from './lint.js';
 import { ARCHIVE_RULES, COLLISION_RULES, RULES } from './rules.js';
+import { moves, type Passed, reasons, type Schedule } from './schedule.js';
 import { inWords } from './text.js';
 import type { Finding, Severity } from './types.js';
 
@@ -302,6 +303,83 @@ export function matrixJson(report: CollisionReport): Record<string, unknown> {
     })),
     unscheduled: report.unscheduled.map((b) => b.id),
     deferred: report.deferred.map((b) => b.id),
+  };
+}
+
+/**
+ * The schedule for a person: each wave with its briefs, and under a brief whose
+ * wave would change, why it goes where it goes. `written` is `null` when
+ * nothing was asked to be written.
+ */
+export function prettySchedule(s: Schedule, written: readonly string[] | null, style: Style): string {
+  const label = (b: Brief): string => b.id ?? b.name;
+  const out: string[] = [];
+  const width = Math.max(3, ...s.placements.map((p) => label(p.brief).length));
+  const titleOf = (b: Brief): string => b.title ?? b.name;
+  const titles = Math.max(0, ...s.placements.map((p) => titleOf(p.brief).length));
+  const waves = [...new Set(s.placements.map((p) => p.proposed))].sort((a, b) => a - b);
+  for (const wave of waves) {
+    const here = s.placements.filter((p) => p.proposed === wave);
+    out.push(paint(style, 'bold', `wave ${wave} · ${plural(here.length, 'brief')}`));
+    for (const p of here) {
+      const title = titleOf(p.brief);
+      if (p.proposed === p.declared) {
+        out.push(`  ${label(p.brief).padEnd(width)}  ${title}`);
+        continue;
+      }
+      const from = p.declared === null ? 'no wave' : `wave ${p.declared}`;
+      out.push(`  ${label(p.brief).padEnd(width)}  ${title.padEnd(titles)}  ${paint(style, 'yellow', `moves from ${from}`)}`);
+      for (const reason of reasons(p)) out.push(`  ${' '.repeat(width)}    ${paint(style, 'dim', reason)}`);
+    }
+  }
+  if (waves.length > 0) out.push('');
+  for (const cycle of s.cycles) out.push(`${paint(style, 'red', 'cycle:')} ${cycle.map(label).join(' -> ')}`);
+  for (const u of s.unplaced) {
+    const why = u.because === 'deferred' ? 'which is deferred' : u.because === 'cycle' ? 'which is in a cycle' : 'which is not placed';
+    out.push(`${paint(style, 'dim', 'waits:')} ${label(u.brief)} on ${label(u.waitsOn)}, ${why}`);
+  }
+  if (s.deferred.length > 0) out.push(paint(style, 'dim', `deferred: ${s.deferred.map(label).join(', ')}`));
+  const moving = moves(s).length;
+  if (written !== null && written.length > 0) {
+    out.push(`wrote the wave of ${plural(written.length, 'brief')}: ${written.join(', ')}`);
+  } else if (written !== null && moving > 0) {
+    out.push(paint(style, 'red', s.cycles.length > 0 ? 'nothing was written: the dependencies form a cycle' : 'nothing was written: a front matter cannot be edited'));
+  } else if (moving > 0) {
+    out.push(`${plural(moving, 'brief')} would move; "spec-brief schedule --write" writes the waves`);
+  } else if (s.placements.length > 0) {
+    out.push('the declared waves hold');
+  } else if (s.cycles.length === 0 && s.unplaced.length === 0 && s.deferred.length === 0) {
+    out.push('no live briefs');
+  }
+  return out.join('\n').trimEnd();
+}
+
+/** The schedule as JSON: a row per placed brief with its declared and proposed wave and why. */
+export function scheduleJson(s: Schedule): Record<string, unknown> {
+  const passed = (p: Passed): Record<string, unknown> => {
+    const base = { wave: p.wave, reason: p.reason, brief: p.brief.id };
+    if (p.reason === 'collision') return { ...base, overlaps: p.overlaps.map((o) => ({ patterns: o.patterns, witness: o.witness })) };
+    if (p.reason === 'undecided') return { ...base, patterns: p.patterns };
+    return base;
+  };
+  const waves = [...new Set(s.placements.map((p) => p.proposed))].sort((a, b) => a - b);
+  return {
+    first: s.first,
+    waves: waves.map((wave) => ({ wave, briefs: s.placements.filter((p) => p.proposed === wave).map((p) => p.brief.id) })),
+    briefs: s.placements.map((p) => ({
+      id: p.brief.id,
+      file: p.brief.file,
+      declared: p.declared,
+      proposed: p.proposed,
+      moves: p.proposed !== p.declared,
+      after: p.after === null ? null : { brief: p.after.brief.id, wave: p.after.wave },
+      passed: p.passed.map(passed),
+      unscoped: p.unscoped,
+      reasons: reasons(p),
+    })),
+    unplaced: s.unplaced.map((u) => ({ id: u.brief.id, file: u.brief.file, waitsOn: u.waitsOn.id, because: u.because })),
+    cycles: s.cycles.map((cycle) => cycle.map((b) => b.id)),
+    deferred: s.deferred.map((b) => b.id),
   };
 }
 

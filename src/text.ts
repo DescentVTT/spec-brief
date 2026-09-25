@@ -22,6 +22,15 @@ export function joinLines(lines: readonly string[], eol: '\n' | '\r\n'): string 
   return lines.length === 0 ? '' : `${lines.join(eol)}${eol}`;
 }
 
+/** Lines written back with the source's byte-order mark, line ending and final newline, or lack of one. */
+export function encodeLike(source: string, lines: readonly string[]): string {
+  const bom = source.charCodeAt(0) === 0xfeff ? '﻿' : '';
+  const eol = lineEnding(source);
+  const text = joinLines(lines, eol);
+  const finalNewline = source === '' || source.endsWith('\n');
+  return `${bom}${finalNewline ? text : text.slice(0, text.length - eol.length)}`;
+}
+
 export function stripBom(text: string): string {
   return text.charCodeAt(0) === 0xfeff ? text.slice(1) : text;
 }
