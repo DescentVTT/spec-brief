@@ -32,6 +32,7 @@ import {
   prettyMatrix,
   prettyPlan,
   sarif,
+  sectionsJson,
   type Style,
   summaryLine,
 } from './report.js';
@@ -325,7 +326,7 @@ async function runLint(run: Run): Promise<number> {
   engine.requireBriefs();
   const findings = await engine.lint(run.positionals);
   const checked = run.positionals.length === 0 ? engine.corpus.briefs.length : run.positionals.length;
-  return emitFindings(run, 'lint', findings, checked);
+  return emitFindings(run, 'lint', findings, checked, { sections: sectionsJson(engine.config) });
 }
 
 async function runList(run: Run): Promise<number> {
@@ -337,7 +338,13 @@ async function runList(run: Run): Promise<number> {
     .map((brief) => ({ brief, ready: ready.has(brief), waitingOn: engine.waitingOn(brief) }))
     .filter((row) => !flag(run.values, 'ready') || row.ready);
   if (run.format === 'json') {
-    run.out(jsonDocument('list', run.version, { ok: true, briefs: rows.map((r) => briefJson(r.brief, { ready: r.ready, waitingOn: r.waitingOn })) }));
+    run.out(
+      jsonDocument('list', run.version, {
+        ok: true,
+        briefs: rows.map((r) => briefJson(r.brief, { ready: r.ready, waitingOn: r.waitingOn })),
+        sections: sectionsJson(engine.config),
+      }),
+    );
   } else {
     run.out(`${prettyList(rows, run.style)}\n`);
   }

@@ -5,7 +5,7 @@
  * until somebody writes it.
  */
 
-import type { Config, SectionRule } from './config.js';
+import { type Config, DEFAULT_CONFIG, type SectionRule } from './config.js';
 import type { Corpus } from './corpus.js';
 import { renderScalar } from './frontmatter.js';
 import { fillTemplate, slugify } from './text.js';
@@ -38,17 +38,17 @@ export function fileNameFor(config: Config, id: string, title: string): string {
   return slug === '' ? `${id}.md` : `${id}${config.id.separator}${slug}.md`;
 }
 
-const HINTS: Readonly<Record<string, string>> = {
-  intent: 'The state of the tree when this round is done, and why it matters. One paragraph.',
-  'negative scope': 'What this round must not do, even where it would look helpful.',
-  'not empowered': 'Files, interfaces and decisions this round may not change.',
-  invariants: 'Checks that must hold before the round is called done, each one a task item.',
-  'acceptance criteria': 'What a reviewer checks to accept the result, each one a task item.',
-  'the defect, measured': 'How to reproduce the defect, and the measurement that shows it.',
-};
+const DEFAULT_RULES: readonly SectionRule[] = [...DEFAULT_CONFIG.sections, ...Object.values(DEFAULT_CONFIG.types).flat()];
 
+/**
+ * What a new brief says under a heading: the section's configured hint, or the
+ * default section's of the same name - a configuration written before hints
+ * existed names its sections without one - or a plain instruction. A "-->"
+ * would end the comment early and leave the rest as content, so it is broken.
+ */
 function hint(rule: SectionRule): string {
-  return HINTS[rule.name.toLowerCase()] ?? `Write the ${rule.name}.`;
+  const text = rule.hint ?? DEFAULT_RULES.find((d) => d.name.toLowerCase() === rule.name.toLowerCase())?.hint ?? `Write the ${rule.name}.`;
+  return text.replaceAll('-->', '-- >');
 }
 
 function frontMatter(config: Config, brief: NewBrief): string[] {

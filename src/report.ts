@@ -9,6 +9,7 @@
 
 import type { Plan } from './archive.js';
 import type { Brief } from './brief.js';
+import type { Config, SectionRule } from './config.js';
 import { type CollisionReport, inWords } from './collisions.js';
 import { summarise } from './lint.js';
 import { ARCHIVE_RULES, COLLISION_RULES, RULES } from './rules.js';
@@ -164,6 +165,28 @@ export function briefJson(brief: Brief, extra: Record<string, unknown> = {}): Re
     tasks: { total: brief.tasks.length, checked: brief.tasks.filter((t) => t.checked).length },
     ...extra,
   };
+}
+
+/**
+ * The sections the configuration asks for, each with what it must answer:
+ * those every live brief carries, with `type` null, then those each type adds.
+ * A tool that helps write a brief asks for these rather than for names it
+ * knows in advance.
+ */
+export function sectionsJson(config: Config): Record<string, unknown>[] {
+  const describe = (rule: SectionRule, type: string | null): Record<string, unknown> => ({
+    name: rule.name,
+    type,
+    aliases: rule.aliases,
+    optional: rule.optional,
+    checklist: rule.checklist,
+    mustContain: rule.mustContain,
+    hint: rule.hint ?? null,
+  });
+  return [
+    ...config.sections.map((rule) => describe(rule, null)),
+    ...Object.entries(config.types).flatMap(([type, rules]) => rules.map((rule) => describe(rule, type))),
+  ];
 }
 
 /** Columns padded to their widest cell; every row has the header's length. */
