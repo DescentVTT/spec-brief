@@ -113,7 +113,7 @@ function archiveSeverity(corpus: Corpus, id: string): Severity | null {
   return setting === 'off' ? null : setting;
 }
 
-/** Where a finding goes: an error refuses, and under --strict so does a warning, which it then is. */
+/** Where an archive rule's finding goes: an error refuses, and under --strict a warning refuses as an error, as out-of-scope does. */
 function place(finding: Finding, strict: boolean, blocking: Finding[], warnings: Finding[]): void {
   if (finding.severity === 'error') blocking.push(finding);
   else if (strict && finding.severity === 'warning') blocking.push({ ...finding, severity: 'error' });

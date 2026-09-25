@@ -122,12 +122,12 @@ function where(wave: number | null): string {
 
 /** `a`, `a and b`, `a, b and c`. */
 export function inWords(items: readonly string[]): string {
-  return items.length < 2 ? items.join('') : `${items.slice(0, -1).join(', ')} and ${items[items.length - 1] as string}`;
+  return items.length < 2 ? (items[0] ?? '') : `${items.slice(0, -1).join(', ')} and ${items[items.length - 1] as string}`;
 }
 
 function collisionMessage(c: Collision, wave: number | null): string {
-  const [only] = c.overlaps;
-  if (only !== undefined && c.overlaps.length === 1) {
+  if (c.overlaps.length === 1) {
+    const only = c.overlaps[0] as Overlap;
     return `"${only.patterns[1]}" overlaps ${label(c.a)}'s "${only.patterns[0]}" ${where(wave)}; both cover ${only.witness}`;
   }
   const each = c.overlaps.map((o) => `"${o.patterns[1]}" and ${label(c.a)}'s "${o.patterns[0]}" both cover ${o.witness}`);

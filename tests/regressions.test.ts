@@ -250,6 +250,8 @@ describe('dispositions, after 0.1.0', () => {
       '  > **Rejected** in a quote',
       '  ```\n  **Rejected** in a fence\n  ```',
       '  -**Rejected** with no space after the marker',
+      // A sibling item is not a note under the box.
+      '- **Rejected** as a sibling item',
     ];
     for (const note of words) expect(open(note), note).toEqual(OPEN);
   });
@@ -259,6 +261,7 @@ describe('dispositions, after 0.1.0', () => {
       '  **Rejected** by the rule.',
       '\t**Rejected** by the rule.',
       '  - **Delegated to** 012',
+      '  -   **Delegated to** 012, after several spaces',
       '  * **Accepted debt**: after the release',
       '  + **Rejected**',
       '  1. **Rejected**',
@@ -343,6 +346,7 @@ describe('collisions, after 0.1.0', () => {
     [A]: goodBrief({ wave: '1', affectedFiles: '[src/**, docs/**, lib/a.ts]' }),
     [B]: goodBrief({ wave: '1', affectedFiles: '[src/x.ts, docs/y.md, "lib/**"]' }),
     'briefs/003_c.md': goodBrief({ wave: '1', affectedFiles: '[etc/c.ts]' }),
+    'briefs/004_d.md': goodBrief({ affectedFiles: '[src/**]' }),
   };
 
   it('reports a pair of briefs once, with every pair of patterns that meets', () => {
@@ -373,6 +377,8 @@ describe('collisions, after 0.1.0', () => {
       '  X 001 "src/**" and 002 "src/x.ts" both cover src/x.ts',
       '    001 "docs/**" and 002 "docs/y.md" both cover docs/y.md',
       '    001 "lib/a.ts" and 002 "lib/**" both cover lib/a.ts',
+      '',
+      'no wave: 004',
     ]);
     expect(matrixJson(report)).toEqual({
       waves: [
@@ -394,7 +400,7 @@ describe('collisions, after 0.1.0', () => {
           unscoped: [],
         },
       ],
-      unscheduled: [],
+      unscheduled: ['004'],
     });
   });
 
