@@ -12,8 +12,11 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       include: ['src/**/*.ts'],
-      // types.ts is type-only: it compiles to an empty module.
-      exclude: ['src/types.ts'],
+      // types.ts is type-only: it compiles to an empty module. The vendored
+      // spec-core is measured in spec-core, against its oracle and its own
+      // mutation sweep; here it would pad or dilute a number about this
+      // repository's code (spec-core ADR-0001).
+      exclude: ['src/types.ts', 'src/vendor/**'],
       reporter: ['text', 'lcov'],
       // Floors set just below the measured numbers, so that losing ground
       // fails the build while ordinary refactoring does not. They move up

@@ -25,6 +25,7 @@ export default {
     '!src/fs.ts',
     '!src/git.ts',
     '!src/plugins.ts',
+    '!src/vendor/**',
   ],
   // Unit tests finish in milliseconds; a mutant still running after a few
   // seconds is one that will not finish.

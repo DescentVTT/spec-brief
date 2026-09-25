@@ -20,7 +20,8 @@ export default {
 
   // types.ts is type-only and index.ts is re-exports: nothing to mutate.
   // cli.ts is mutated with the rest: the CLI tests drive main() in process.
-  mutate: ['src/**/*.ts', '!src/types.ts', '!src/index.ts'],
+  // The vendored spec-core is mutated in spec-core, where its oracle is.
+  mutate: ['src/**/*.ts', '!src/types.ts', '!src/index.ts', '!src/vendor/**'],
 
   // Stryker's sandbox rewrites a tsconfig that reaches outside the project,
   // and the rewriter calls a TypeScript API that TypeScript 7's native
