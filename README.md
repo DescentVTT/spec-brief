@@ -116,7 +116,7 @@ deferred: 006
 2 briefs would move; "spec-brief schedule --write" writes the waves
 ```
 
-Each move says why: the dependency that sets the earliest wave, and for every wave passed over, the brief there and the file both would write. A deferred brief, and one that waits on it, is placed nowhere; a dependency cycle is an error, and nothing in or after it is placed. `--write` sets `wave` in the front matter of each brief whose wave changes - every other line as it was, in one transaction - and writes nothing over a cycle. `--format json` gives an orchestrator the waves, each brief's declared and proposed wave with the reasons, and what waits on what; `sarif` and `github` carry a `wave-schedule` finding per move.
+Each move says why: the dependency that sets the earliest wave, and for every wave passed over, the brief there and the file both would write. A deferred brief, and one that waits on it, is placed nowhere; a dependency cycle is an error, and nothing in or after it is placed. `--write` sets `wave` in the front matter of each brief whose wave changes - every other line as it was, in one transaction - and writes nothing over a cycle. `--format json` gives an orchestrator the waves, each brief's declared and proposed wave with the reasons, and what waits on what; `sarif`, `github` and `gitlab` carry a `wave-schedule` finding per move.
 
 Exit 0 when the declared waves already hold, 1 when they would change or the dependencies form a cycle, 2 when the run cannot be trusted. The result is the same every time for the same briefs. It is a valid schedule, not always the shortest: no fast method promises the fewest waves, and a person can always move a brief later by hand, which `lint` and `matrix` then check.
 
@@ -139,7 +139,7 @@ Reopens an archived brief: the banner and the hash come off, the status goes bac
 
 ### Every command
 
-`--root <dir>` runs from another directory. `--config <file>` names the configuration; `--no-config` uses the defaults. `--format` is `pretty`, `json`, `sarif` or `github` where the command reports findings. `--strict` makes warnings fail the run. `--no-git` leaves git out even inside a repository: the tree is read from disk, and `archive` records no commit. `--color` and `--no-color` override `NO_COLOR`, `FORCE_COLOR` and the terminal check. `--help` and `--version` do what they say.
+`--root <dir>` runs from another directory. `--config <file>` names the configuration; `--no-config` uses the defaults. `--format` is `pretty`, `json`, `sarif`, `github` or `gitlab` where the command reports findings. `--strict` makes warnings fail the run. `--no-git` leaves git out even inside a repository: the tree is read from disk, and `archive` records no commit. `--color` and `--no-color` override `NO_COLOR`, `FORCE_COLOR` and the terminal check. `--help` and `--version` do what they say.
 
 **Exit codes:** `0` clean, `1` findings, a collision, or a refused action, `2` the run could not be trusted - a bad flag, a configuration that does not load, a brief that does not exist. A run over a briefs directory that does not exist exits 2, because a check over nothing looks exactly like a clean one.
 
@@ -246,7 +246,17 @@ Section names compare without case, typographic quotes, emphasis, a leading numb
 - run: npx spec-brief schedule --format github
 ```
 
-`github` writes workflow commands, which annotate the pull request with no upload and no permission. `sarif` writes SARIF 2.1.0 for code-scanning upload. `json` is a versioned document for anything else: `schemaVersion` changes when a field changes meaning, and is 2 since a collision became a pair of briefs rather than a pair of patterns.
+`github` writes workflow commands, which annotate the pull request with no upload and no permission. `sarif` writes SARIF 2.1.0 for code-scanning upload. `gitlab` writes a GitLab Code Quality report - an array of `{ description, check_name, fingerprint, severity, location: { path, lines: { begin } } }` - for a merge request to show:
+
+```yaml
+spec-brief:
+  script: npx spec-brief lint --format gitlab > gl-code-quality.json
+  artifacts:
+    reports:
+      codequality: gl-code-quality.json
+```
+
+An error is `major`, a warning `minor` and a note `info`; GitLab's `critical` and `blocker` are for security holes and crashes, which no finding here is. The fingerprint is a SHA-256 of the rule, the file and the message, and not the line, so a finding that moves is the same issue. `json` is a versioned document for anything else: `schemaVersion` changes when a field changes meaning, and is 2 since a collision became a pair of briefs rather than a pair of patterns.
 
 ## As a library
 

@@ -23,6 +23,7 @@ import {
   FORMATS,
   type Format,
   githubCommands,
+  gitlabCodeQuality,
   jsonDocument,
   type ListRow,
   matrixJson,
@@ -77,7 +78,7 @@ Options for every command:
   --root <dir>          run from this directory instead of the current one
   --config <file>       use this configuration file
   --no-config           use the defaults, ignoring any configuration file
-  --format <format>     pretty (default), json, sarif or github
+  --format <format>     pretty (default), json, sarif, github or gitlab
   --strict              treat warnings as errors
   --no-git              leave git out; read the files on disk instead
   --color, --no-color   force colour on or off
@@ -274,6 +275,9 @@ function emitFindings(run: Run, command: string, findings: readonly Finding[], c
       break;
     case 'github':
       run.out(githubCommands(findings));
+      break;
+    case 'gitlab':
+      run.out(gitlabCodeQuality(findings));
       break;
     case 'pretty':
       if (findings.length > 0) run.out(`${prettyFindings(findings, run.style)}\n\n`);

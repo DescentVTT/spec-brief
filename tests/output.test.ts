@@ -18,8 +18,8 @@ const table = (findings: readonly Finding[]): string[] =>
   findings.map((f) => `${f.line} ${f.rule}: ${f.message}${f.hint === undefined ? '' : ` | ${f.hint}`}`);
 
 describe('reports', () => {
-  it('offers the four formats', () => {
-    expect(FORMATS).toEqual(['pretty', 'json', 'sarif', 'github']);
+  it('offers the five formats', () => {
+    expect(FORMATS).toEqual(['pretty', 'json', 'sarif', 'github', 'gitlab']);
   });
 
   it('writes a finding as JSON with only the fields it has', () => {
