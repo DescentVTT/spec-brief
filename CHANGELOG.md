@@ -12,6 +12,10 @@ Notable changes, newest first. Versions follow [semver](https://semver.org).
   declares `affectedFiles` or `protectedFiles` gets `scope-unmeasured`, a
   warning that names the next step, and a refusal under `--strict`. It is the
   first archive rule, and configuration sets its severity like any other.
+- An open box is closed only by a note under it that starts with a
+  disposition marker. A marker anywhere in the item used to count, the box's
+  own text included, so `- [ ] Explain why the **Rejected** designs failed`
+  archived as dispositioned.
 
 ## 0.1.0
 

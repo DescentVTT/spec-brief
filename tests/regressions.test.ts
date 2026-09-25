@@ -223,3 +223,47 @@ describe('regressions after 0.1.0', () => {
     expect(plan('note', true).warnings.map((f) => [f.rule, f.severity])).toEqual([['scope-unmeasured', 'note']]);
   });
 });
+
+describe('dispositions, after 0.1.0', () => {
+  const open = (body: string): string[] => {
+    const corpus = corpusOf({ [A]: goodBrief({}, `\n- [ ] Migrate the cache\n${body}\n`) });
+    return planArchive(corpus, the(corpus, '001'), { date: DATE }).blocking.map((f) => f.message);
+  };
+  const OPEN = ['"Migrate the cache" is neither ticked nor dispositioned'];
+
+  it('does not take a marker in the task itself for a note closing it', () => {
+    // The input the review archived with: the marker is a word in the task.
+    const corpus = corpusOf({ [A]: goodBrief({}, '\n- [ ] Explain why the **Rejected** designs failed\n') });
+    expect(planArchive(corpus, the(corpus, '001'), { date: DATE }).blocking.map((f) => [f.rule, f.message])).toEqual([
+      ['open-task', '"Explain why the **Rejected** designs failed" is neither ticked nor dispositioned'],
+    ]);
+  });
+
+  it('closes a box only with a note that starts with a marker', () => {
+    const words = [
+      '  see the **Rejected** list',
+      '  `x` **Rejected** after a code span',
+      '  <!-- aside --> **Rejected** after a comment',
+      '  > **Rejected** in a quote',
+      '  ```\n  **Rejected** in a fence\n  ```',
+      '  -**Rejected** with no space after the marker',
+    ];
+    for (const note of words) expect(open(note), note).toEqual(OPEN);
+  });
+
+  it('closes a box with a note under it, indented, as a bullet or a numbered item, or folded into it', () => {
+    const notes = [
+      '  **Rejected** by the rule.',
+      '\t**Rejected** by the rule.',
+      '  - **Delegated to** 012',
+      '  * **Accepted debt**: after the release',
+      '  + **Rejected**',
+      '  1. **Rejected**',
+      '  12) **Rejected**',
+      '**Rejected** because it folds into the item',
+      '  First the context.\n  **Rejected** on the second line',
+      '\n  **Rejected** after a blank line',
+    ];
+    for (const note of notes) expect(open(note), note).toEqual([]);
+  });
+});
