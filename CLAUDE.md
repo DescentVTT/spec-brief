@@ -52,7 +52,7 @@ spawn a process: under per-test coverage, one that does is run for every
 mutant it reaches.
 
 The coverage floors in `vitest.config.ts` and the mutation `break` in
-`stryker.config.mjs` sit below the last measurement. They move up with the
+`stryker.core.config.mjs` sit below the last measurement. They move up with the
 measurement and never down to make a change pass.
 
 ## Design rules
