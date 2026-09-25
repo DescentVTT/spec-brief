@@ -127,7 +127,7 @@ Closes a round. Refused, with every reason, when:
 - the brief has lint errors, is a draft, or depends on a brief that is still live;
 - a task item is neither ticked nor dispositioned - an open box counts as closed when a note under it starts with one of the `dispositions` (`**Delegated`, `**Accepted debt`, `**Rejected` by default), a note being a line of the item, bare or as a bullet, above any box nested in it;
 - the working tree holds uncommitted work outside the brief directories (`--allow-dirty` to proceed);
-- the round's commit changed a file in `protectedFiles`.
+- the round's commit changed a file in `protectedFiles` - one refusal per file, naming it, unless a plugin that verifies rulings [waives it](#waiving-a-refusal).
 
 Changes outside `affectedFiles` are a warning, and an error under `--strict`. A scope is never passed by checks that measured nothing: when the files the round changed are unknown - no `--commit`, `--base` or `archiving.base`, `--no-git`, or a commit already in the base branch, as on `main` after the merge - a brief that declares one gets `scope-unmeasured`, a warning, and a refusal under `--strict`. Otherwise it writes the archived brief with its status set, a frozen banner under the front matter, every relative link rewritten for the archive directory, and an `integrity` hash; rewrites the links other live briefs hold to it; and removes the original. With `archiving.rewriteLinks` off, no link is rewritten, and the links other live briefs are left holding are reported as `stale-link`. `--commit <rev>` records the commit and the files it changed; `--base <rev>` measures from the merge base instead, for a branch of several commits; `--pr <n>` links the pull request; `--summary <text>` is what the round did, in the banner. `--dry-run` prints the plan and the banner and writes nothing. Archiving an archived brief does nothing and exits 0.
 
@@ -236,7 +236,7 @@ Section names compare without case, typographic quotes, emphasis, a leading numb
 | `stale-link` | warning | Links in live briefs left pointing where a brief used to be, when `archiving.rewriteLinks` is off (`archive`, `unarchive`). |
 <!-- rules:end -->
 
-`archive` refuses with its own reasons - `open-task`, `archive-draft`, `archive-deferred`, `dependency-open`, `dirty-tree`, `protected-file`, `out-of-scope`, `archive-exists` - which are not lint rules: they are about whether this round is done, not whether the brief is well written. The rules marked `archive` above are raised by archival too, and configuration sets their severity like any other.
+`archive` refuses with its own reasons - `open-task`, `archive-draft`, `archive-deferred`, `dependency-open`, `dirty-tree`, `protected-file`, `out-of-scope`, `archive-exists` - and says `waived` and `waiver-ignored` of what [plugins](#waiving-a-refusal) lift; none of these are lint rules: they are about whether this round is done, not whether the brief is well written. The rules marked `archive` above are raised by archival too, and configuration sets their severity like any other.
 
 ## In CI
 
@@ -289,7 +289,25 @@ export default (options) => ({
 
 This is where integrations belong. A tool that defines a format - signed departures, recorded reproducers, a code graph's blast radius - is the one that can check it, and spec-brief carries no copy of formats it does not own. Loading a plugin runs its code, exactly as loading a linter configuration does.
 
-A path is relative to the root. A package is found from the root as an `import` there would find it, its `exports` read under the import conditions, so a plugin published as ESM only loads.
+A path is relative to the root. A package is found from the root as an `import` there would find it, its `exports` read under the import conditions, so a plugin published as ESM only loads, and so does a subpath such as `@descent-vtt/spec-harness/spec-brief-plugin`.
+
+### Waiving a refusal
+
+A plugin may also export `waive`, which lets the archive accept a change its own check allows - spec-harness's plugin verifies a signed ruling for a protected path, which spec-brief does not know how to read.
+
+```js
+export default () => ({
+  name: 'rulings',
+  rules: [],
+  // context: { root, brief: { id, file, text }, findings, base, commit }
+  waive: async ({ findings }) =>
+    findings
+      .filter((f) => f.rule === 'protected-file' && verifiedRulingCovers(f.path))
+      .map((f) => ({ rule: f.rule, path: f.path, reason: 'ruling R3, signed by alice, allows it' })),
+});
+```
+
+`findings` are the archive's refusals. A `protected-file` refusal is one per file and names its `path`; an `out-of-scope` refusal, which refuses only under `--strict`, lists its `paths`. Those two are the only ones a plugin can waive: a waiver matches a refusal by rule and path and turns it into a `waived` note naming the plugin, the rule, the path and the reason; a waiver for any other rule is ignored with a `waiver-ignored` warning. The hook is asked only when the plan has a refusal it could lift. A hook that throws or answers in another shape stops the run with exit 2, as a plugin that fails to load does.
 
 ## What it does not do
 

@@ -11,7 +11,7 @@ changes is superseded by a new record that says so; the old one keeps its text.
 | [0004](0004-archival-is-a-planned-transaction.md) | Archival is a planned transaction over files; git is read, never written. |
 | [0005](0005-scopes-collide-by-intersection.md) | Scopes collide by glob intersection, with a witness; amended for spec-core's engine: a literal is read from the tree, a witness is a file, protection wins, and undecided is an answer. |
 | [0006](0006-the-freeze-lives-in-the-file.md) | The freeze is a hash in the archived brief's own front matter, not a ledger. |
-| [0007](0007-integrations-are-plugins.md) | Integrations are plugins, owned by the tools that define their formats. |
+| [0007](0007-integrations-are-plugins.md) | Integrations are plugins, owned by the tools that define their formats; amended so a plugin may waive a protected-file or out-of-scope refusal its own check allows. |
 | [0008](0008-toolchain.md) | The toolchain, chosen by "latest is not newest", with the reason for each pin. |
 | [0009](0009-mutation-testing.md) | Mutation testing in two sweeps; the core measured at 95.75 and gated at 93. |
 | [0010](0010-releases-are-published-by-ci.md) | Releases are published by CI from a version tag, by trusted publishing, with provenance. |

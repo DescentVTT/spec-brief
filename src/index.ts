@@ -5,6 +5,7 @@
 
 export { applyPlan, ConflictError, TransactionError } from './apply.js';
 export {
+  applyWaivers,
   type ArchiveRequest,
   type FileOp,
   openTasks,
@@ -15,6 +16,8 @@ export {
   renderBanner,
   type UnarchiveRequest,
   type Unmeasured,
+  WAIVABLE,
+  type Waiver,
 } from './archive.js';
 export { BANNER_CLOSE, BANNER_OPEN, type Brief, BUILT_IN_FIELDS, type FieldProblem, idFromName, parseBrief } from './brief.js';
 export { main, type CliIO, EXIT_ERROR, EXIT_FAILED, EXIT_OK, HELP, UsageError } from './cli.js';
@@ -72,8 +75,8 @@ export {
   type Witness,
 } from './glob.js';
 export { integrityOf } from './integrity.js';
-export { failing, lint, type LintOptions, type Plugin, ruleIds, sortFindings, summarise } from './lint.js';
-export { asPlugin, loadPlugins } from './plugins.js';
+export { failing, lint, type LintOptions, type Plugin, ruleIds, sortFindings, summarise, type WaiveContext } from './lint.js';
+export { asPlugin, asWaivers, loadPlugins } from './plugins.js';
 export { type Format, FORMATS, githubCommands, JSON_SCHEMA_VERSION, matrixJson, sarif, scheduleJson, sectionsJson } from './report.js';
 export { ARCHIVE_RULES, COLLISION_RULES, type Rule, type RuleContext, type RuleInfo, type RuleResult, RULES } from './rules.js';
 export { nextId, renderNewBrief } from './scaffold.js';

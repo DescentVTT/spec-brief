@@ -57,6 +57,18 @@ Notable changes, newest first. Versions follow [semver](https://semver.org).
   the declared waves hold, 1 when they would change or on a cycle. Pretty,
   JSON, SARIF and GitHub output; `wave-schedule`, an error by default, is the
   finding per move.
+- A plugin may export a `waive` hook beside its rules (ADR-0007, amended).
+  After an archival is planned, and only when it has a refusal a plugin may
+  lift, each hook is given `{ root, brief: { id, file, text }, findings,
+  base, commit }` and answers `[{ rule, path, reason }]`. A `protected-file`
+  or `out-of-scope` refusal it names by rule and path becomes a `waived`
+  note; a waiver for any other rule is ignored with a `waiver-ignored`
+  warning. A hook that throws or answers in another shape stops the run
+  with exit 2. This is how spec-harness's plugin lets a signed ruling allow
+  a protected file, without spec-brief reading signatures.
+- A `protected-file` refusal names its file in a new `path` field, one
+  finding per file as before, and an `out-of-scope` finding lists its files
+  in `paths`. Both appear in the JSON of `archive`; a plugin reads them.
 - 24 lint rules and 5 collision rules.
 - The library's `parseGlob`, `matchGlob`, `intersectGlobs` and `globBase`
   keep their signatures over the new engine. `parseGlob`'s `isFile` option is
