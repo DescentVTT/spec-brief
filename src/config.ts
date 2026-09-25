@@ -274,7 +274,7 @@ function sectionFrom(raw: unknown): SectionRule {
     mustContain: (r['mustContain'] as string[] | undefined) ?? [],
     checklist: (r['checklist'] as boolean | undefined) ?? false,
     optional: (r['optional'] as boolean | undefined) ?? false,
-    ...(r['hint'] === undefined ? {} : { hint: r['hint'] as string }),
+    hint: r['hint'] as string | undefined,
   });
 }
 

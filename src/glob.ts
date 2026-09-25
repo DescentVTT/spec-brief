@@ -148,7 +148,7 @@ function splitTopLevel(body: string): string[] {
     if (ch === '\\') i += 1;
     else if (ch === '[') {
       const close = classEnd(body, i);
-      if (close > 0) i = close;
+      if (close !== -1) i = close;
     } else if (ch === '{') depth += 1;
     else if (ch === '}') depth -= 1;
     else if (ch === ',' && depth === 0) {
