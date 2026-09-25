@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 
 import { releaseOf } from '../scripts/release.js';
 import { HELP } from '../src/cli.js';
+import { matchGlob, parseGlob } from '../src/glob.js';
 import { ARCHIVE_RULES, COLLISION_RULES, RULES } from '../src/rules.js';
 
 /**
@@ -69,6 +70,17 @@ describe('the tree', () => {
     const offenders = sources.filter((file) => /(?::\s*any\b|\bas any\b|<any>|any\[\])/.test(code(file)));
     expect(offenders).toEqual([]);
     expect(/:\s*any\b/.test(code('src/lint.ts'))).toBe(false);
+  });
+
+  it('type-checks every configuration file', () => {
+    // A configuration left out of tsconfig.json is never type-checked, and a
+    // misspelt option in it is read as absent.
+    const { include } = JSON.parse(readFileSync('tsconfig.json', 'utf8')) as { include: string[] };
+    const globs = include.map((pattern) => parseGlob(pattern)).flatMap((parsed) => (parsed.ok ? [parsed.glob] : []));
+    expect(globs).toHaveLength(include.length);
+    const configs = readdirSync('.').filter((name) => /\.config\.(?:ts|mjs)$/.test(name));
+    expect(configs.sort()).toEqual(['stryker.config.mjs', 'stryker.core.config.mjs', 'vitest.config.ts', 'vitest.core.config.ts', 'vitest.mutation.config.ts']);
+    expect(configs.filter((name) => !globs.some((glob) => matchGlob(glob, name)))).toEqual([]);
   });
 
   it('keeps I/O at the edges', () => {
