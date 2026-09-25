@@ -128,6 +128,9 @@ describe('deferral', () => {
 
   it('leaves a trigger of the wrong shape to the field rule, and a brief that is not deferred alone', async () => {
     expect((await findings({ [A]: deferred({ trigger: '[a, b]' }) })).map((f) => f.rule)).toEqual(['field']);
+    // Another field's problem is its own finding, and the missing trigger still one.
+    expect((await findings({ [A]: deferred({ wave: 'two' }) })).map((f) => f.rule)).toEqual(['deferral-trigger', 'field']);
+    expect((await findings({ [A]: deferred({ trigger: '"   "' }) })).map((f) => f.message)).toEqual(['is deferred and names no "trigger"']);
     expect(await findings({ [A]: goodBrief({ trigger: '2026-10' }) })).toEqual([]);
     expect(await findings({ [A]: goodBrief({ status: 'draft', trigger: 'Q3' }) })).toEqual([]);
   });
@@ -369,6 +372,8 @@ describe('scopes', () => {
     }
     // Without a tree nothing is known to be missing from it.
     expect(await noted('src/newmod', null)).toEqual([]);
+    // The extension is the last name's, not a dotted directory's above it.
+    expect(await noted('docs/v1.2/newmod')).toHaveLength(1);
     // One note per pattern: a literal it names is not also said to match nothing.
     const all = await findings({ [A]: goodBrief({ affectedFiles: '[src/newmod, docs/v1.2]', protectedFiles: '[gone]' }) }, config(), tree);
     expect(all.map((f) => `${f.rule}: ${f.message}`)).toEqual([

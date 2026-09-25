@@ -142,7 +142,8 @@ export function globBases(glob: Glob): readonly string[] {
 
 /** The first of {@link globBases}: the 0.1 interface, kept for the library's callers. */
 export function globBase(glob: Glob): string {
-  return glob.compiled.bases[0] ?? '';
+  // One base per alternative, and a pattern has at least one.
+  return glob.compiled.bases[0] as string;
 }
 
 /** A name with an extension, `login.ts` or `.eslintrc.json`, and not a dot-name such as `.github`. */

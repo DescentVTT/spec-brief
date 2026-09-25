@@ -397,6 +397,7 @@ describe('collisions', () => {
       expect(matrixJson(report)['deferred']).toEqual(['002', '003']);
     }
     expect(prettyMatrix(collisions(corpus), { color: false }).split('\n').slice(-1)).toEqual(['deferred: 002, 003']);
+    expect(prettyMatrix(collisions(corpus), { color: true }).split('\n').slice(-1)).toEqual([`${String.fromCharCode(27)}[2mdeferred: 002, 003${String.fromCharCode(27)}[22m`]);
     const only = corpusOf({ 'briefs/002_b.md': goodBrief({ status: 'deferred', trigger: 'when x' }) });
     expect(prettyMatrix(collisions(only), { color: false })).toBe('deferred: 002');
   });
@@ -448,7 +449,11 @@ describe('collisions', () => {
     // Undecided is neither: with the budget it needs, the pair collides.
     expect(collisions(corpus).waves[0]?.collisions).toHaveLength(1);
     expect(collisions(corpus, { budget: 1 }).waves[0]?.undecided).toHaveLength(1);
-    expect(collisionFindings(corpus, report).map((f) => f.rule)).toEqual(['collision-undecided']);
+    expect(collisionFindings(corpus, report).map((f) => [f.rule, f.brief, f.file])).toEqual([['collision-undecided', '002', 'briefs/002_b.md']]);
+    const esc = String.fromCharCode(27);
+    const painted = prettyMatrix(report, { color: true });
+    expect(painted).toContain(`  001    ·    ${esc}[33m?${esc}[39m`);
+    expect(painted).toContain(`  ${esc}[33m?${esc}[39m 001 "src/**" and 002 "**/*.ts": undecided`);
     const quiet = corpusOf(Object.fromEntries(corpus.briefs.map((b) => [b.file, b.text])), config({ rules: { 'collision-undecided': 'off' } }));
     expect(collisionFindings(quiet, report)).toEqual([]);
   });

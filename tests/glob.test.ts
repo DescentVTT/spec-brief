@@ -166,7 +166,7 @@ describe('the tree', () => {
 describe('an extension', () => {
   it('is a dot with something before it and something after it', () => {
     for (const name of ['a.ts', '.eslintrc.json', 'v1.2', 'a.b.c']) expect(hasExtension(name), name).toBe(true);
-    for (const name of ['Makefile', '.github', 'a.', '.', '..']) expect(hasExtension(name), name).toBe(false);
+    for (const name of ['Makefile', '.github', 'a.', '.', '..', 'x.y.']) expect(hasExtension(name), name).toBe(false);
   });
 });
 

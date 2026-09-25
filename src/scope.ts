@@ -82,7 +82,6 @@ export interface Contradiction {
 export function contradictions(scope: Scope, budget: number = WITNESS_BUDGET): Contradiction {
   const covered: string[] = [];
   const undecided: string[] = [];
-  if (scope.protected.length === 0) return { covered, undecided };
   const outer = scope.protected.map((p) => p.glob);
   for (const { pattern, glob } of scope.affected) {
     const answer = globCovers(outer, glob, budget);
