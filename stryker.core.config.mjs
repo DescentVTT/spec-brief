@@ -31,7 +31,8 @@ export default {
   // seconds is one that will not finish.
   timeoutMS: 3000,
   // A regression guard below the measurement, never a target to argue down
-  // to: 95.75 on 2026-09-24, and the rule for moving it is in ADR-0009.
+  // to: 95.75 on 2026-09-24, 97.83 on 2026-09-26, and the rule for moving it
+  // is in ADR-0009.
   thresholds: { high: 95, low: 90, break: 93 },
   htmlReporter: { fileName: 'reports/mutation-core/index.html' },
   jsonReporter: { fileName: 'reports/mutation-core/mutation.json' },
