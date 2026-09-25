@@ -50,7 +50,7 @@ describe('pretty findings', () => {
 
 describe('machine formats', () => {
   it('writes a versioned JSON document and leaves out absent fields', () => {
-    expect(JSON.parse(jsonDocument('lint', '1.2.3', { ok: true }))).toEqual({ tool: 'spec-brief', version: '1.2.3', schemaVersion: 1, command: 'lint', ok: true });
+    expect(JSON.parse(jsonDocument('lint', '1.2.3', { ok: true }))).toEqual({ tool: 'spec-brief', version: '1.2.3', schemaVersion: 2, command: 'lint', ok: true });
     expect(findingJson(finding())).toEqual({ rule: 'r', severity: 'error', file: 'a.md', line: 1, message: 'm' });
     expect(findingJson(finding({ brief: '1', hint: 'h' }))).toEqual(expect.objectContaining({ brief: '1', hint: 'h' }));
   });

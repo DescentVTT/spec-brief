@@ -9,7 +9,7 @@
 
 import type { Plan } from './archive.js';
 import type { Brief } from './brief.js';
-import type { CollisionReport } from './collisions.js';
+import { type CollisionReport, inWords } from './collisions.js';
 import { summarise } from './lint.js';
 import { ARCHIVE_RULES, COLLISION_RULES, RULES } from './rules.js';
 import type { Finding, Severity } from './types.js';
@@ -18,8 +18,13 @@ export type Format = 'pretty' | 'json' | 'sarif' | 'github';
 
 export const FORMATS: readonly Format[] = ['pretty', 'json', 'sarif', 'github'];
 
-/** The version of the JSON documents this tool prints. Bumped when a field changes meaning. */
-export const JSON_SCHEMA_VERSION = 1;
+/**
+ * The version of the JSON documents this tool prints. Bumped when a field
+ * changes meaning. 2: a collision in `matrix` is a pair of briefs, with every
+ * pair of patterns that meets, and a shared-directory entry lists its
+ * directories.
+ */
+export const JSON_SCHEMA_VERSION = 2;
 
 export interface Style {
   readonly color: boolean;
@@ -214,11 +219,14 @@ export function prettyMatrix(report: CollisionReport, style: Style): string {
       });
       out.push(`  ${row.padEnd(width)}  ${cells.join('  ')}`);
     }
+    // One mark per pair of briefs; each further pair of patterns on a line beneath it.
     for (const c of wave.collisions) {
-      out.push(`  ${paint(style, 'red', 'X')} ${label(c.a)} "${c.patterns[0]}" and ${label(c.b)} "${c.patterns[1]}" both cover ${c.witness}`);
+      c.overlaps.forEach((o, i) => {
+        out.push(`  ${i === 0 ? paint(style, 'red', 'X') : ' '} ${label(c.a)} "${o.patterns[0]}" and ${label(c.b)} "${o.patterns[1]}" both cover ${o.witness}`);
+      });
     }
     for (const s of wave.shared) {
-      out.push(`  ${paint(style, 'yellow', '~')} ${label(s.a)} and ${label(s.b)} both write into ${s.directory}/`);
+      out.push(`  ${paint(style, 'yellow', '~')} ${label(s.a)} and ${label(s.b)} both write into ${inWords(s.directories.map((d) => `${d}/`))}`);
     }
     for (const b of wave.unscoped) {
       out.push(`  ${paint(style, 'cyan', '?')} ${label(b)} declares no affectedFiles and cannot be checked`);
@@ -230,6 +238,24 @@ export function prettyMatrix(report: CollisionReport, style: Style): string {
   }
   if (report.waves.length === 0 && report.unscheduled.length === 0) out.push('no live briefs');
   return out.join('\n').trimEnd();
+}
+
+/** The matrix as JSON: briefs by id, and a collision per pair of briefs. */
+export function matrixJson(report: CollisionReport): Record<string, unknown> {
+  return {
+    waves: report.waves.map((w) => ({
+      wave: w.wave,
+      briefs: w.briefs.map((b) => b.id),
+      collisions: w.collisions.map((c) => ({
+        a: c.a.id,
+        b: c.b.id,
+        overlaps: c.overlaps.map((o) => ({ patterns: o.patterns, witness: o.witness })),
+      })),
+      sharedDirectories: w.shared.map((s) => ({ a: s.a.id, b: s.b.id, directories: s.directories })),
+      unscoped: w.unscoped.map((b) => b.id),
+    })),
+    unscheduled: report.unscheduled.map((b) => b.id),
+  };
 }
 
 export function prettyPlan(plan: Plan, dryRun: boolean, style: Style): string {

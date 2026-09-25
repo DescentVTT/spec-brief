@@ -141,7 +141,7 @@ describe('lint', () => {
     const root = plain('cli-lint-formats', { 'briefs/001_a.md': goodBrief({ type: 'epic' }) });
     const json = JSON.parse((await run(root, ['lint', '--format', 'json'])).out) as Record<string, unknown>;
     expect(json).toEqual(
-      expect.objectContaining({ tool: 'spec-brief', schemaVersion: 1, command: 'lint', ok: false, checked: 1, summary: { errors: 1, warnings: 0, notes: 0 } }),
+      expect.objectContaining({ tool: 'spec-brief', schemaVersion: 2, command: 'lint', ok: false, checked: 1, summary: { errors: 1, warnings: 0, notes: 0 } }),
     );
     const sarif = JSON.parse((await run(root, ['lint', '--format', 'sarif'])).out) as { runs: { results: unknown[] }[] };
     expect(sarif.runs[0]?.results).toHaveLength(1);
@@ -231,7 +231,7 @@ describe('list and matrix', () => {
     });
     const doc = JSON.parse((await run(near, ['matrix', '--format', 'json'])).out) as { ok: boolean; waves: { sharedDirectories: unknown[]; unscoped: string[] }[] };
     expect(doc.ok).toBe(true);
-    expect(doc.waves[0]?.sharedDirectories).toEqual([{ a: '001', b: '002', directory: 'src' }]);
+    expect(doc.waves[0]?.sharedDirectories).toEqual([{ a: '001', b: '002', directories: ['src'] }]);
     expect(doc.waves[0]?.unscoped).toEqual(['003']);
   });
 });

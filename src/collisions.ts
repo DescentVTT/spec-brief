@@ -7,6 +7,10 @@
  * cover `src/auth/session.ts`; the intersection finds that, and names the file.
  * A brief that declares no scope cannot be proven apart from anything, so it
  * is reported as unscoped rather than silently counted as safe.
+ *
+ * Two briefs that collide are one defect however many of their patterns
+ * meet: they are fixed together, by a wave, a dependency or a narrower scope.
+ * So a pair is one collision, carrying every pair of patterns that meets.
  */
 
 import type { Brief } from './brief.js';
@@ -17,18 +21,24 @@ import { severityOf } from './lint.js';
 import { COLLISION_RULES, type RuleInfo } from './rules.js';
 import type { Finding, Severity } from './types.js';
 
+/** A pattern from each scope, and a path both cover. */
+export interface Overlap {
+  readonly patterns: readonly [string, string];
+  readonly witness: string;
+}
+
 export interface Collision {
   readonly a: Brief;
   readonly b: Brief;
-  readonly patterns: readonly [string, string];
-  /** A path both scopes cover. */
-  readonly witness: string;
+  /** Every pair of patterns that meets, `a`'s first; never empty. */
+  readonly overlaps: readonly Overlap[];
 }
 
 export interface SharedDirectory {
   readonly a: Brief;
   readonly b: Brief;
-  readonly directory: string;
+  /** The directories both write into, sorted; never empty. */
+  readonly directories: readonly string[];
 }
 
 export interface WaveMatrix {
@@ -68,18 +78,20 @@ function matrix(wave: number | null, briefs: readonly Brief[], isFile: ((path: s
     for (let j = i + 1; j < scoped.length; j += 1) {
       const left = scoped[i] as (typeof scoped)[number];
       const right = scoped[j] as (typeof scoped)[number];
-      const found: Collision[] = [];
+      const overlaps: Overlap[] = [];
       for (const x of left.scopes) {
         for (const y of right.scopes) {
           const witness = intersectGlobs(x.glob, y.glob);
-          if (witness !== null) found.push({ a: left.brief, b: right.brief, patterns: [x.pattern, y.pattern], witness });
+          if (witness !== null) overlaps.push({ patterns: [x.pattern, y.pattern], witness });
         }
       }
-      collisions.push(...found);
-      if (found.length > 0) continue;
+      if (overlaps.length > 0) {
+        collisions.push({ a: left.brief, b: right.brief, overlaps });
+        continue;
+      }
       const leftDirs = new Set(left.scopes.map((s) => globBase(s.glob)).filter((d) => d !== ''));
-      const common = [...new Set(right.scopes.map((s) => globBase(s.glob)))].filter((d) => leftDirs.has(d)).sort();
-      for (const directory of common) shared.push({ a: left.brief, b: right.brief, directory });
+      const directories = [...new Set(right.scopes.map((s) => globBase(s.glob)))].filter((d) => leftDirs.has(d)).sort();
+      if (directories.length > 0) shared.push({ a: left.brief, b: right.brief, directories });
     }
   }
   const unscoped = briefs.length > 1 ? scoped.filter((s) => s.scopes.length === 0).map((s) => s.brief) : [];
@@ -108,9 +120,23 @@ function where(wave: number | null): string {
   return wave === null ? 'among the live briefs' : `in wave ${wave}`;
 }
 
+/** `a`, `a and b`, `a, b and c`. */
+export function inWords(items: readonly string[]): string {
+  return items.length < 2 ? items.join('') : `${items.slice(0, -1).join(', ')} and ${items[items.length - 1] as string}`;
+}
+
+function collisionMessage(c: Collision, wave: number | null): string {
+  const [only] = c.overlaps;
+  if (only !== undefined && c.overlaps.length === 1) {
+    return `"${only.patterns[1]}" overlaps ${label(c.a)}'s "${only.patterns[0]}" ${where(wave)}; both cover ${only.witness}`;
+  }
+  const each = c.overlaps.map((o) => `"${o.patterns[1]}" and ${label(c.a)}'s "${o.patterns[0]}" both cover ${o.witness}`);
+  return `overlaps ${label(c.a)} ${where(wave)} through ${c.overlaps.length} pairs of patterns: ${each.join('; ')}`;
+}
+
 /**
- * The report as findings. One collision is one finding, placed on the later
- * brief of the pair, which is usually the one still being written.
+ * The report as findings. One pair of briefs is one finding, placed on the
+ * later brief of the pair, which is usually the one still being written.
  */
 export function collisionFindings(corpus: Corpus, report: CollisionReport): Finding[] {
   const severity = (id: string): Severity | null => {
@@ -128,7 +154,7 @@ export function collisionFindings(corpus: Corpus, report: CollisionReport): Find
         findings.push({
           rule: 'collision',
           severity: collision,
-          message: `"${c.patterns[1]}" overlaps ${label(c.a)}'s "${c.patterns[0]}" ${where(wave.wave)}; both cover ${c.witness}`,
+          message: collisionMessage(c, wave.wave),
           file: c.b.file,
           line: lineOfField(c.b, 'affectedFiles') + 1,
           brief: c.b.id ?? undefined,
@@ -141,7 +167,7 @@ export function collisionFindings(corpus: Corpus, report: CollisionReport): Find
         findings.push({
           rule: 'shared-directory',
           severity: sharedDirectory,
-          message: `writes into ${s.directory}/, as ${label(s.a)} does ${where(wave.wave)}`,
+          message: `writes into ${inWords(s.directories.map((d) => `${d}/`))}, as ${label(s.a)} does ${where(wave.wave)}`,
           file: s.b.file,
           line: lineOfField(s.b, 'affectedFiles') + 1,
           brief: s.b.id ?? undefined,

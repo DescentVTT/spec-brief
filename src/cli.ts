@@ -25,6 +25,7 @@ import {
   githubCommands,
   jsonDocument,
   type ListRow,
+  matrixJson,
   planJson,
   prettyFindings,
   prettyList,
@@ -352,14 +353,7 @@ async function runMatrix(run: Run): Promise<number> {
     run.out(`${prettyMatrix(report, run.style)}\n`);
     return failing(sorted, run.strict) ? EXIT_FAILED : EXIT_OK;
   }
-  const waves = report.waves.map((w) => ({
-    wave: w.wave,
-    briefs: w.briefs.map((b) => b.id),
-    collisions: w.collisions.map((c) => ({ a: c.a.id, b: c.b.id, patterns: c.patterns, witness: c.witness })),
-    sharedDirectories: w.shared.map((s) => ({ a: s.a.id, b: s.b.id, directory: s.directory })),
-    unscoped: w.unscoped.map((b) => b.id),
-  }));
-  return emitFindings(run, 'matrix', sorted, engine.corpus.live.length, { waves, unscheduled: report.unscheduled.map((b) => b.id) });
+  return emitFindings(run, 'matrix', sorted, engine.corpus.live.length, matrixJson(report));
 }
 
 async function runTransition(run: Run, action: 'archive' | 'unarchive'): Promise<number> {
