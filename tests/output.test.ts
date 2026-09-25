@@ -211,7 +211,8 @@ describe('rules at their edges', () => {
   it('lists every alias in a missing section hint', async () => {
     const text = goodBrief().replace('## Negative Scope\n\n- Nothing else changes.\n\n', '');
     expect((await lint(corpusOf({ [A]: text })))[0]?.hint).toBe(
-      'add a "## Negative Scope" heading (also accepted: "Out of Scope", "Non-Goals", "Not in Scope", "What this round is NOT", "What this brief does NOT do")',
+      'add a "## Negative Scope" heading (also accepted: "Out of Scope", "Non-Goals", "Not in Scope", "What this round is NOT", "What this brief does NOT do").' +
+        ' What this round must not do, even where it would look helpful.',
     );
   });
 

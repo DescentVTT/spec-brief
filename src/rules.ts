@@ -271,14 +271,17 @@ export const RULES: readonly Rule[] = [
     check: live(({ brief, config }) =>
       sectionRules(brief, config)
         .filter((rule) => !rule.optional && sectionsFilling(brief, rule).length === 0)
-        .map((rule) => ({
-          line: at(brief.bodyStart),
-          message: `has no "${rule.name}" section`,
-          hint:
+        .map((rule) => {
+          const heading =
             rule.aliases.length === 0
               ? `add a "## ${rule.name}" heading`
-              : `add a "## ${rule.name}" heading (also accepted: ${rule.aliases.map((a) => `"${a}"`).join(', ')})`,
-        })),
+              : `add a "## ${rule.name}" heading (also accepted: ${rule.aliases.map((a) => `"${a}"`).join(', ')})`;
+          return {
+            line: at(brief.bodyStart),
+            message: `has no "${rule.name}" section`,
+            hint: rule.hint === undefined ? heading : `${heading}. ${rule.hint}`,
+          };
+        }),
     ),
   },
   {
@@ -302,7 +305,12 @@ export const RULES: readonly Rule[] = [
         sectionsFilling(brief, rule)
           .slice(0, 1)
           .filter((s) => contentLines(brief, s).length === 0)
-          .map((s) => ({ line: at(s.heading.line), message: `the "${rule.name}" section is empty`, severity: leniency(brief) })),
+          .map((s) => ({
+            line: at(s.heading.line),
+            message: `the "${rule.name}" section is empty`,
+            hint: rule.hint ?? 'write it; a comment alone is not content',
+            severity: leniency(brief),
+          })),
       ),
     ),
   },
@@ -321,6 +329,7 @@ export const RULES: readonly Rule[] = [
           .map((s) => ({
             line: at(s.heading.line),
             message: `the "${rule.name}" section holds only a placeholder`,
+            hint: rule.hint ?? 'replace the placeholder with what the section must say',
             severity: leniency(brief),
           })),
       ),

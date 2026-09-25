@@ -133,6 +133,11 @@
               "optional": {
                 "description": "Checked when present, not required.",
                 "type": "boolean"
+              },
+              "hint": {
+                "description": "What the section must answer: a comment under the heading in a new brief, and the hint of a finding that it is missing or unwritten.",
+                "type": "string",
+                "minLength": 1
               }
             },
             "additionalProperties": false,
@@ -193,6 +198,11 @@
                     "optional": {
                       "description": "Checked when present, not required.",
                       "type": "boolean"
+                    },
+                    "hint": {
+                      "description": "What the section must answer: a comment under the heading in a new brief, and the hint of a finding that it is missing or unwritten.",
+                      "type": "string",
+                      "minLength": 1
                     }
                   },
                   "additionalProperties": false,

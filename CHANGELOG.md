@@ -35,6 +35,13 @@ Notable changes, newest first. Versions follow [semver](https://semver.org).
 - A brace group is split on its own commas only: `{[,]x,y}` has the two
   alternatives `[,]x` and `y`, where a comma or brace inside a class used to
   split the group or unbalance it.
+- A section rule takes a `hint`: what the section must answer. A new brief
+  carries it as a comment under the heading, `missing-section`,
+  `empty-section` and `placeholder` findings give it as their hint, and the
+  JSON of `list` and `lint` gains `sections`, every section the configuration
+  asks for with its type, switches and hint. The default sections carry one,
+  and `init` writes them out. `empty-section` and `placeholder` findings have
+  a hint even without one.
 
 ## 0.1.0
 

@@ -140,6 +140,7 @@ describe('lint', () => {
   it('writes JSON, SARIF and GitHub annotations', async () => {
     const root = plain('cli-lint-formats', { 'briefs/001_a.md': goodBrief({ type: 'epic' }) });
     const json = JSON.parse((await run(root, ['lint', '--format', 'json'])).out) as Record<string, unknown>;
+    expect((json['sections'] as { name: string }[]).map((s) => s.name)).toContain('Negative Scope');
     expect(json).toEqual(
       expect.objectContaining({ tool: 'spec-brief', schemaVersion: 2, command: 'lint', ok: false, checked: 1, summary: { errors: 1, warnings: 0, notes: 0 } }),
     );
@@ -194,8 +195,20 @@ describe('list and matrix', () => {
       '004  archived  -     1/1    -          A brief',
       '',
     ]);
-    const ready = JSON.parse((await run(root, ['list', '--ready', '--format', 'json'])).out) as { briefs: { id: string; ready: boolean }[] };
+    const ready = JSON.parse((await run(root, ['list', '--ready', '--format', 'json'])).out) as {
+      briefs: { id: string; ready: boolean }[];
+      sections: { name: string; type: string | null; hint: string | null }[];
+    };
     expect(ready.briefs.map((b) => b.id)).toEqual(['001', '003']);
+    expect(ready.sections.map((s) => [s.name, s.type])).toEqual([
+      ['Intent', null],
+      ['Negative Scope', null],
+      ['Not Empowered', null],
+      ['Invariants', null],
+      ['Acceptance Criteria', 'feature'],
+      ['The Defect, Measured', 'defect'],
+    ]);
+    expect(ready.sections[0]?.hint).toBe('The state of the tree when this round is done, and why it matters. One paragraph.');
     const empty = plain('cli-list-empty', { 'briefs/.gitkeep': '' });
     expect((await run(empty, ['list'])).out).toBe('no briefs\n');
     const missing = plain('cli-list-missing', {});

@@ -98,10 +98,10 @@ describe('what lint says', () => {
   it('about sections', async () => {
     const cfg = config({
       sections: [
-        { name: 'Mission', mustContain: ['Latest is not newest'] },
+        { name: 'Mission', mustContain: ['Latest is not newest'], hint: 'Why the round exists.' },
         { name: 'Scope', aliases: ['Out of Scope'] },
         { name: 'Checks', checklist: true },
-        'Report',
+        { name: 'Report', hint: 'What the round found, for whoever archives it.' },
       ],
       sectionOrder: true,
       types: { defect: { sections: ['Measured'] } },
@@ -133,12 +133,12 @@ describe('what lint says', () => {
     ].join('\n');
     expect(table(await lint(corpusOf({ 'briefs/001_a.md': body }, cfg)))).toEqual([
       'briefs/001_a.md:5 error missing-section: has no "Measured" section | add a "## Measured" heading',
-      'briefs/001_a.md:5 error missing-section: has no "Report" section | add a "## Report" heading',
+      'briefs/001_a.md:5 error missing-section: has no "Report" section | add a "## Report" heading. What the round found, for whoever archives it.',
       'briefs/001_a.md:8 error missing-checklist: the "Checks" section has no "- [ ]" items | write each check as a task item, so it has a state that can be closed',
       'briefs/001_a.md:8 error section-order: "Checks" comes before "Scope" | the order is Mission, Scope, Checks, Report, Measured',
-      'briefs/001_a.md:12 error empty-section: the "Mission" section is empty',
+      'briefs/001_a.md:12 error empty-section: the "Mission" section is empty | Why the round exists.',
       'briefs/001_a.md:12 error must-contain: the "Mission" section must contain "Latest is not newest"',
-      'briefs/001_a.md:16 error placeholder: the "Scope" section holds only a placeholder',
+      'briefs/001_a.md:16 error placeholder: the "Scope" section holds only a placeholder | replace the placeholder with what the section must say',
       'briefs/001_a.md:20 warning duplicate-section: a second "Scope" section | merge the two',
     ]);
   });

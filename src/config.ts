@@ -29,6 +29,13 @@ export interface SectionRule {
   /** The section must hold at least one task item. */
   readonly checklist: boolean;
   readonly optional: boolean;
+  /**
+   * What the section must answer. A new brief carries it as a comment under
+   * the heading, a finding that the section is missing or unwritten carries it
+   * as its hint, and `list` and `lint` report it, so a tool that helps write a
+   * brief can ask for each section without knowing its name in advance.
+   */
+  readonly hint?: string | undefined;
 }
 
 export interface PluginReference {
@@ -109,6 +116,11 @@ const SECTION: Schema = {
         mustContain: { ...STRINGS, description: 'Literal text the section must contain.' },
         checklist: { type: 'boolean', description: 'The section must hold at least one "- [ ]" task item.' },
         optional: { type: 'boolean', description: 'Checked when present, not required.' },
+        hint: {
+          type: 'string',
+          minLength: 1,
+          description: 'What the section must answer: a comment under the heading in a new brief, and the hint of a finding that it is missing or unwritten.',
+        },
       },
     },
   ],
@@ -200,17 +212,34 @@ export const DEFAULT_CONFIG: Config = {
   id: { source: 'filename', separator: '_', digits: 3 },
   status: { field: 'status', draft: 'draft', active: 'active', archived: 'archived' },
   sections: [
-    section('Intent', { aliases: ["Commander's Intent", 'Mission', 'Objective'] }),
+    section('Intent', {
+      aliases: ["Commander's Intent", 'Mission', 'Objective'],
+      hint: 'The state of the tree when this round is done, and why it matters. One paragraph.',
+    }),
     section('Negative Scope', {
       aliases: ['Out of Scope', 'Non-Goals', 'Not in Scope', 'What this round is NOT', 'What this brief does NOT do'],
+      hint: 'What this round must not do, even where it would look helpful.',
     }),
-    section('Not Empowered', { aliases: ['Non-Empowerment', 'Non-Empowerment List'], optional: true }),
-    section('Invariants', { aliases: ['Invariant Checklist', 'Definition of Done'], checklist: true }),
+    section('Not Empowered', {
+      aliases: ['Non-Empowerment', 'Non-Empowerment List'],
+      optional: true,
+      hint: 'Files, interfaces and decisions this round may not change.',
+    }),
+    section('Invariants', {
+      aliases: ['Invariant Checklist', 'Definition of Done'],
+      checklist: true,
+      hint: 'Checks that must hold before the round is called done, each one a task item.',
+    }),
   ],
   sectionOrder: false,
   types: {
-    feature: [section('Acceptance Criteria', { checklist: true })],
-    defect: [section('The Defect, Measured', { aliases: ['Reproduction'] })],
+    feature: [section('Acceptance Criteria', { checklist: true, hint: 'What a reviewer checks to accept the result, each one a task item.' })],
+    defect: [
+      section('The Defect, Measured', {
+        aliases: ['Reproduction'],
+        hint: 'How to reproduce the defect, and the measurement that shows it.',
+      }),
+    ],
     refactor: [],
     chore: [],
   },
@@ -245,6 +274,7 @@ function sectionFrom(raw: unknown): SectionRule {
     mustContain: (r['mustContain'] as string[] | undefined) ?? [],
     checklist: (r['checklist'] as boolean | undefined) ?? false,
     optional: (r['optional'] as boolean | undefined) ?? false,
+    ...(r['hint'] === undefined ? {} : { hint: r['hint'] as string }),
   });
 }
 
@@ -399,6 +429,7 @@ export function initialConfig(briefs: string, archive: string): Record<string, u
     if (s.mustContain.length > 0) out['mustContain'] = s.mustContain;
     if (s.checklist) out['checklist'] = true;
     if (s.optional) out['optional'] = true;
+    if (s.hint !== undefined) out['hint'] = s.hint;
     return Object.keys(out).length === 1 ? s.name : out;
   };
   return {

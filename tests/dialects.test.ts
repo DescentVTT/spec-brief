@@ -438,15 +438,18 @@ describe('configuration', () => {
       id: { source: 'filename', separator: '_', digits: 3 },
       status: { field: 'status', draft: 'draft', active: 'active', archived: 'archived' },
       sections: [
-        section('Intent', { aliases: ["Commander's Intent", 'Mission', 'Objective'] }),
-        section('Negative Scope', { aliases: ['Out of Scope', 'Non-Goals', 'Not in Scope', 'What this round is NOT', 'What this brief does NOT do'] }),
-        section('Not Empowered', { aliases: ['Non-Empowerment', 'Non-Empowerment List'], optional: true }),
-        section('Invariants', { aliases: ['Invariant Checklist', 'Definition of Done'], checklist: true }),
+        section('Intent', { aliases: ["Commander's Intent", 'Mission', 'Objective'], hint: 'The state of the tree when this round is done, and why it matters. One paragraph.' }),
+        section('Negative Scope', {
+          aliases: ['Out of Scope', 'Non-Goals', 'Not in Scope', 'What this round is NOT', 'What this brief does NOT do'],
+          hint: 'What this round must not do, even where it would look helpful.',
+        }),
+        section('Not Empowered', { aliases: ['Non-Empowerment', 'Non-Empowerment List'], optional: true, hint: 'Files, interfaces and decisions this round may not change.' }),
+        section('Invariants', { aliases: ['Invariant Checklist', 'Definition of Done'], checklist: true, hint: 'Checks that must hold before the round is called done, each one a task item.' }),
       ],
       sectionOrder: false,
       types: {
-        feature: [section('Acceptance Criteria', { checklist: true })],
-        defect: [section('The Defect, Measured', { aliases: ['Reproduction'] })],
+        feature: [section('Acceptance Criteria', { checklist: true, hint: 'What a reviewer checks to accept the result, each one a task item.' })],
+        defect: [section('The Defect, Measured', { aliases: ['Reproduction'], hint: 'How to reproduce the defect, and the measurement that shows it.' })],
         refactor: [],
         chore: [],
       },
@@ -472,7 +475,7 @@ describe('configuration', () => {
     });
   });
 
-  it('writes out for init the sections as names where a name is all there is', () => {
+  it('writes out for init every section with its aliases, its switches and its hint', () => {
     expect(initialConfig('b', 'b/done')).toEqual({
       $schema: 'https://raw.githubusercontent.com/DescentVTT/spec-brief/main/schema.json',
       briefs: 'b',
@@ -481,14 +484,18 @@ describe('configuration', () => {
       id: { source: 'filename', separator: '_', digits: 3 },
       status: { field: 'status', draft: 'draft', active: 'active', archived: 'archived' },
       sections: [
-        { name: 'Intent', aliases: ["Commander's Intent", 'Mission', 'Objective'] },
-        { name: 'Negative Scope', aliases: ['Out of Scope', 'Non-Goals', 'Not in Scope', 'What this round is NOT', 'What this brief does NOT do'] },
-        { name: 'Not Empowered', aliases: ['Non-Empowerment', 'Non-Empowerment List'], optional: true },
-        { name: 'Invariants', aliases: ['Invariant Checklist', 'Definition of Done'], checklist: true },
+        { name: 'Intent', aliases: ["Commander's Intent", 'Mission', 'Objective'], hint: 'The state of the tree when this round is done, and why it matters. One paragraph.' },
+        {
+          name: 'Negative Scope',
+          aliases: ['Out of Scope', 'Non-Goals', 'Not in Scope', 'What this round is NOT', 'What this brief does NOT do'],
+          hint: 'What this round must not do, even where it would look helpful.',
+        },
+        { name: 'Not Empowered', aliases: ['Non-Empowerment', 'Non-Empowerment List'], optional: true, hint: 'Files, interfaces and decisions this round may not change.' },
+        { name: 'Invariants', aliases: ['Invariant Checklist', 'Definition of Done'], checklist: true, hint: 'Checks that must hold before the round is called done, each one a task item.' },
       ],
       types: {
-        feature: { sections: [{ name: 'Acceptance Criteria', checklist: true }] },
-        defect: { sections: [{ name: 'The Defect, Measured', aliases: ['Reproduction'] }] },
+        feature: { sections: [{ name: 'Acceptance Criteria', checklist: true, hint: 'What a reviewer checks to accept the result, each one a task item.' }] },
+        defect: { sections: [{ name: 'The Defect, Measured', aliases: ['Reproduction'], hint: 'How to reproduce the defect, and the measurement that shows it.' }] },
         refactor: { sections: [] },
         chore: { sections: [] },
       },

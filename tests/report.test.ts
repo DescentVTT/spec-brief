@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { planArchive } from '../src/archive.js';
 import { collisions } from '../src/collisions.js';
 import { definePlugin } from '../src/index.js';
+import { lint } from '../src/lint.js';
 import {
   briefJson,
   findingJson,
@@ -15,6 +16,7 @@ import {
   prettyMatrix,
   prettyPlan,
   sarif,
+  sectionsJson,
   summaryLine,
 } from '../src/report.js';
 import { fileNameFor, nextId, renderNewBrief } from '../src/scaffold.js';
@@ -243,5 +245,64 @@ describe('the library', () => {
   it('types a plugin without changing it', () => {
     const plugin = { name: 'p', rules: [] };
     expect(definePlugin(plugin)).toBe(plugin);
+  });
+});
+
+describe('section hints', () => {
+  const cfg = config({
+    sections: [
+      { name: 'Mission', hint: 'Why the round exists --> and for whom.' },
+      { name: 'Deliverables', checklist: true },
+      'Intent',
+    ],
+    types: { spike: { sections: [{ name: 'Findings', aliases: ['Results'], optional: true, mustContain: ['Measured'], hint: 'What the spike measured.' }] } },
+  });
+
+  it('are read from the configuration, and must say something', () => {
+    expect(cfg.sections.map((s) => s.hint)).toEqual(['Why the round exists --> and for whom.', undefined, undefined]);
+    expect(() => config({ sections: [{ name: 'x', hint: '' }] })).toThrow('"sections[0].hint" must not be empty');
+    expect(() => config({ sections: [{ name: 'x', hint: 3 }] })).toThrow('"sections[0].hint" must be a string');
+  });
+
+  it('are written under each heading of a new brief, where a comment is not content', async () => {
+    const text = renderNewBrief(cfg, { id: '001', title: 'T', date: '2026-09-24', type: 'spike' }, null);
+    expect(text.split('\n').filter((line) => line.startsWith('<!--'))).toEqual([
+      // A "-->" in the hint would end the comment early.
+      '<!-- Why the round exists -- > and for whom. -->',
+      '<!-- Write the Deliverables. -->',
+      // A section named as a default one is, without a hint of its own, gets the default's.
+      '<!-- The state of the tree when this round is done, and why it matters. One paragraph. -->',
+      '<!-- What the spike measured. -->',
+    ]);
+    const corpus = corpusOf({ 'briefs/001_t.md': text.replace('status: draft', 'status: active') }, cfg);
+    const found = await lint(corpus);
+    // An empty box is a placeholder, so a checklist section reads as unwritten too.
+    expect(found.filter((f) => f.rule === 'empty-section' || f.rule === 'placeholder').map((f) => [f.message, f.hint])).toEqual([
+      ['the "Mission" section is empty', 'Why the round exists --> and for whom.'],
+      ['the "Deliverables" section holds only a placeholder', 'replace the placeholder with what the section must say'],
+      ['the "Intent" section is empty', 'write it; a comment alone is not content'],
+    ]);
+  });
+
+  it('carry into the finding that a section is missing', async () => {
+    const corpus = corpusOf({ 'briefs/001_t.md': '---\nstatus: active\n---\n\n# T\n\n## Deliverables\n\n- [ ] x\n\n## Intent\n\nx\n' }, cfg);
+    expect((await lint(corpus)).map((f) => [f.rule, f.hint])).toEqual([['missing-section', 'add a "## Mission" heading. Why the round exists --> and for whom.']]);
+  });
+
+  it('are described with every section the configuration asks for', () => {
+    expect(sectionsJson(cfg)).toEqual([
+      { name: 'Mission', type: null, aliases: [], optional: false, checklist: false, mustContain: [], hint: 'Why the round exists --> and for whom.' },
+      { name: 'Deliverables', type: null, aliases: [], optional: false, checklist: true, mustContain: [], hint: null },
+      { name: 'Intent', type: null, aliases: [], optional: false, checklist: false, mustContain: [], hint: null },
+      { name: 'Findings', type: 'spike', aliases: ['Results'], optional: true, checklist: false, mustContain: ['Measured'], hint: 'What the spike measured.' },
+    ]);
+    expect(sectionsJson(config()).map((s) => [s['name'], s['type'], s['hint'] === null])).toEqual([
+      ['Intent', null, false],
+      ['Negative Scope', null, false],
+      ['Not Empowered', null, false],
+      ['Invariants', null, false],
+      ['Acceptance Criteria', 'feature', false],
+      ['The Defect, Measured', 'defect', false],
+    ]);
   });
 });

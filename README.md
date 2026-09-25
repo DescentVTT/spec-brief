@@ -58,7 +58,7 @@ Writes `.spec-brief.json` with every default spelled out, and creates the brief 
 
 ### `spec-brief new <title>`
 
-Scaffolds a brief with the next free number - one more than the highest id, live or archived, since ids are never reused - and every required section, each holding a hint in a comment. A comment is not content, so a fresh brief reads as unwritten until someone writes it. `--id`, `--type`, `--wave`, `--depends-on 7,8` and `--date` fill the front matter.
+Scaffolds a brief with the next free number - one more than the highest id, live or archived, since ids are never reused - and every required section, each holding its `hint` in a comment. A comment is not content, so a fresh brief reads as unwritten until someone writes it. `--id`, `--type`, `--wave`, `--depends-on 7,8` and `--date` fill the front matter.
 
 ### `spec-brief lint [brief...]`
 
@@ -76,7 +76,7 @@ briefs/035_the-background-side.md
 
 ### `spec-brief list`
 
-Live briefs with their status, wave, task count and readiness. A brief is *ready* when every brief it depends on is archived. `--ready` shows only those, which is the question an orchestrator asks; `--archived` includes the archive; `--format json` gives an orchestrator the whole table.
+Live briefs with their status, wave, task count and readiness. A brief is *ready* when every brief it depends on is archived. `--ready` shows only those, which is the question an orchestrator asks; `--archived` includes the archive; `--format json` gives an orchestrator the whole table, and the sections the configuration asks for, each with its `hint`.
 
 ### `spec-brief matrix`
 
@@ -130,7 +130,7 @@ Reopens an archived brief: the banner and the hash come off, the status goes bac
 | `template` | `null` | A template file for `new`, with `{id}`, `{title}`, `{date}`, `{type}`, `{wave}`, `{status}`. |
 | `id` | `{ "source": "filename", "separator": "_", "digits": 3 }` | Where an id comes from, and how a new one is written. |
 | `status` | `{ "field": "status", "draft": "draft", "active": "active", "archived": "archived" }` | The words a repository uses. `field: null` reads status from location alone. |
-| `sections` | Intent, Negative Scope, Not Empowered (optional), Invariants (checklist) | Sections every live brief carries: a name, or `{ name, aliases, mustContain, checklist, optional }`. |
+| `sections` | Intent, Negative Scope, Not Empowered (optional), Invariants (checklist) | Sections every live brief carries: a name, or `{ name, aliases, mustContain, checklist, optional, hint }`. `hint` says what the section must answer: a new brief carries it as a comment under the heading, a finding that the section is missing or unwritten gives it as the next step, and the JSON of `list` and `lint` reports it, so a tool helping to write a brief can ask for each section by what it is for. |
 | `sectionOrder` | `false` | Sections must appear in the listed order. |
 | `types` | `feature`, `defect`, `refactor`, `chore` | Brief types and the sections each adds. |
 | `placeholders` | `TBD`, `TODO`, `FIXME`, ... | Words that mark a section as unwritten. |
