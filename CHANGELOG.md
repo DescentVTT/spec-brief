@@ -69,6 +69,11 @@ Notable changes, newest first. Versions follow [semver](https://semver.org).
 - A `protected-file` refusal names its file in a new `path` field, one
   finding per file as before, and an `out-of-scope` finding lists its files
   in `paths`. Both appear in the JSON of `archive`; a plugin reads them.
+- `--format gitlab` wherever `sarif` is offered - `lint`, `matrix`,
+  `schedule` - writes a GitLab Code Quality report: an array of
+  `{ description, check_name, fingerprint, severity, location }`, errors as
+  `major`, warnings as `minor`, notes as `info`, and a fingerprint that
+  hashes the rule, the file and the message but not the line.
 - 24 lint rules and 5 collision rules.
 - The library's `parseGlob`, `matchGlob`, `intersectGlobs` and `globBase`
   keep their signatures over the new engine. `parseGlob`'s `isFile` option is

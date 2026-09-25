@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto';
+
 import { describe, expect, it } from 'vitest';
 
 import { planArchive } from '../src/archive.js';
@@ -8,6 +10,7 @@ import {
   briefJson,
   findingJson,
   githubCommands,
+  gitlabCodeQuality,
   jsonDocument,
   paint,
   planJson,
@@ -77,6 +80,35 @@ describe('machine formats', () => {
       locations: [{ physicalLocation: { artifactLocation: { uri: 'a.md', uriBaseId: '%SRCROOT%' }, region: { startLine: 4 } } }],
     });
     expect(run.results[1]?.level).toBe('note');
+  });
+
+  it('writes GitLab Code Quality issues, fingerprinted by rule, file and message', () => {
+    const sha = (text: string): string => createHash('sha256').update(text).digest('hex');
+    const issues = JSON.parse(
+      gitlabCodeQuality([
+        finding({ rule: 'missing-section', line: 4, message: 'has no "Intent" section', hint: 'add it' }),
+        finding({ rule: 'acme/x', severity: 'warning', file: 'b.md', line: 2 }),
+        finding({ severity: 'note', line: 9 }),
+        finding({ severity: 'note', line: 12 }),
+      ]),
+    ) as unknown[];
+    expect(issues).toEqual([
+      {
+        description: 'has no "Intent" section. add it',
+        check_name: 'missing-section',
+        fingerprint: sha('missing-section\u0000a.md\u0000has no "Intent" section'),
+        severity: 'major',
+        location: { path: 'a.md', lines: { begin: 4 } },
+      },
+      { description: 'm', check_name: 'acme/x', fingerprint: sha('acme/x\u0000b.md\u0000m'), severity: 'minor', location: { path: 'b.md', lines: { begin: 2 } } },
+      // Two findings alike but for their line are two issues, told apart by their order.
+      { description: 'm', check_name: 'r', fingerprint: sha('r\u0000a.md\u0000m'), severity: 'info', location: { path: 'a.md', lines: { begin: 9 } } },
+      { description: 'm', check_name: 'r', fingerprint: sha('r\u0000a.md\u0000m\u00001'), severity: 'info', location: { path: 'a.md', lines: { begin: 12 } } },
+    ]);
+    // A finding that moves keeps its fingerprint.
+    const moved = JSON.parse(gitlabCodeQuality([finding({ line: 40 })])) as { fingerprint: string }[];
+    expect(moved[0]?.fingerprint).toBe(sha('r\u0000a.md\u0000m'));
+    expect(gitlabCodeQuality([])).toBe('[]\n');
   });
 
   it('writes GitHub workflow commands with their escapes', () => {

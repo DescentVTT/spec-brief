@@ -147,6 +147,8 @@ describe('lint', () => {
     const sarif = JSON.parse((await run(root, ['lint', '--format', 'sarif'])).out) as { runs: { results: unknown[] }[] };
     expect(sarif.runs[0]?.results).toHaveLength(1);
     expect((await run(root, ['lint', '--format', 'github'])).out).toMatch(/^::error file=briefs\/001_a\.md,line=3,title=spec-brief unknown-type::/);
+    const gitlab = JSON.parse((await run(root, ['lint', '--format', 'gitlab'])).out) as { check_name: string; severity: string; location: unknown }[];
+    expect(gitlab.map((i) => [i.check_name, i.severity, i.location])).toEqual([['unknown-type', 'major', { path: 'briefs/001_a.md', lines: { begin: 3 } }]]);
   });
 
   it('colours a terminal, and follows NO_COLOR, FORCE_COLOR and the flags', async () => {
@@ -233,6 +235,9 @@ describe('list and matrix', () => {
       [1, 1],
     ]);
     expect((await run(root, ['matrix', '--format', 'github'])).out).toContain('::error file=briefs/002_b.md');
+    const gitlab = await run(root, ['matrix', '--format', 'gitlab']);
+    expect(gitlab.code).toBe(EXIT_FAILED);
+    expect((JSON.parse(gitlab.out) as { check_name: string }[]).map((i) => i.check_name)).toEqual(['collision']);
     expect((await run(root, ['matrix', '--all-waves', '--no-color'])).out).toContain('all live briefs');
     const calm = plain('cli-matrix-calm', { 'briefs/001_a.md': goodBrief({ wave: '1' }) });
     expect((await run(calm, ['matrix'])).code).toBe(EXIT_OK);
@@ -279,6 +284,7 @@ describe('schedule', () => {
     ]);
     expect((await run(root, ['schedule', '--format', 'github'])).out).toMatch(/^::error file=briefs\/002_b\.md,line=3,title=spec-brief wave-schedule::/);
     expect(JSON.parse((await run(root, ['schedule', '--format', 'sarif'])).out).runs[0].results).toHaveLength(1);
+    expect((JSON.parse((await run(root, ['schedule', '--format', 'gitlab'])).out) as { check_name: string }[]).map((i) => i.check_name)).toEqual(['wave-schedule']);
 
     const write = await run(root, ['schedule', '--write', '--no-color']);
     expect(write.code).toBe(EXIT_OK);

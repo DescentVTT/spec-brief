@@ -5,7 +5,11 @@
  * `json` is a document with a version, for orchestrators. `sarif` is SARIF
  * 2.1.0, for code-scanning upload. `github` is workflow commands, which put a
  * finding on the line of the pull request with no upload and no permission.
+ * `gitlab` is a Code Quality report, the artifact a GitLab merge request reads,
+ * so the family is not GitHub's alone.
  */
+
+import { createHash } from 'node:crypto';
 
 import type { Plan } from './archive.js';
 import type { Brief } from './brief.js';
@@ -17,9 +21,9 @@ import { moves, type Passed, reasons, type Schedule } from './schedule.js';
 import { inWords } from './text.js';
 import type { Finding, Severity } from './types.js';
 
-export type Format = 'pretty' | 'json' | 'sarif' | 'github';
+export type Format = 'pretty' | 'json' | 'sarif' | 'github' | 'gitlab';
 
-export const FORMATS: readonly Format[] = ['pretty', 'json', 'sarif', 'github'];
+export const FORMATS: readonly Format[] = ['pretty', 'json', 'sarif', 'github', 'gitlab'];
 
 /**
  * The version of the JSON documents this tool prints. Bumped when a field
@@ -132,6 +136,38 @@ export function sarif(findings: readonly Finding[], version: string): string {
     ],
   };
   return `${JSON.stringify(document, null, 2)}\n`;
+}
+
+/**
+ * GitLab's Code Quality severities. An error fails the run but is not a
+ * security hole or a crash, which is what `critical` and `blocker` say in
+ * GitLab's own reports, so the scale tops out at `major`.
+ */
+const GITLAB_SEVERITY: Readonly<Record<Severity, string>> = { error: 'major', warning: 'minor', note: 'info' };
+
+/**
+ * GitLab Code Quality: a JSON array of issues, which a merge request shows
+ * beside the lines they are on. The fingerprint is how GitLab tells a new
+ * issue from one it has seen, so it hashes the rule, the file and the message
+ * and not the line: a finding that moves down a page is the same finding. Two
+ * findings with the same three - a section duplicated twice - are told apart
+ * by their order.
+ */
+export function gitlabCodeQuality(findings: readonly Finding[]): string {
+  const seen = new Map<string, number>();
+  const issues = findings.map((f) => {
+    const key = `${f.rule}\u0000${f.file}\u0000${f.message}`;
+    const repeat = seen.get(key) ?? 0;
+    seen.set(key, repeat + 1);
+    return {
+      description: f.hint === undefined ? f.message : `${f.message}. ${f.hint}`,
+      check_name: f.rule,
+      fingerprint: createHash('sha256').update(repeat === 0 ? key : `${key}\u0000${repeat}`).digest('hex'),
+      severity: GITLAB_SEVERITY[f.severity],
+      location: { path: f.file, lines: { begin: f.line } },
+    };
+  });
+  return `${JSON.stringify(issues, null, 2)}\n`;
 }
 
 function escapeData(text: string): string {
