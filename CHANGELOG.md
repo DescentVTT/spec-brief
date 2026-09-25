@@ -21,14 +21,15 @@ Notable changes, newest first. Versions follow [semver](https://semver.org).
   the old path are reported as `stale-link`, a warning naming each file and
   line, on `archive` and `unarchive` alike; `unarchive --strict` refuses on
   it, as `archive --strict` does.
-- `matrix` reports two briefs whose scopes meet once, however many pairs of
-  their patterns meet, and the finding lists every pair with a path both
-  cover. A pair writing into several shared directories is likewise one
-  `shared-directory` finding.
+- `matrix` reports two briefs whose scopes meet as one collision, however
+  many pairs of their patterns meet, and the finding lists every pair with a
+  path both cover. A pair writing into several shared directories is likewise
+  one `shared-directory` finding.
 - JSON documents are `schemaVersion: 2`. In `matrix --format json` a
   collision carries `overlaps`, a list of `{ patterns, witness }`, in place of
   `patterns` and `witness`, and a `sharedDirectories` entry carries
-  `directories` in place of `directory`.
+  `directories` in place of `directory`. The library's `Collision` and
+  `SharedDirectory` change the same way.
 - A plugin package whose `exports` offer only the `import` condition loads.
   Packages were resolved with `require.resolve`, which reads `exports` under
   the require conditions, so an ESM-only plugin could not be found.
