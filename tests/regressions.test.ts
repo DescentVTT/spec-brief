@@ -408,6 +408,7 @@ describe('collisions, after 0.1.0', () => {
         },
       ],
       unscheduled: ['004'],
+      deferred: [],
     });
   });
 
@@ -436,6 +437,7 @@ describe('collisions, after 0.1.0', () => {
     expect(matrixJson(unscoped)).toEqual({
       waves: [{ wave: 1, briefs: ['001', '002', '003'], collisions: [], undecided: [], sharedDirectories: [{ a: '001', b: '002', directories: ['x'] }], unscoped: ['003'] }],
       unscheduled: [],
+      deferred: [],
     });
     expect(inWords(['a/', 'b/'])).toBe('a/ and b/');
     expect(inWords([])).toBe('');

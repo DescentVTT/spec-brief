@@ -48,6 +48,8 @@ Every privilege change issues a new session token and invalidates the old one.
 - [ ] a rotated token is rejected by every endpoint
 ```
 
+Work put off for later is a brief too, with `status: deferred` and a `trigger` naming the event that brings it back - "when the second tenant signs", "when p95 exceeds 200 ms", never a date. A deferred brief stays in the briefs directory, is never ready, and runs in no wave until someone sets it `active`.
+
 The id comes from the file name (`012_rotate-session-tokens.md`) or from an `id` field. `affectedFiles` is the scope the round may write; `protectedFiles` is what it is not empowered to change, and archival refuses a round that changed it. Protection wins: what a round may write is `affectedFiles` less `protectedFiles`, so "all of `src/` but the schema" is `affectedFiles: [src/**]` with `protectedFiles: [src/db/schema.ts]`.
 
 Scopes are globs in spec-core's `path` dialect, the one every spec-\* tool reads: `*`, `?`, `[a-z]` and `{a,b}` within a name, `**` for any number of directories, compared case-sensitively on every host. A trailing `/**` or `/` is a directory's contents - at least one name below it, never the directory itself. A path with no glob syntax is read from the tree: a file the tree holds is that file, a directory it holds is everything beneath it, and a path it does not hold yet is a file unless it ends in `/`. Write `src/newmod/` for a directory the round creates; `lint` notes a bare `src/newmod` it cannot place.
@@ -78,11 +80,11 @@ briefs/035_the-background-side.md
 
 ### `spec-brief list`
 
-Live briefs with their status, wave, task count and readiness. A brief is *ready* when every brief it depends on is archived. `--ready` shows only those, which is the question an orchestrator asks; `--archived` includes the archive; `--format json` gives an orchestrator the whole table, and the sections the configuration asks for, each with its `hint`.
+Live briefs with their status, wave, task count and readiness. A brief is *ready* when every brief it depends on is archived, and it is neither a draft nor deferred. `--ready` shows only those, which is the question an orchestrator asks; `--archived` includes the archive; `--format json` gives an orchestrator the whole table, and the sections the configuration asks for, each with its `hint`.
 
 ### `spec-brief matrix`
 
-Compares the `affectedFiles` of every pair of live briefs in the same wave, `--all-waves` for every pair.
+Compares the `affectedFiles` of every pair of live briefs in the same wave, `--all-waves` for every pair. Deferred briefs are listed and left out.
 
 ```text
 wave 1 · 3 briefs
@@ -131,7 +133,7 @@ Reopens an archived brief: the banner and the hash come off, the status goes bac
 | `exclude` | `[]` | File-name globs that are never briefs, such as an index. |
 | `template` | `null` | A template file for `new`, with `{id}`, `{title}`, `{date}`, `{type}`, `{wave}`, `{status}`. |
 | `id` | `{ "source": "filename", "separator": "_", "digits": 3 }` | Where an id comes from, and how a new one is written. |
-| `status` | `{ "field": "status", "draft": "draft", "active": "active", "archived": "archived" }` | The words a repository uses. `field: null` reads status from location alone. |
+| `status` | `{ "field": "status", "draft": "draft", "active": "active", "deferred": "deferred", "archived": "archived" }` | The words a repository uses. `field: null` reads status from location alone; `draft` and `deferred` may be `null` where a repository has no such word. |
 | `sections` | Intent, Negative Scope, Not Empowered (optional), Invariants (checklist) | Sections every live brief carries: a name, or `{ name, aliases, mustContain, checklist, optional, hint }`. `hint` says what the section must answer: a new brief carries it as a comment under the heading, a finding that the section is missing or unwritten gives it as the next step, and the JSON of `list` and `lint` reports it, so a tool helping to write a brief can ask for each section by what it is for. |
 | `sectionOrder` | `false` | Sections must appear in the listed order. |
 | `types` | `feature`, `defect`, `refactor`, `chore` | Brief types and the sections each adds. |
@@ -197,6 +199,7 @@ Section names compare without case, typographic quotes, emphasis, a leading numb
 | `dependency` | error | A dependency on itself, or on a brief that does not exist. |
 | `dependency-cycle` | error | Live briefs that depend on each other in a cycle, reported once, as a path. |
 | `wave-order` | error | A live dependency that does not run in an earlier wave. |
+| `deferral-trigger` | error | A deferred brief with no `trigger`, or one that is only a date or a time - `2026-10`, `Q3`, `next month`, `October` - or a placeholder, rather than an event such as "when the second tenant signs". |
 | `glob` | error | A scope pattern spec-brief cannot read. |
 | `scope-contradiction` | error | Patterns in `affectedFiles` that `protectedFiles` cover entirely, so nothing of them is writable - one finding per brief, naming each. A pattern the search cannot decide is a warning. |
 | `glob-matches-nothing` | note | A scope pattern that matches no file git sees, tracked or untracked - expected when the round creates it. |
@@ -210,7 +213,7 @@ Section names compare without case, typographic quotes, emphasis, a leading numb
 | `stale-link` | warning | Links in live briefs left pointing where a brief used to be, when `archiving.rewriteLinks` is off (`archive`, `unarchive`). |
 <!-- rules:end -->
 
-`archive` refuses with its own reasons - `open-task`, `archive-draft`, `dependency-open`, `dirty-tree`, `protected-file`, `out-of-scope`, `archive-exists` - which are not lint rules: they are about whether this round is done, not whether the brief is well written. The rules marked `archive` above are raised by archival too, and configuration sets their severity like any other.
+`archive` refuses with its own reasons - `open-task`, `archive-draft`, `archive-deferred`, `dependency-open`, `dirty-tree`, `protected-file`, `out-of-scope`, `archive-exists` - which are not lint rules: they are about whether this round is done, not whether the brief is well written. The rules marked `archive` above are raised by archival too, and configuration sets their severity like any other.
 
 ## In CI
 

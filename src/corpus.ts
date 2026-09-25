@@ -82,9 +82,12 @@ export function pendingDependencies(corpus: Corpus, brief: Brief): string[] {
   });
 }
 
-/** A live brief whose every dependency is archived can be executed now. */
+/**
+ * A live brief whose every dependency is archived can be executed now, unless
+ * it is still being written or is deferred until its trigger.
+ */
 export function isReady(corpus: Corpus, brief: Brief): boolean {
-  if (brief.phase !== 'live' || brief.status === 'draft') return false;
+  if (brief.phase !== 'live' || brief.status === 'draft' || brief.status === 'deferred') return false;
   return brief.dependsOn.every((dependency) => resolveDependency(corpus, dependency)?.phase === 'archived');
 }
 

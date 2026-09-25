@@ -384,11 +384,23 @@ export function planArchive(corpus: Corpus, brief: Brief, request: ArchiveReques
     const refuses = finding.severity === 'error' || (request.strict === true && finding.severity === 'warning');
     if (finding.file === brief.file && refuses) blocking.push(finding);
   }
-  // Only a status field can say "draft", so there is one to point at.
+  // Only a status field can say "draft" or "deferred", so there is one to point at.
   const field = config.status.field as string;
   if (brief.status === 'draft') {
     blocking.push(
       problem(brief, 'archive-draft', 'error', lineOf(brief, field), 'is a draft, and a draft has not been executed', `set "${field}: ${config.status.active}" once the round runs`),
+    );
+  }
+  if (brief.status === 'deferred') {
+    blocking.push(
+      problem(
+        brief,
+        'archive-deferred',
+        'error',
+        lineOf(brief, field),
+        'is deferred, and deferred work has not been executed',
+        `set "${field}: ${config.status.active}" when its trigger fires and the round runs`,
+      ),
     );
   }
   for (const task of openTasks(brief, corpus)) {

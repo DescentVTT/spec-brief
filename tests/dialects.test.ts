@@ -384,6 +384,23 @@ describe('collisions', () => {
     expect(tree.waves[0]?.collisions.flatMap((c) => c.overlaps.map((o) => o.witness))).toEqual(['build/x']);
   });
 
+  it('leaves deferred briefs out of every wave, and lists them', () => {
+    const corpus = corpusOf({
+      'briefs/001_a.md': goodBrief({ wave: '1', affectedFiles: '[src/**]' }),
+      'briefs/002_b.md': goodBrief({ wave: '1', status: 'deferred', trigger: 'when x', affectedFiles: '[src/**]' }),
+      'briefs/003_c.md': goodBrief({ status: 'deferred', trigger: 'when y' }),
+    });
+    for (const report of [collisions(corpus), collisions(corpus, { all: true })]) {
+      expect(report.waves.map((w) => w.briefs.map((b) => b.id))).toEqual([['001']]);
+      expect(report.deferred.map((b) => b.id)).toEqual(['002', '003']);
+      expect(report.unscheduled).toEqual([]);
+      expect(matrixJson(report)['deferred']).toEqual(['002', '003']);
+    }
+    expect(prettyMatrix(collisions(corpus), { color: false }).split('\n').slice(-1)).toEqual(['deferred: 002, 003']);
+    const only = corpusOf({ 'briefs/002_b.md': goodBrief({ status: 'deferred', trigger: 'when x' }) });
+    expect(prettyMatrix(collisions(only), { color: false })).toBe('deferred: 002');
+  });
+
   it('names a file as the witness, never the directory a trailing globstar is under', () => {
     const corpus = corpusOf({
       'briefs/001_a.md': goodBrief({ wave: '1', affectedFiles: '[docs/adr/**]' }),
@@ -484,7 +501,7 @@ describe('configuration', () => {
       exclude: [],
       template: null,
       id: { source: 'filename', separator: '_', digits: 3 },
-      status: { field: 'status', draft: 'draft', active: 'active', archived: 'archived' },
+      status: { field: 'status', draft: 'draft', active: 'active', deferred: 'deferred', archived: 'archived' },
       sections: [
         section('Intent', { aliases: ["Commander's Intent", 'Mission', 'Objective'], hint: 'The state of the tree when this round is done, and why it matters. One paragraph.' }),
         section('Negative Scope', {
@@ -530,7 +547,7 @@ describe('configuration', () => {
       archive: 'b/done',
       files: '[0-9]*.md',
       id: { source: 'filename', separator: '_', digits: 3 },
-      status: { field: 'status', draft: 'draft', active: 'active', archived: 'archived' },
+      status: { field: 'status', draft: 'draft', active: 'active', deferred: 'deferred', archived: 'archived' },
       sections: [
         { name: 'Intent', aliases: ["Commander's Intent", 'Mission', 'Objective'], hint: 'The state of the tree when this round is done, and why it matters. One paragraph.' },
         {
@@ -580,7 +597,7 @@ describe('configuration', () => {
       '"archive" must be a directory inside the repository, not "../b/archive"',
     ]);
     expect(problems({ archive: '../../x' })).toEqual(['"archive" must be a directory inside the repository, not "../../x"']);
-    expect(problems({ status: { draft: 'Done', active: 'done' } })).toEqual(['the status words for draft, active and archived must differ']);
+    expect(problems({ status: { draft: 'Done', active: 'done' } })).toEqual(['the status words for draft, active, deferred and archived must differ']);
     expect(problems({ archiving: { banner: ['{nope}'] } })).toEqual([
       '"archiving.banner" uses {nope}; the placeholders are {date}, {summary}, {pr}, {commit}, {diffstat}, {links}, {id}, {title}, {author}',
     ]);

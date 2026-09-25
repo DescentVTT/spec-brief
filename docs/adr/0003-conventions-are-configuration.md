@@ -53,3 +53,24 @@ DescentVTT is **not** described by this version: its sections are labels, not
 headings, and its waves are in a document rather than in the briefs. Label
 sections are the next extension this ADR invites. The README records it as
 open rather than claiming it.
+
+## Amended 2026-09-26: deferred work
+
+Splitting a goal into rounds leaves work that should wait: the second backend,
+the scaling nobody needs yet. Written down nowhere, it is forgotten; written
+as a live brief, it is scheduled; archived, it is recorded as done. So a
+fourth status word, `status.deferred`, `"deferred"` by default and `null` for
+a repository that has none, as `draft` is. A deferred brief lives in the briefs
+directory, is never ready, runs in no wave - `matrix` and `schedule` list it
+and leave it out - and `archive` refuses it as it refuses a draft.
+
+A deferral must say what brings it back, in a built-in `trigger` field, and
+what brings it back must be an event someone can observe: "when the second
+tenant signs", "when p95 exceeds 200 ms". A date is not a trigger. It arrives
+whether or not the reason for the work has, so a deferral dated "Q3" is a
+reminder to decide again, which is what the deferral already was.
+`deferral-trigger` refuses a missing trigger, a placeholder, and one made only
+of words that say when: dates, quarters, months and weekdays, stretches of
+time, and the small words that join them. The lists are short on purpose; a
+time the rule reads as an event is a miss, which costs less than refusing an
+event that looks like a date.

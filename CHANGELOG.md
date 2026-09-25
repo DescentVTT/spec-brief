@@ -35,7 +35,17 @@ Notable changes, newest first. Versions follow [semver](https://semver.org).
   witness search could not decide within its budget. It is never reported
   as a collision and never as clean. `matrix` marks the pair `?`, and its
   JSON gains an `undecided` list per wave (`{ a, b, patterns }`).
-- 23 lint rules and 4 collision rules.
+- Deferred work has a status: `status.deferred` in configuration, `"deferred"`
+  by default and `null` for a repository without one. A deferred brief lives
+  in the briefs directory, is never ready, is listed and left out by
+  `matrix`, and is refused by `archive` as `archive-deferred`. It names the
+  event that brings it back in `trigger`, a new built-in field that `list`
+  reports.
+- `deferral-trigger`, an error: a deferred brief with no `trigger`, or one
+  that is only a date or a time - `2026-10`, `Q3`, `next month`, `October`,
+  `in two weeks` - or a placeholder. "when the second tenant signs" and
+  "when p95 > 200 ms" pass.
+- 24 lint rules and 4 collision rules.
 - The library's `parseGlob`, `matchGlob`, `intersectGlobs` and `globBase`
   keep their signatures over the new engine. `parseGlob`'s `isFile` option is
   replaced by `literal` (`'file'`, `'directory'`, `'either'` or a function,
