@@ -42,6 +42,9 @@ Notable changes, newest first. Versions follow [semver](https://semver.org).
   asks for with its type, switches and hint. The default sections carry one,
   and `init` writes them out. `empty-section` and `placeholder` findings have
   a hint even without one.
+- A `--base` or `archiving.base` that names no commit stops `archive` with a
+  message that says so, where git's failure to diff from it surfaced as an
+  unexpected error with a stack trace.
 
 ## 0.1.0
 
