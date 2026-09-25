@@ -13,7 +13,7 @@ import { access } from 'node:fs/promises';
 import { dirname, relative, resolve, sep } from 'node:path';
 
 import { applyPlan } from './apply.js';
-import { planArchive, type Plan, planUnarchive, type PullRequest } from './archive.js';
+import { planArchive, type Plan, planUnarchive, type PullRequest, type Unmeasured } from './archive.js';
 import type { Brief } from './brief.js';
 import { collisionFindings, collisions, type CollisionOptions, type CollisionReport } from './collisions.js';
 import { type Config, DEFAULT_CONFIG, locateConfig, parseConfig } from './config.js';
@@ -260,6 +260,7 @@ export class BriefEngine {
 
     let commit: CommitInfo | undefined;
     let changes: FileChange[] | undefined;
+    let unmeasured: Unmeasured | undefined;
     let dirty: string[] | undefined;
     let pr: PullRequest | undefined;
     if (git !== null) {
@@ -268,9 +269,17 @@ export class BriefEngine {
         commit = (await git.commit(revision)) ?? undefined;
         if (commit === undefined) throw new EngineError('not-found', `"${revision}" names no commit`);
         const from = base === undefined ? null : ((await git.mergeBase(base, commit.sha)) ?? base);
-        changes = await git.changes(from, commit.sha);
+        // A commit that is its own merge base with the base branch is already
+        // in it: the diff is empty whatever the round changed, and an empty
+        // diff would pass every scope check without measuring one.
+        if (from === commit.sha) unmeasured = { reason: 'merged', base: base as string, commit: commit.sha };
+        else changes = await git.changes(from, commit.sha);
+      } else {
+        unmeasured = { reason: 'revision' };
       }
       dirty = await git.dirty();
+    } else {
+      unmeasured = { reason: 'git' };
     }
     if (options.pr !== undefined) {
       pr = { number: options.pr, url: git === null ? null : pullRequestUrl(await git.remoteUrl('origin'), options.pr) };
@@ -281,6 +290,7 @@ export class BriefEngine {
       pr,
       commit,
       changes,
+      unmeasured,
       dirty,
       allowDirty: options.allowDirty,
       strict: options.strict,

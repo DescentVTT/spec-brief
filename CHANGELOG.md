@@ -6,6 +6,12 @@ Notable changes, newest first. Versions follow [semver](https://semver.org).
 
 - Versions are published by CI through npm's trusted publishing, with
   provenance that names the commit and the run (ADR-0010).
+- `archive` no longer passes a scope it never measured. With no `--commit`,
+  `--base` or `archiving.base`, without git, or with a commit already in the
+  base branch - where the diff from the merge base is empty - a brief that
+  declares `affectedFiles` or `protectedFiles` gets `scope-unmeasured`, a
+  warning that names the next step, and a refusal under `--strict`. It is the
+  first archive rule, and configuration sets its severity like any other.
 
 ## 0.1.0
 

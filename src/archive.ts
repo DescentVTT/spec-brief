@@ -16,7 +16,9 @@ import type { CommitInfo, FileChange } from './git.js';
 import { type Glob, matchGlob, parseGlob } from './glob.js';
 import { INTEGRITY_FIELD, integrityOf } from './integrity.js';
 import { dirOf, linesLinkingTo, normalisePath, rewriteLinks } from './links.js';
+import { severityOf } from './lint.js';
 import type { Scan } from './markdown.js';
+import { ARCHIVE_RULES, type RuleInfo } from './rules.js';
 import { fillTemplate, joinLines, labelMatches, lineEnding, templateHoles } from './text.js';
 import type { Finding, Severity } from './types.js';
 
@@ -25,14 +27,32 @@ export interface PullRequest {
   readonly url: string | null;
 }
 
+/**
+ * Why the files a round changed are unknown. `git`: there was no git to ask.
+ * `revision`: no commit was named and no base configured, so no diff was
+ * read. `merged`: the commit is already in the base branch, so the diff from
+ * their merge base is empty whatever the round changed - archiving on the base
+ * branch after the merge.
+ */
+export type Unmeasured =
+  | { readonly reason: 'git' }
+  | { readonly reason: 'revision' }
+  | { readonly reason: 'merged'; readonly base: string; readonly commit: string };
+
 export interface ArchiveRequest {
   /** `YYYY-MM-DD`. */
   readonly date: string;
   readonly summary?: string | undefined;
   readonly pr?: PullRequest | undefined;
   readonly commit?: CommitInfo | undefined;
-  /** The files the round changed, when a commit is known. */
+  /** The files the round changed, when they were read. */
   readonly changes?: readonly FileChange[] | undefined;
+  /**
+   * Why `changes` is missing, when the caller knows. Without changes the
+   * scope checks have nothing to check, and a plan that said nothing would
+   * read as a round that stayed in scope.
+   */
+  readonly unmeasured?: Unmeasured | undefined;
   /** Uncommitted paths, when the working tree was read. */
   readonly dirty?: readonly string[] | undefined;
   readonly allowDirty?: boolean | undefined;
@@ -84,6 +104,51 @@ function problem(
 
 function lineOf(brief: Brief, key: string): number {
   return lineOfField(brief, key) + 1;
+}
+
+/** The severity configuration gives an archive rule; `null` when it is off. */
+function archiveSeverity(corpus: Corpus, id: string): Severity | null {
+  const rule = ARCHIVE_RULES.find((r) => r.id === id) as RuleInfo;
+  const setting = severityOf(corpus, id, rule.severity);
+  return setting === 'off' ? null : setting;
+}
+
+/** Where a finding goes: an error refuses, and under --strict so does a warning, which it then is. */
+function place(finding: Finding, strict: boolean, blocking: Finding[], warnings: Finding[]): void {
+  if (finding.severity === 'error') blocking.push(finding);
+  else if (strict && finding.severity === 'warning') blocking.push({ ...finding, severity: 'error' });
+  else warnings.push(finding);
+}
+
+const UNMEASURED: Readonly<Record<Unmeasured['reason'], { readonly why: string; readonly hint: string }>> = {
+  git: {
+    why: 'without git, the files the round changed cannot be read',
+    hint: 'archive inside the git work tree without --no-git, and name the round with --commit <rev> or --base <rev>',
+  },
+  revision: {
+    why: 'no commit or base was named, so the files the round changed were not read',
+    hint: 'pass --commit <rev> for the commit the round landed as, or --base <rev> for the branch it started from, or set "archiving.base"',
+  },
+  merged: {
+    why: 'the diff from their merge base is empty',
+    hint: "archive on the round's branch before it merges, or pass --base <rev> naming the commit the round started from",
+  },
+};
+
+/**
+ * The finding for scope checks that had nothing to check. A brief with no
+ * scope has nothing to check either way, so it gets none.
+ */
+function unmeasuredScope(brief: Brief, request: ArchiveRequest, severity: Severity): Finding | null {
+  const unmeasured = request.unmeasured ?? (request.changes === undefined ? { reason: 'revision' as const } : undefined);
+  const fields = [
+    ...(brief.protectedFiles.length > 0 ? ['protectedFiles'] : []),
+    ...(brief.affectedFiles.length > 0 ? ['affectedFiles'] : []),
+  ];
+  if (unmeasured === undefined || fields.length === 0) return null;
+  const { why, hint } = UNMEASURED[unmeasured.reason];
+  const cause = unmeasured.reason === 'merged' ? `${unmeasured.commit.slice(0, 7)} is already in ${unmeasured.base}, so ${why}` : why;
+  return problem(brief, 'scope-unmeasured', severity, lineOf(brief, fields[0] as string), `${fields.join(' and ')} went unchecked: ${cause}`, hint);
 }
 
 /**
@@ -332,6 +397,9 @@ export function planArchive(corpus: Corpus, brief: Brief, request: ArchiveReques
     );
     (request.strict === true ? blocking : warnings).push(finding);
   }
+  const scopeSeverity = archiveSeverity(corpus, 'scope-unmeasured');
+  const unmeasured = scopeSeverity === null ? null : unmeasuredScope(brief, request, scopeSeverity);
+  if (unmeasured !== null) place(unmeasured, request.strict === true, blocking, warnings);
   if (corpus.briefs.some((b) => b.file === to)) {
     blocking.push(problem(brief, 'archive-exists', 'error', 1, `${to} already exists`, 'an archived brief is never overwritten'));
   }

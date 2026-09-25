@@ -519,3 +519,16 @@ export const COLLISION_RULES: readonly RuleInfo[] = [
   { id: 'unscoped', severity: 'note', description: 'A brief sharing a wave declares the files it writes.' },
   { id: 'shared-directory', severity: 'off', description: 'Briefs in one wave do not write into the same directory.' },
 ];
+
+/**
+ * The rules archival reports under beside its refusals. Like the collision
+ * rules they carry no check: the planner raises them, and they exist so
+ * configuration can set their severity and reports can describe them.
+ */
+export const ARCHIVE_RULES: readonly RuleInfo[] = [
+  {
+    id: 'scope-unmeasured',
+    severity: 'warning',
+    description: 'A brief that declares a scope is archived against the changes its round made.',
+  },
+];

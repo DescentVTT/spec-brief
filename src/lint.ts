@@ -6,7 +6,7 @@
 import type { Brief } from './brief.js';
 import { ConfigError } from './config.js';
 import type { Corpus } from './corpus.js';
-import { analyse, COLLISION_RULES, type Rule, RULES } from './rules.js';
+import { analyse, ARCHIVE_RULES, COLLISION_RULES, type Rule, RULES } from './rules.js';
 import type { Finding, Severity, SeveritySetting } from './types.js';
 
 export interface Plugin {
@@ -38,11 +38,12 @@ interface ActiveRule {
   readonly options: unknown;
 }
 
-/** Every rule id a run knows: built-in, collision and plugin. */
+/** Every rule id a run knows: built-in, collision, archive and plugin. */
 export function ruleIds(plugins: readonly Plugin[] = []): string[] {
   return [
     ...RULES.map((r) => r.id),
     ...COLLISION_RULES.map((r) => r.id),
+    ...ARCHIVE_RULES.map((r) => r.id),
     ...plugins.flatMap((p) => p.rules.map((r) => `${p.name}/${r.id}`)),
   ];
 }

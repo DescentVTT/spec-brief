@@ -4,7 +4,17 @@
  */
 
 export { applyPlan, ConflictError, TransactionError } from './apply.js';
-export { type ArchiveRequest, type FileOp, openTasks, type Plan, planArchive, planUnarchive, type PullRequest, renderBanner } from './archive.js';
+export {
+  type ArchiveRequest,
+  type FileOp,
+  openTasks,
+  type Plan,
+  planArchive,
+  planUnarchive,
+  type PullRequest,
+  renderBanner,
+  type Unmeasured,
+} from './archive.js';
 export { BANNER_CLOSE, BANNER_OPEN, type Brief, BUILT_IN_FIELDS, type FieldProblem, idFromName, parseBrief } from './brief.js';
 export { main, type CliIO, EXIT_ERROR, EXIT_FAILED, EXIT_OK, HELP, UsageError } from './cli.js';
 export {
@@ -47,7 +57,7 @@ export { integrityOf } from './integrity.js';
 export { failing, lint, type LintOptions, type Plugin, ruleIds, sortFindings, summarise } from './lint.js';
 export { asPlugin, loadPlugins } from './plugins.js';
 export { type Format, FORMATS, githubCommands, JSON_SCHEMA_VERSION, sarif } from './report.js';
-export { COLLISION_RULES, type Rule, type RuleContext, type RuleInfo, type RuleResult, RULES } from './rules.js';
+export { ARCHIVE_RULES, COLLISION_RULES, type Rule, type RuleContext, type RuleInfo, type RuleResult, RULES } from './rules.js';
 export { nextId, renderNewBrief } from './scaffold.js';
 export type { Finding, Phase, Severity, SeveritySetting, Status } from './types.js';
 

@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 
 import { releaseOf } from '../scripts/release.js';
 import { HELP } from '../src/cli.js';
-import { COLLISION_RULES, RULES } from '../src/rules.js';
+import { ARCHIVE_RULES, COLLISION_RULES, RULES } from '../src/rules.js';
 
 /**
  * Claims the repository makes about itself, checked rather than trusted: a
@@ -86,7 +86,7 @@ describe('the documents', () => {
   const readme = readFileSync('README.md', 'utf8');
 
   it('the README names every rule, and no rule that does not exist', () => {
-    const ids = [...RULES, ...COLLISION_RULES].map((r) => r.id);
+    const ids = [...RULES, ...COLLISION_RULES, ...ARCHIVE_RULES].map((r) => r.id);
     const missing = ids.filter((id) => !readme.includes(`\`${id}\``));
     expect(missing).toEqual([]);
     const table = readme.slice(readme.indexOf('<!-- rules:start -->'), readme.indexOf('<!-- rules:end -->'));

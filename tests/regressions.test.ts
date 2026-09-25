@@ -3,16 +3,24 @@ import { describe, expect, it } from 'vitest';
 import { planArchive, planUnarchive, type Plan } from '../src/archive.js';
 import { BANNER_CLOSE, BANNER_OPEN } from '../src/brief.js';
 import { type Corpus, findBriefs } from '../src/corpus.js';
+import { BriefEngine } from '../src/engine.js';
+import { MemoryFileSystem } from '../src/fs.js';
+import type { Git } from '../src/git.js';
 import { lint } from '../src/lint.js';
 import { linksOf, scan } from '../src/markdown.js';
+import type { Finding } from '../src/types.js';
 import { brief, config, corpusOf, goodBrief } from './helpers.js';
 
 /**
- * Defects found by a review of 0.1.0 before its release, each held here by the
- * input that showed it.
+ * Defects found by reviews, each held here by the input that showed it: one of
+ * 0.1.0 before its release, and one after it.
  */
 
 const A = 'briefs/001_a.md';
+const DATE = '2026-09-24';
+
+const table = (findings: readonly Finding[]): string[] =>
+  findings.map((f) => `${f.file}:${f.line} ${f.severity} ${f.rule}: ${f.message}${f.hint === undefined ? '' : ` | ${f.hint}`}`);
 
 function the(corpus: Corpus, id: string) {
   return findBriefs(corpus, id)[0]!;
@@ -105,5 +113,113 @@ describe('regressions', () => {
     expect(findings.map((f) => f.severity)).toEqual(['warning']);
     expect(planArchive(corpus, the(corpus, '001'), { date: '2026-09-24', findings }).blocking).toEqual([]);
     expect(planArchive(corpus, the(corpus, '001'), { date: '2026-09-24', findings, strict: true }).blocking.map((f) => f.rule)).toEqual(['unknown-field']);
+  });
+});
+
+describe('regressions after 0.1.0', () => {
+  const COMMIT = { sha: 'abcdef1234567890', author: 'A', date: '' };
+  const scoped = goodBrief({ affectedFiles: '[src/auth/**]', protectedFiles: '[src/db/schema.ts]' });
+  const UNREAD =
+    'briefs/001_a.md:4 warning scope-unmeasured: protectedFiles and affectedFiles went unchecked: no commit or base was named, so the files the round changed were not read' +
+    ' | pass --commit <rev> for the commit the round landed as, or --base <rev> for the branch it started from, or set "archiving.base"';
+
+  /** Git that knows one commit, already in the base branch: its merge base with any base is itself. */
+  function mergedGit(calls: string[]): Git {
+    return {
+      commit: (rev) => {
+        calls.push(`commit ${rev}`);
+        return Promise.resolve({ sha: 'feedface00000000', author: 'A', date: '' });
+      },
+      mergeBase: (a, b) => {
+        calls.push(`merge-base ${a} ${b}`);
+        return Promise.resolve(b);
+      },
+      changes: (from, to) => {
+        calls.push(`changes ${from ?? 'parent'} ${to}`);
+        return Promise.resolve([]);
+      },
+      dirty: () => Promise.resolve([]),
+      files: () => Promise.resolve(['src/auth/a.ts', 'src/db/schema.ts']),
+      remoteUrl: () => Promise.resolve(null),
+    };
+  }
+
+  function engineOver(files: Record<string, string>, git: Git | null, archiving: Record<string, unknown> = {}): BriefEngine {
+    return new BriefEngine({ root: '/virtual', config: config({ archiving }), configFile: null, fs: new MemoryFileSystem(files), git, plugins: [] });
+  }
+
+  it('does not pass a scope it never measured, and refuses it under --strict', () => {
+    const corpus = corpusOf({ [A]: scoped });
+    const plan = planArchive(corpus, the(corpus, '001'), { date: DATE });
+    expect(plan.blocking).toEqual([]);
+    expect(table(plan.warnings)).toEqual([UNREAD]);
+    expect(table(planArchive(corpus, the(corpus, '001'), { date: DATE, strict: true }).blocking)).toEqual([UNREAD.replace(' warning ', ' error ')]);
+    // Only the scope the brief declares is named, at its own line.
+    const affected = corpusOf({ [A]: goodBrief({ affectedFiles: '[src/**]' }) });
+    expect(table(planArchive(affected, the(affected, '001'), { date: DATE }).warnings)[0]).toMatch(
+      /^briefs\/001_a\.md:3 warning scope-unmeasured: affectedFiles went unchecked: /,
+    );
+    const guarded = corpusOf({ [A]: goodBrief({ protectedFiles: '[src/**]' }) });
+    expect(table(planArchive(guarded, the(guarded, '001'), { date: DATE }).warnings)[0]).toMatch(
+      /^briefs\/001_a\.md:3 warning scope-unmeasured: protectedFiles went unchecked: /,
+    );
+    // A brief with no scope has nothing to check, and a round whose changes
+    // were read was measured, even one that changed nothing but briefs.
+    const unscoped = corpusOf({ [A]: goodBrief() });
+    expect(planArchive(unscoped, the(unscoped, '001'), { date: DATE }).warnings).toEqual([]);
+    const briefsOnly = [{ path: A, insertions: 1, deletions: 1 }];
+    expect(planArchive(corpus, the(corpus, '001'), { date: DATE, commit: COMMIT, changes: briefsOnly }).warnings).toEqual([]);
+    expect(planArchive(corpus, the(corpus, '001'), { date: DATE, changes: [] }).warnings).toEqual([]);
+  });
+
+  it('does not pass a round archived on its base branch after the merge', async () => {
+    const calls: string[] = [];
+    const engine = engineOver({ [A]: scoped }, mergedGit(calls), { base: 'main' });
+    await engine.load();
+    const plan = await engine.planArchive('1', { date: DATE });
+    // The diff from a commit to itself is empty, so it is not asked for.
+    expect(calls).toEqual(['commit HEAD', 'merge-base main feedface00000000']);
+    expect(plan.blocking).toEqual([]);
+    expect(table(plan.warnings)).toEqual([
+      'briefs/001_a.md:4 warning scope-unmeasured: protectedFiles and affectedFiles went unchecked: feedfac is already in main, so the diff from their merge base is empty' +
+        " | archive on the round's branch before it merges, or pass --base <rev> naming the commit the round started from",
+    ]);
+    // Nothing was measured, so the banner claims no diffstat.
+    expect(plan.changes).toEqual([]);
+    expect(plan.banner.some((line) => line.includes('Recorded at commit'))).toBe(false);
+    const strict = await engine.planArchive('1', { date: DATE, strict: true, commit: 'v1', base: 'release' });
+    expect(table(strict.blocking)).toEqual([
+      'briefs/001_a.md:4 error scope-unmeasured: protectedFiles and affectedFiles went unchecked: feedfac is already in release, so the diff from their merge base is empty' +
+        " | archive on the round's branch before it merges, or pass --base <rev> naming the commit the round started from",
+    ]);
+  });
+
+  it('does not pass a scope when git is left out, or is not there', async () => {
+    const calls: string[] = [];
+    const engine = engineOver({ [A]: scoped }, mergedGit(calls), { base: 'main' });
+    await engine.load();
+    const without =
+      'briefs/001_a.md:4 warning scope-unmeasured: protectedFiles and affectedFiles went unchecked: without git, the files the round changed cannot be read' +
+      ' | archive inside the git work tree without --no-git, and name the round with --commit <rev> or --base <rev>';
+    expect(table((await engine.planArchive('1', { date: DATE, noGit: true })).warnings)).toEqual([without]);
+    expect(calls).toEqual([]);
+    const gitless = engineOver({ [A]: scoped }, null);
+    await gitless.load();
+    expect(table((await gitless.planArchive('1', { date: DATE })).warnings)).toEqual([without]);
+    const unnamed = engineOver({ [A]: scoped }, mergedGit(calls));
+    await unnamed.load();
+    expect(table((await unnamed.planArchive('1', { date: DATE })).warnings)).toEqual([UNREAD]);
+  });
+
+  it('takes the severity of an unmeasured scope from the configuration', () => {
+    const plan = (severity: string, strict = false): Plan => {
+      const corpus = corpusOf({ [A]: scoped }, config({ rules: { 'scope-unmeasured': severity } }));
+      return planArchive(corpus, the(corpus, '001'), { date: DATE, strict });
+    };
+    expect(plan('off').warnings).toEqual([]);
+    expect(plan('off').blocking).toEqual([]);
+    expect(plan('error').blocking.map((f) => [f.rule, f.severity])).toEqual([['scope-unmeasured', 'error']]);
+    expect(plan('note', true).blocking).toEqual([]);
+    expect(plan('note', true).warnings.map((f) => [f.rule, f.severity])).toEqual([['scope-unmeasured', 'note']]);
   });
 });
