@@ -78,6 +78,7 @@ describe('parsing', () => {
 
 describe('a literal path', () => {
   it('is a file unless something says otherwise', () => {
+    expect(glob('src/auth').literals).toEqual([{ path: 'src/auth', reading: 'file' }]);
     expect(matches('src/auth', 'src/auth')).toBe(true);
     expect(matches('src/auth', 'src/auth/login.ts')).toBe(false);
   });

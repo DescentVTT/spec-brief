@@ -165,7 +165,7 @@ export function treeOf(files: readonly string[]): Tree {
   if (known !== undefined) return known;
   const directories = new Set<string>();
   for (const file of files) {
-    for (let slash = file.indexOf('/'); slash > 0; slash = file.indexOf('/', slash + 1)) directories.add(file.slice(0, slash));
+    for (let slash = file.indexOf('/'); slash !== -1; slash = file.indexOf('/', slash + 1)) directories.add(file.slice(0, slash));
   }
   const tree = { files: new Set(files), directories };
   trees.set(files, tree);

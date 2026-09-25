@@ -4,7 +4,7 @@ import { collisions } from '../src/collisions.js';
 import { buildCorpus, type Corpus } from '../src/corpus.js';
 import { lint } from '../src/lint.js';
 import { prettySchedule, scheduleJson } from '../src/report.js';
-import { byId, moves, planWaves, reasons, schedule, scheduleFindings } from '../src/schedule.js';
+import { byId, moves, planWaves, reasons, type Schedule, schedule, scheduleFindings } from '../src/schedule.js';
 import type { Finding } from '../src/types.js';
 import { brief, config, corpusOf, goodBrief } from './helpers.js';
 
@@ -123,6 +123,18 @@ describe('placing briefs', () => {
     expect(s.cycles).toEqual([]);
   });
 
+  it('lists deferred briefs by id, whatever their paths', () => {
+    const cfg = config({ id: { source: 'frontmatter' }, files: '*.md' });
+    const corpus = corpusOf(
+      {
+        'briefs/a.md': goodBrief({ id: '2', status: 'deferred', trigger: 'when x' }),
+        'briefs/b.md': goodBrief({ id: '1', status: 'deferred', trigger: 'when y' }),
+      },
+      cfg,
+    );
+    expect(schedule(corpus).deferred.map((b) => b.id)).toEqual(['1', '2']);
+  });
+
   it('places nothing in a dependency cycle or after one, and names the cycle', () => {
     const corpus = corpusOf({
       [B(1)]: goodBrief({ affectedFiles: '[a]', dependsOn: '[2]' }),
@@ -171,6 +183,16 @@ describe('the order of briefs', () => {
     expect(byId(briefs[1]!, briefs[4]!)).toBeLessThan(0);
     const unnamed = brief(goodBrief(), 'briefs/zz.md', 'live', cfg);
     expect(byId(unnamed, briefs[0]!)).toBeGreaterThan(0);
+    // By id before path, whichever way the paths run.
+    expect(byId(briefs[2]!, briefs[3]!)).toBe(1);
+    expect(byId(briefs[3]!, briefs[2]!)).toBe(-1);
+    // Numbers by value only when the whole id is digits.
+    const named = (id: string, file: string) => brief(goodBrief({ id }), file, 'live', cfg);
+    expect(byId(named('a10', 'briefs/1.md'), named('a9', 'briefs/2.md'))).toBe(-1);
+    expect(byId(named('10a', 'briefs/1.md'), named('9', 'briefs/2.md'))).toBe(-1);
+    expect(byId(named('a10', 'briefs/1.md'), named('9', 'briefs/2.md'))).toBe(1);
+    expect(byId(named('9', 'briefs/1.md'), named('a10', 'briefs/2.md'))).toBe(-1);
+    expect(byId(named('9', 'briefs/1.md'), named('10a', 'briefs/2.md'))).toBe(1);
   });
 });
 
@@ -197,18 +219,22 @@ describe('why a brief goes where it goes', () => {
 });
 
 describe('what schedule says', () => {
-  const corpus = corpusOf({
-    [B(1)]: goodBrief({ wave: '1', affectedFiles: '[src/**]' }),
-    [B(2)]: goodBrief({ wave: '1', affectedFiles: '[src/a.ts]' }),
-    [B(3)]: goodBrief({ wave: '1' }),
-    [B(4)]: goodBrief({ wave: '1', affectedFiles: '[a]', dependsOn: '[5]' }),
-    [B(5)]: goodBrief({ affectedFiles: '[b]', dependsOn: '[4]' }),
-    [B(6)]: goodBrief({ status: 'deferred', trigger: 'when x' }),
-    [B(7)]: goodBrief({ affectedFiles: '[c]', dependsOn: '[6]' }),
-  });
-  const s = schedule(corpus);
+  // Built inside each test, so that what it runs is measured per test and not at load.
+  const said = (): { corpus: Corpus; s: Schedule } => {
+    const corpus = corpusOf({
+      [B(1)]: goodBrief({ wave: '1', affectedFiles: '[src/**]' }),
+      [B(2)]: goodBrief({ wave: '1', affectedFiles: '[src/a.ts]' }),
+      [B(3)]: goodBrief({ wave: '1' }),
+      [B(4)]: goodBrief({ wave: '1', affectedFiles: '[a]', dependsOn: '[5]' }),
+      [B(5)]: goodBrief({ affectedFiles: '[b]', dependsOn: '[4]' }),
+      [B(6)]: goodBrief({ status: 'deferred', trigger: 'when x' }),
+      [B(7)]: goodBrief({ affectedFiles: '[c]', dependsOn: '[6]' }),
+    });
+    return { corpus, s: schedule(corpus) };
+  };
 
   it('as findings: a cycle, each move with its reasons, and a brief that runs alone', () => {
+    const { corpus, s } = said();
     expect(table(scheduleFindings(corpus, s))).toEqual([
       'briefs/004_x.md:5 error dependency-cycle: dependencies form a cycle, so no wave can hold them: 004 -> 005 -> 004 | a cycle can never become ready; remove the dependency that is not real',
       'briefs/002_x.md:3 error wave-schedule: declares wave 1; the schedule puts it in wave 2: not wave 1, where 001 also writes src/a.ts ("src/a.ts" and "src/**") | run "spec-brief schedule --write", or set "wave: 2"',
@@ -218,6 +244,7 @@ describe('what schedule says', () => {
   });
 
   it('as findings, only the rules configuration leaves on', () => {
+    const { corpus } = said();
     const quiet = corpusOf(
       Object.fromEntries(corpus.briefs.map((b) => [b.file, b.text])),
       config({ rules: { 'dependency-cycle': 'off', 'wave-schedule': 'warning', unscoped: 'off' } }),
@@ -240,6 +267,7 @@ describe('what schedule says', () => {
   });
 
   it('to a person', () => {
+    const { s } = said();
     expect(prettySchedule(s, null, { color: false }).split('\n')).toEqual([
       'wave 1 · 1 brief',
       '  001  A brief',
@@ -280,6 +308,7 @@ describe('what schedule says', () => {
   });
 
   it('to a machine', () => {
+    const { s } = said();
     expect(scheduleJson(s)).toEqual({
       first: 1,
       waves: [
