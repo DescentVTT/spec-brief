@@ -9,11 +9,10 @@
  * a process in the loop. It runs in minutes where the full sweep runs for
  * hours on a slow host. The edges (cli, engine, fs, git, plugins) are measured
  * by the full sweep in CI. See docs/adr/0009-mutation-testing.md.
- *
- * @type {import('@stryker-mutator/api/core').PartialStrykerOptions}
  */
 import base from './stryker.config.mjs';
 
+/** @type {import('@stryker-mutator/api/core').PartialStrykerOptions} */
 export default {
   ...base,
   vitest: { configFile: 'vitest.core.config.ts', related: false },

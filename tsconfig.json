@@ -18,9 +18,11 @@
     "verbatimModuleSyntax": true,
     "isolatedModules": true,
 
+    "allowJs": true,
+    "checkJs": true,
     "noEmit": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true
   },
-  "include": ["src/**/*.ts", "tests/**/*.ts", "scripts/**/*.ts", "vitest.config.ts", "vitest.mutation.config.ts"]
+  "include": ["src/**/*.ts", "tests/**/*.ts", "scripts/**/*.ts", "*.config.ts", "*.config.mjs"]
 }
