@@ -48,7 +48,9 @@ Every privilege change issues a new session token and invalidates the old one.
 - [ ] a rotated token is rejected by every endpoint
 ```
 
-The id comes from the file name (`012_rotate-session-tokens.md`) or from an `id` field. `affectedFiles` is the scope the round may write; `protectedFiles` is what it is not empowered to change, and archival refuses a round that changed it.
+The id comes from the file name (`012_rotate-session-tokens.md`) or from an `id` field. `affectedFiles` is the scope the round may write; `protectedFiles` is what it is not empowered to change, and archival refuses a round that changed it. Protection wins: what a round may write is `affectedFiles` less `protectedFiles`, so "all of `src/` but the schema" is `affectedFiles: [src/**]` with `protectedFiles: [src/db/schema.ts]`.
+
+Scopes are globs in spec-core's `path` dialect, the one every spec-\* tool reads: `*`, `?`, `[a-z]` and `{a,b}` within a name, `**` for any number of directories, compared case-sensitively on every host. A trailing `/**` or `/` is a directory's contents - at least one name below it, never the directory itself. A path with no glob syntax is read from the tree: a file the tree holds is that file, a directory it holds is everything beneath it, and a path it does not hold yet is a file unless it ends in `/`. Write `src/newmod/` for a directory the round creates; `lint` notes a bare `src/newmod` it cannot place.
 
 ## Commands
 
@@ -92,7 +94,7 @@ wave 1 · 3 briefs
   ? 003 declares no affectedFiles and cannot be checked
 ```
 
-Scopes are intersected as globs, not compared as strings: the two above share no prefix and still meet, and the file named is one both patterns match. Two briefs whose scopes meet in several places are one collision, listing every pair of patterns that meets. A brief with no scope is reported as unscoped rather than counted as safe. Exit 1 on a collision.
+Scopes are intersected as globs, not compared as strings: the two above share no prefix and still meet, and the file named is one both patterns match and neither brief protects - always a file, never a directory. Two briefs whose scopes meet in several places are one collision, listing every pair of patterns that meets. A brief with no scope is reported as unscoped rather than counted as safe. The search for a shared file has a budget; a pair it cannot decide within it is marked `?` and reported as `collision-undecided`, a warning, never as a collision and never as clean. Exit 1 on a collision.
 
 ### `spec-brief archive <brief>`
 
@@ -196,10 +198,12 @@ Section names compare without case, typographic quotes, emphasis, a leading numb
 | `dependency-cycle` | error | Live briefs that depend on each other in a cycle, reported once, as a path. |
 | `wave-order` | error | A live dependency that does not run in an earlier wave. |
 | `glob` | error | A scope pattern spec-brief cannot read. |
-| `scope-contradiction` | error | A file that is both in `affectedFiles` and in `protectedFiles`. |
+| `scope-contradiction` | error | Patterns in `affectedFiles` that `protectedFiles` cover entirely, so nothing of them is writable - one finding per brief, naming each. A pattern the search cannot decide is a warning. |
 | `glob-matches-nothing` | note | A scope pattern that matches no file git sees, tracked or untracked - expected when the round creates it. |
+| `literal-read-as-file` | note | A path with no glob syntax that the tree does not hold and whose name has no extension, such as `src/newmod`: read as a file, and `src/newmod/` if a directory was meant. |
 | `archive-freeze` | error | An archived brief that changed after it was archived. |
 | `collision` | error | Two briefs in one wave whose scopes can name the same file (`matrix`). |
+| `collision-undecided` | warning | Two briefs in one wave whose collision the search could not decide within its budget (`matrix`). |
 | `unscoped` | note | A brief sharing a wave that declares no scope (`matrix`). |
 | `shared-directory` | off | Two briefs in one wave writing into the same directory (`matrix`). |
 | `scope-unmeasured` | warning | A brief with a scope archived without the files its round changed, so nothing checked the scope (`archive`). |
@@ -230,7 +234,9 @@ const plan = await engine.planArchive('012', { commit: 'HEAD', pr: 41 });
 if (plan.blocking.length === 0) await engine.apply(plan);
 ```
 
-Everything below the engine is a pure function of text: `parseBrief`, `lint`, `collisions`, `intersectGlobs`, `planArchive`. `MemoryFileSystem` runs an engine over files that were never written, which is how a harness can ask what archiving a brief would do.
+Everything below the engine is a pure function of text: `parseBrief`, `lint`, `collisions`, `meet`, `globWitness`, `planArchive`. `MemoryFileSystem` runs an engine over files that were never written, which is how a harness can ask what archiving a brief would do.
+
+`parseGlob`, `matchGlob`, `intersectGlobs` and `globBase` keep their 0.1 signatures as a compatibility layer over the spec-core engine. They follow its dialect: a literal is read as a file unless `parseGlob` is told otherwise (`{ literal: 'directory' | 'either' | (path) => ... }`, where `readingIn(files)` reads it from a tree), and `intersectGlobs` throws where `globWitness` would answer `undecided`.
 
 ## Plugins
 

@@ -4,9 +4,12 @@
  *
  * Scopes are compared as globs, not as strings. `src/auth/**` and
  * `src/**\/session.ts` share no prefix a string comparison would see and both
- * cover `src/auth/session.ts`; the intersection finds that, and names the file.
- * A brief that declares no scope cannot be proven apart from anything, so it
- * is reported as unscoped rather than silently counted as safe.
+ * cover `src/auth/session.ts`; the witness search finds that, and names the
+ * file. What a brief protects it will not write, so a file either brief of a
+ * pair protects is no collision. A brief that declares no scope cannot be
+ * proven apart from anything, so it is reported as unscoped rather than
+ * silently counted as safe, and a pair the search could not decide is reported
+ * as undecided rather than as either.
  *
  * Two briefs that collide are one defect however many of their patterns
  * meet: they are fixed together, by a wave, a dependency or a narrower scope.
@@ -16,22 +19,28 @@
 import type { Brief } from './brief.js';
 import { lineOfField } from './brief.js';
 import type { Corpus } from './corpus.js';
-import { type Glob, globBase, intersectGlobs, parseGlob } from './glob.js';
+import { globBases, readingIn, WITNESS_BUDGET } from './glob.js';
 import { severityOf } from './lint.js';
 import { COLLISION_RULES, type RuleInfo } from './rules.js';
+import { meet, type Overlap, type Scope, scopeOf } from './scope.js';
+import { inWords } from './text.js';
 import type { Finding, Severity } from './types.js';
 
-/** A pattern from each scope, and a path both cover. */
-export interface Overlap {
-  readonly patterns: readonly [string, string];
-  readonly witness: string;
-}
+export type { Overlap } from './scope.js';
 
 export interface Collision {
   readonly a: Brief;
   readonly b: Brief;
   /** Every pair of patterns that meets, `a`'s first; never empty. */
   readonly overlaps: readonly Overlap[];
+}
+
+/** Two briefs no pair of whose patterns is known to meet, and some pair the search could not decide. */
+export interface UndecidedPair {
+  readonly a: Brief;
+  readonly b: Brief;
+  /** The pairs of patterns, `a`'s first; never empty. */
+  readonly patterns: readonly (readonly [string, string])[];
 }
 
 export interface SharedDirectory {
@@ -46,6 +55,7 @@ export interface WaveMatrix {
   readonly wave: number | null;
   readonly briefs: readonly Brief[];
   readonly collisions: readonly Collision[];
+  readonly undecided: readonly UndecidedPair[];
   readonly shared: readonly SharedDirectory[];
   readonly unscoped: readonly Brief[];
 }
@@ -59,56 +69,52 @@ export interface CollisionReport {
 export interface CollisionOptions {
   /** Compare every live brief with every other, whatever its wave. */
   readonly all?: boolean;
-  /** Tracked files, which tell a literal file path from a directory. */
+  /** The files the tree holds, which say whether a literal path is a file or a directory. */
   readonly repoFiles?: readonly string[] | null;
+  /** How many states one witness search may visit before it answers `undecided`. */
+  readonly budget?: number;
 }
 
-function scopes(brief: Brief, isFile: ((path: string) => boolean) | undefined): { pattern: string; glob: Glob }[] {
-  return brief.affectedFiles.flatMap((pattern) => {
-    const parsed = parseGlob(pattern, { isFile });
-    return parsed.ok ? [{ pattern, glob: parsed.glob }] : [];
-  });
-}
-
-function matrix(wave: number | null, briefs: readonly Brief[], isFile: ((path: string) => boolean) | undefined): WaveMatrix {
+function matrix(wave: number | null, briefs: readonly Brief[], scopes: ReadonlyMap<Brief, Scope>, budget: number): WaveMatrix {
   const collisions: Collision[] = [];
+  const undecided: UndecidedPair[] = [];
   const shared: SharedDirectory[] = [];
-  const scoped = briefs.map((brief) => ({ brief, scopes: scopes(brief, isFile) }));
+  const scoped = briefs.map((brief) => scopes.get(brief) as Scope);
   for (let i = 0; i < scoped.length; i += 1) {
     for (let j = i + 1; j < scoped.length; j += 1) {
-      const left = scoped[i] as (typeof scoped)[number];
-      const right = scoped[j] as (typeof scoped)[number];
-      const overlaps: Overlap[] = [];
-      for (const x of left.scopes) {
-        for (const y of right.scopes) {
-          const witness = intersectGlobs(x.glob, y.glob);
-          if (witness !== null) overlaps.push({ patterns: [x.pattern, y.pattern], witness });
-        }
-      }
-      if (overlaps.length > 0) {
-        collisions.push({ a: left.brief, b: right.brief, overlaps });
+      const left = scoped[i] as Scope;
+      const right = scoped[j] as Scope;
+      const meeting = meet(left, right, budget);
+      if (meeting.overlaps.length > 0) {
+        collisions.push({ a: left.brief, b: right.brief, overlaps: meeting.overlaps });
         continue;
       }
-      const leftDirs = new Set(left.scopes.map((s) => globBase(s.glob)).filter((d) => d !== ''));
-      const directories = [...new Set(right.scopes.map((s) => globBase(s.glob)))].filter((d) => leftDirs.has(d)).sort();
+      if (meeting.undecided.length > 0) {
+        undecided.push({ a: left.brief, b: right.brief, patterns: meeting.undecided });
+        continue;
+      }
+      const leftDirs = new Set(left.affected.flatMap((s) => globBases(s.glob)).filter((d) => d !== ''));
+      const directories = [...new Set(right.affected.flatMap((s) => globBases(s.glob)))].filter((d) => leftDirs.has(d)).sort();
       if (directories.length > 0) shared.push({ a: left.brief, b: right.brief, directories });
     }
   }
-  const unscoped = briefs.length > 1 ? scoped.filter((s) => s.scopes.length === 0).map((s) => s.brief) : [];
-  return { wave, briefs, collisions, shared, unscoped };
+  const unscoped = briefs.length > 1 ? scoped.filter((s) => s.affected.length === 0).map((s) => s.brief) : [];
+  return { wave, briefs, collisions, undecided, shared, unscoped };
 }
 
 export function collisions(corpus: Corpus, options: CollisionOptions = {}): CollisionReport {
-  const files = options.repoFiles === undefined || options.repoFiles === null ? null : new Set(options.repoFiles);
-  const isFile = files === null ? undefined : (path: string): boolean => files.has(path);
-  if (options.all === true) return { waves: [matrix(null, corpus.live, isFile)], unscheduled: [] };
+  const reading = readingIn(options.repoFiles ?? null);
+  const budget = options.budget ?? WITNESS_BUDGET;
+  const live = corpus.live;
+  const scopes = new Map(live.map((brief) => [brief, scopeOf(brief, reading)]));
+  if (options.all === true) return { waves: [matrix(null, live, scopes, budget)], unscheduled: [] };
   const byWave = new Map<number, Brief[]>();
   const unscheduled: Brief[] = [];
-  for (const brief of corpus.live) {
+  for (const brief of live) {
     if (brief.wave === null) unscheduled.push(brief);
     else byWave.set(brief.wave, [...(byWave.get(brief.wave) ?? []), brief]);
   }
-  const waves = [...byWave.keys()].sort((a, b) => a - b).map((wave) => matrix(wave, byWave.get(wave) as Brief[], isFile));
+  const waves = [...byWave.keys()].sort((a, b) => a - b).map((wave) => matrix(wave, byWave.get(wave) as Brief[], scopes, budget));
   return { waves, unscheduled };
 }
 
@@ -120,11 +126,6 @@ function where(wave: number | null): string {
   return wave === null ? 'among the live briefs' : `in wave ${wave}`;
 }
 
-/** `a`, `a and b`, `a, b and c`. */
-export function inWords(items: readonly string[]): string {
-  return items.length < 2 ? (items[0] ?? '') : `${items.slice(0, -1).join(', ')} and ${items[items.length - 1] as string}`;
-}
-
 function collisionMessage(c: Collision, wave: number | null): string {
   if (c.overlaps.length === 1) {
     const only = c.overlaps[0] as Overlap;
@@ -134,20 +135,37 @@ function collisionMessage(c: Collision, wave: number | null): string {
   return `overlaps ${label(c.a)} ${where(wave)} through ${c.overlaps.length} pairs of patterns: ${each.join('; ')}`;
 }
 
+/** The severity configuration gives a collision rule; `null` when it is off. */
+export function collisionSeverity(corpus: Corpus, id: string): Severity | null {
+  const rule = COLLISION_RULES.find((r) => r.id === id) as RuleInfo;
+  const setting = severityOf(corpus, id, rule.severity);
+  return setting === 'off' ? null : setting;
+}
+
+/** A pair whose collision the search could not decide, as one finding on the later brief. */
+export function undecidedFinding(severity: Severity, a: Brief, b: Brief, patterns: readonly (readonly [string, string])[], wave: number | null): Finding {
+  const pairs = patterns.map(([x, y]) => `"${y}" and ${label(a)}'s "${x}"`);
+  return {
+    rule: 'collision-undecided',
+    severity,
+    message: `whether it can write a file ${label(a)} writes ${where(wave)} is undecided: the search met its budget for ${inWords(pairs)}`,
+    file: b.file,
+    line: lineOfField(b, 'affectedFiles') + 1,
+    brief: b.id ?? undefined,
+    hint: 'narrow one of the patterns, or run the two in different waves',
+  };
+}
+
 /**
  * The report as findings. One pair of briefs is one finding, placed on the
  * later brief of the pair, which is usually the one still being written.
  */
 export function collisionFindings(corpus: Corpus, report: CollisionReport): Finding[] {
-  const severity = (id: string): Severity | null => {
-    const rule = COLLISION_RULES.find((r) => r.id === id) as RuleInfo;
-    const setting = severityOf(corpus, id, rule.severity);
-    return setting === 'off' ? null : setting;
-  };
   const findings: Finding[] = [];
-  const collision = severity('collision');
-  const unscoped = severity('unscoped');
-  const sharedDirectory = severity('shared-directory');
+  const collision = collisionSeverity(corpus, 'collision');
+  const undecided = collisionSeverity(corpus, 'collision-undecided');
+  const unscoped = collisionSeverity(corpus, 'unscoped');
+  const sharedDirectory = collisionSeverity(corpus, 'shared-directory');
   for (const wave of report.waves) {
     if (collision !== null) {
       for (const c of wave.collisions) {
@@ -162,6 +180,9 @@ export function collisionFindings(corpus: Corpus, report: CollisionReport): Find
         });
       }
     }
+    if (undecided !== null) {
+      for (const u of wave.undecided) findings.push(undecidedFinding(undecided, u.a, u.b, u.patterns, wave.wave));
+    }
     if (sharedDirectory !== null) {
       for (const s of wave.shared) {
         findings.push({
@@ -171,22 +192,26 @@ export function collisionFindings(corpus: Corpus, report: CollisionReport): Find
           file: s.b.file,
           line: lineOfField(s.b, 'affectedFiles') + 1,
           brief: s.b.id ?? undefined,
+          hint: 'check that the two do not depend on one decision in that directory; if they do, order them',
         });
       }
     }
     if (unscoped !== null) {
-      for (const brief of wave.unscoped) {
-        findings.push({
-          rule: 'unscoped',
-          severity: unscoped,
-          message: `declares no affectedFiles, so it cannot be checked against the ${wave.briefs.length - 1} other brief(s) ${where(wave.wave)}`,
-          file: brief.file,
-          line: 1,
-          brief: brief.id ?? undefined,
-          hint: 'list the files or globs this round writes under "affectedFiles"',
-        });
-      }
+      for (const brief of wave.unscoped) findings.push(unscopedFinding(unscoped, brief, `the ${wave.briefs.length - 1} other brief(s) ${where(wave.wave)}`));
     }
   }
   return findings;
+}
+
+/** A brief with no scope, which nothing can be proved apart from. */
+export function unscopedFinding(severity: Severity, brief: Brief, others: string): Finding {
+  return {
+    rule: 'unscoped',
+    severity,
+    message: `declares no affectedFiles, so it cannot be checked against ${others}`,
+    file: brief.file,
+    line: 1,
+    brief: brief.id ?? undefined,
+    hint: 'list the files or globs this round writes under "affectedFiles"',
+  };
 }

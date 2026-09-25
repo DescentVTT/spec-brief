@@ -10,9 +10,10 @@
 import type { Plan } from './archive.js';
 import type { Brief } from './brief.js';
 import type { Config, SectionRule } from './config.js';
-import { type CollisionReport, inWords } from './collisions.js';
+import type { CollisionReport } from './collisions.js';
 import { summarise } from './lint.js';
 import { ARCHIVE_RULES, COLLISION_RULES, RULES } from './rules.js';
+import { inWords } from './text.js';
 import type { Finding, Severity } from './types.js';
 
 export type Format = 'pretty' | 'json' | 'sarif' | 'github';
@@ -231,13 +232,25 @@ export function prettyMatrix(report: CollisionReport, style: Style): string {
     out.push(paint(style, 'bold', `${title} \u00b7 ${plural(wave.briefs.length, 'brief')}`));
     const names = wave.briefs.map(label);
     const width = Math.max(3, ...names.map((n) => n.length));
-    const hits = new Set(wave.collisions.flatMap((c) => [`${label(c.a)}\u0000${label(c.b)}`, `${label(c.b)}\u0000${label(c.a)}`]));
-    const near = new Set(wave.shared.flatMap((s) => [`${label(s.a)}\u0000${label(s.b)}`, `${label(s.b)}\u0000${label(s.a)}`]));
+    const pairs = (list: readonly { readonly a: Brief; readonly b: Brief }[]): Set<string> =>
+      new Set(list.flatMap((p) => [`${label(p.a)}\u0000${label(p.b)}`, `${label(p.b)}\u0000${label(p.a)}`]));
+    const hits = pairs(wave.collisions);
+    const unknown = pairs(wave.undecided);
+    const near = pairs(wave.shared);
     out.push(`  ${''.padEnd(width)}  ${names.map((n) => n.padStart(width)).join('  ')}`);
     for (const row of names) {
       const cells = names.map((col) => {
         const key = `${row}\u0000${col}`;
-        const mark = row === col ? '\u00b7' : hits.has(key) ? paint(style, 'red', 'X') : near.has(key) ? paint(style, 'yellow', '~') : '\u00b7';
+        const mark =
+          row === col
+            ? '\u00b7'
+            : hits.has(key)
+              ? paint(style, 'red', 'X')
+              : unknown.has(key)
+                ? paint(style, 'yellow', '?')
+                : near.has(key)
+                  ? paint(style, 'yellow', '~')
+                  : '\u00b7';
         return `${' '.repeat(width - 1)}${mark}`;
       });
       out.push(`  ${row.padEnd(width)}  ${cells.join('  ')}`);
@@ -246,6 +259,11 @@ export function prettyMatrix(report: CollisionReport, style: Style): string {
     for (const c of wave.collisions) {
       c.overlaps.forEach((o, i) => {
         out.push(`  ${i === 0 ? paint(style, 'red', 'X') : ' '} ${label(c.a)} "${o.patterns[0]}" and ${label(c.b)} "${o.patterns[1]}" both cover ${o.witness}`);
+      });
+    }
+    for (const u of wave.undecided) {
+      u.patterns.forEach(([x, y], i) => {
+        out.push(`  ${i === 0 ? paint(style, 'yellow', '?') : ' '} ${label(u.a)} "${x}" and ${label(u.b)} "${y}": undecided within the search's budget`);
       });
     }
     for (const s of wave.shared) {
@@ -274,6 +292,7 @@ export function matrixJson(report: CollisionReport): Record<string, unknown> {
         b: c.b.id,
         overlaps: c.overlaps.map((o) => ({ patterns: o.patterns, witness: o.witness })),
       })),
+      undecided: w.undecided.map((u) => ({ a: u.a.id, b: u.b.id, patterns: u.patterns })),
       sharedDirectories: w.shared.map((s) => ({ a: s.a.id, b: s.b.id, directories: s.directories })),
       unscoped: w.unscoped.map((b) => b.id),
     })),

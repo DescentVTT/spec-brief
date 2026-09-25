@@ -13,6 +13,7 @@ import { integrityOf } from '../src/integrity.js';
 import { isRelativeTarget, relativePath, rewriteLinks, splitTarget } from '../src/links.js';
 import { lint, sortFindings } from '../src/lint.js';
 import { linksOf, scan } from '../src/markdown.js';
+import { matrixJson, prettyMatrix } from '../src/report.js';
 import { renderNewBrief, nextId } from '../src/scaffold.js';
 import { toJsonSchema, validate } from '../src/schema.js';
 import { labelMatches, lineEnding, normaliseLabel, slugify } from '../src/text.js';
@@ -166,12 +167,12 @@ describe('Markdown', () => {
 });
 
 describe('globs', () => {
-  it('reads an extension only at the end of a name, with something before the dot', () => {
-    expect(matches('src/a.ts.d', 'src/a.ts.d/x')).toBe(false);
+  it('reads a literal as a file however it is spelt, and a trailing slash as a directory', () => {
+    for (const literal of ['src/a.ts.d', '.github', 'src/a.', 'a.b/c', 'Makefile']) {
+      expect(matches(literal, `${literal}/x`), literal).toBe(false);
+      expect(matches(literal, literal), literal).toBe(true);
+    }
     expect(matches('src/v1.x/', 'src/v1.x/a')).toBe(true);
-    expect(matches('.github', '.github/x')).toBe(true);
-    expect(matches('src/a.', 'src/a./x')).toBe(true);
-    expect(matches('a.b/c', 'a.b/c/d')).toBe(true);
   });
 
   it('refuses a backslash before a letter or a digit, or at the end, and reads it before anything else as an escape', () => {
@@ -203,13 +204,13 @@ describe('globs', () => {
   });
 
   it('counts nested braces when splitting alternatives, and allows exactly the limit', () => {
-    expect(glob('{a,{b,c}}').alternatives).toHaveLength(3);
-    expect(glob('{{a,b},c}').alternatives).toHaveLength(3);
-    expect(glob('{a,b}{c,d}{e,f}{g,h}{i,j}{k,l}{m,n}{o,p}').alternatives).toHaveLength(256);
+    expect(glob('{a,{b,c}}').literals.map((l) => l.path)).toEqual(['a', 'b', 'c']);
+    expect(glob('{{a,b},c}').literals.map((l) => l.path)).toEqual(['a', 'b', 'c']);
+    expect(glob('{a,b}{c,d}{e,f}{g,h}{i,j}{k,l}{m,n}{o,p}').literals).toHaveLength(256);
     expect(parseGlob('{a,b}{c,d}{e,f}{g,h}{i,j}{k,l}{m,n}{o,p}{q,r}').ok).toBe(false);
     expect(parseGlob('{a,{b}').ok).toBe(false);
     expect(parseGlob('{a,[b}').ok).toBe(false);
-    expect(glob('{a\\,b}').alternatives).toHaveLength(1);
+    expect(glob('{a\\,b}').literals.map((l) => l.path)).toEqual(['a,b']);
   });
 
   it('reads classes with escapes, dashes and a first bracket', () => {
@@ -241,21 +242,14 @@ describe('globs', () => {
     expect(intersectGlobs(glob('**/b'), glob('a/**'))).toBe('a/b');
     expect(intersectGlobs(glob('a/**/c'), glob('a/b/**'))).toBe('a/b/c');
     expect(intersectGlobs(glob('x/{a,b}'), glob('x/b'))).toBe('x/b');
-    expect(intersectGlobs(glob('[!x]'), glob('[!a]'))).toBe('0');
-    expect(intersectGlobs(glob('[.]'), glob('?'))).toBe('.');
-  });
-
-  it('picks the witness a person would type, and steps over the slash', () => {
-    expect(intersectGlobs(glob('[.-9]'), glob('[!.]'))).toBe('0');
-    expect(intersectGlobs(glob('[!a-z0-9_x-]'), glob('?'))).toBe('!');
-    expect(intersectGlobs(glob('[!!-.x_a-]'), glob('?'))).toBe('0');
   });
 
   it('roots a glob in its literal directories', () => {
     expect(globBase(glob('src/*/x.ts'))).toBe('src');
     expect(globBase(glob('src/a*/b'))).toBe('src');
     expect(globBase(glob('{src,lib}/a.ts'))).toBe('src');
-    expect(globBase(glob('src/lib'))).toBe('src/lib');
+    expect(globBase(glob('src/lib'))).toBe('src');
+    expect(globBase(glob('src/lib/'))).toBe('src/lib');
   });
 });
 
@@ -378,14 +372,68 @@ describe('the corpus', () => {
 });
 
 describe('collisions', () => {
-  it('asks the tree whether a literal path is a file', () => {
+  it('asks the tree whether a literal path is a directory, and reads it as a file otherwise', () => {
     const corpus = corpusOf({
-      'briefs/001_a.md': goodBrief({ wave: '1', affectedFiles: '[Makefile]' }),
+      'briefs/001_a.md': goodBrief({ wave: '1', affectedFiles: '[build]' }),
       'briefs/002_b.md': goodBrief({ wave: '1', affectedFiles: '["**/x"]' }),
     });
-    expect(collisions(corpus).waves[0]?.collisions.flatMap((c) => c.overlaps.map((o) => o.witness))).toEqual(['Makefile/x']);
-    expect(collisions(corpus, { repoFiles: ['Makefile'] }).waves[0]?.collisions).toEqual([]);
-    expect(collisions(corpus, { repoFiles: null }).waves[0]?.collisions).toHaveLength(1);
+    expect(collisions(corpus).waves[0]?.collisions).toEqual([]);
+    expect(collisions(corpus, { repoFiles: null }).waves[0]?.collisions).toEqual([]);
+    expect(collisions(corpus, { repoFiles: ['build'] }).waves[0]?.collisions).toEqual([]);
+    const tree = collisions(corpus, { repoFiles: ['build/y'] });
+    expect(tree.waves[0]?.collisions.flatMap((c) => c.overlaps.map((o) => o.witness))).toEqual(['build/x']);
+  });
+
+  it('names a file as the witness, never the directory a trailing globstar is under', () => {
+    const corpus = corpusOf({
+      'briefs/001_a.md': goodBrief({ wave: '1', affectedFiles: '[docs/adr/**]' }),
+      'briefs/002_b.md': goodBrief({ wave: '1', affectedFiles: '[docs/adr/**]' }),
+    });
+    expect(collisions(corpus).waves[0]?.collisions[0]?.overlaps).toEqual([{ patterns: ['docs/adr/**', 'docs/adr/**'], witness: 'docs/adr/x' }]);
+  });
+
+  it('counts no collision on a file either brief protects', () => {
+    const pair = (b: string) =>
+      corpusOf({
+        'briefs/001_a.md': goodBrief({ wave: '1', affectedFiles: '[src/**]', protectedFiles: '[src/db/schema.ts]' }),
+        'briefs/002_b.md': goodBrief({ wave: '1', affectedFiles: b }),
+      });
+    expect(collisions(pair('[src/db/schema.ts]')).waves[0]?.collisions).toEqual([]);
+    expect(collisions(pair('[src/db/*.ts]')).waves[0]?.collisions.map((c) => c.overlaps[0]?.witness)).toEqual(['src/db/.ts']);
+  });
+
+  it('shows a pair it could not decide as undecided, in the terminal and in JSON', () => {
+    const corpus = corpusOf({
+      'briefs/001_a.md': goodBrief({ wave: '1', affectedFiles: '[src/**]' }),
+      'briefs/002_b.md': goodBrief({ wave: '1', affectedFiles: '["**/*.ts", "**/*.md"]' }),
+    });
+    const report = collisions(corpus, { budget: 1 });
+    expect(report.waves[0]?.collisions).toEqual([]);
+    expect(report.waves[0]?.shared).toEqual([]);
+    expect(prettyMatrix(report, { color: false }).split('\n')).toEqual([
+      'wave 1 · 2 briefs',
+      '       001  002',
+      '  001    ·    ?',
+      '  002    ?    ·',
+      '  ? 001 "src/**" and 002 "**/*.ts": undecided within the search\'s budget',
+      '    001 "src/**" and 002 "**/*.md": undecided within the search\'s budget',
+    ]);
+    expect(matrixJson(report).waves).toEqual([
+      {
+        wave: 1,
+        briefs: ['001', '002'],
+        collisions: [],
+        undecided: [{ a: '001', b: '002', patterns: [['src/**', '**/*.ts'], ['src/**', '**/*.md']] }],
+        sharedDirectories: [],
+        unscoped: [],
+      },
+    ]);
+    // Undecided is neither: with the budget it needs, the pair collides.
+    expect(collisions(corpus).waves[0]?.collisions).toHaveLength(1);
+    expect(collisions(corpus, { budget: 1 }).waves[0]?.undecided).toHaveLength(1);
+    expect(collisionFindings(corpus, report).map((f) => f.rule)).toEqual(['collision-undecided']);
+    const quiet = corpusOf(Object.fromEntries(corpus.briefs.map((b) => [b.file, b.text])), config({ rules: { 'collision-undecided': 'off' } }));
+    expect(collisionFindings(quiet, report)).toEqual([]);
   });
 
   it('reports no shared directory at the root, and several in order, as one pair', () => {

@@ -25,7 +25,9 @@ files -> brief.ts -> corpus.ts -> rules.ts / collisions.ts / archive.ts -> repor
 | `text.ts` | Lines, line endings, section-name normalisation, slugs, templates. |
 | `frontmatter.ts` | The flat YAML subset: read with lines, edit one key without touching the rest. |
 | `markdown.ts` | What is code or a comment; headings, sections, task items and their continuations, link destinations. |
-| `glob.ts` | Parsing, matching and intersecting globs, by dynamic programming. |
+| `glob.ts` | Scope patterns over spec-core's `path` dialect: spec-brief's refusals, reading a literal from the tree, the 0.1 library functions. |
+| `scope.ts` | A brief's writable scope, affected less protected; where two scopes meet; patterns the protections cover. |
+| `vendor/spec-core/` | spec-core's `pattern` and `path` modules, copied by its `scripts/vendor.mjs` and verified by hash. Never edited here. |
 | `links.ts` | Relative paths, and rewriting links when a file moves. |
 | `schema.ts` | A small schema language that validates and renders JSON Schema. |
 | `config.ts` | What configuration may say, the defaults, and loading. |
