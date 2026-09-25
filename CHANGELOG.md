@@ -29,6 +29,9 @@ Notable changes, newest first. Versions follow [semver](https://semver.org).
   collision carries `overlaps`, a list of `{ patterns, witness }`, in place of
   `patterns` and `witness`, and a `sharedDirectories` entry carries
   `directories` in place of `directory`.
+- A plugin package whose `exports` offer only the `import` condition loads.
+  Packages were resolved with `require.resolve`, which reads `exports` under
+  the require conditions, so an ESM-only plugin could not be found.
 
 ## 0.1.0
 
