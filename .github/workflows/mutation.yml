@@ -3,7 +3,7 @@ name: Mutation
 # Two sweeps, recorded in docs/adr/0009-mutation-testing.md.
 #
 # The core sweep mutates the pure modules and holds them to the unit suite. It
-# runs on every push to main, and its `break` in stryker.config.mjs is the gate.
+# runs on every push to main, and its `break` in stryker.core.config.mjs is the gate.
 #
 # The full sweep mutates everything, the CLI and the engine included, against
 # the whole suite. Its tests spawn git and write to disk, so it is slower by an
