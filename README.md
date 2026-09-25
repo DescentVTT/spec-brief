@@ -138,7 +138,7 @@ Reopens an archived brief: the banner and the hash come off, the status goes bac
 | `archiving.tasks` | `"all"` | `"all"`, or the sections whose boxes must be closed. |
 | `archiving.dispositions` | `**Delegated`, `**Accepted debt`, `**Rejected` | What a note under an open box starts with to close it. |
 | `archiving.banner` | see [`src/config.ts`](src/config.ts) | Banner lines, with `{date}`, `{summary}`, `{pr}`, `{commit}`, `{diffstat}`, `{links}`, `{id}`, `{title}`, `{author}`. A line with an empty placeholder is left out. |
-| `archiving.rewriteLinks` | `true` | Rewrite relative links when a brief moves. |
+| `archiving.rewriteLinks` | `true` | Rewrite relative links when a brief moves: its own, and the ones other live briefs hold to it. Off, neither is edited, and the links other briefs are left holding are reported as `stale-link`. |
 | `archiving.freeze` | `true` | Write an integrity hash, so a later edit is caught. |
 | `archiving.base` | `null` | Branch the diff is measured from, such as `"main"`. |
 | `rules` | `{}` | Severity per rule: `off`, `note`, `warning` or `error`. |
@@ -203,6 +203,7 @@ Section names compare without case, typographic quotes, emphasis, a leading numb
 | `unscoped` | note | A brief sharing a wave that declares no scope (`matrix`). |
 | `shared-directory` | off | Two briefs in one wave writing into the same directory (`matrix`). |
 | `scope-unmeasured` | warning | A brief with a scope archived without the files its round changed, so nothing checked the scope (`archive`). |
+| `stale-link` | warning | Links in live briefs left pointing where a brief used to be, when `archiving.rewriteLinks` is off (`archive`, `unarchive`). |
 <!-- rules:end -->
 
 `archive` refuses with its own reasons - `open-task`, `archive-draft`, `dependency-open`, `dirty-tree`, `protected-file`, `out-of-scope`, `archive-exists` - which are not lint rules: they are about whether this round is done, not whether the brief is well written. The rules marked `archive` above are raised by archival too, and configuration sets their severity like any other.

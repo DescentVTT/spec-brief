@@ -379,7 +379,7 @@ async function runTransition(run: Run, action: 'archive' | 'unarchive'): Promise
           strict: run.strict,
           noGit: flag(run.values, 'no-git'),
         })
-      : engine.planUnarchive(reference);
+      : engine.planUnarchive(reference, { strict: run.strict });
   const refused = plan.blocking.length > 0;
   if (!refused && !dryRun) await engine.apply(plan);
   if (run.format === 'json') run.out(jsonDocument(action, run.version, { ok: !refused, dryRun, plan: planJson(plan) }));

@@ -293,6 +293,22 @@ describe('archive and unarchive', () => {
     expect(both).toContain('out-of-scope');
   });
 
+  it('refuses under --strict to reopen a brief whose links it would leave behind', async () => {
+    const root = plain('cli-unarchive-strict', {
+      '.spec-brief.json': JSON.stringify({ archiving: { rewriteLinks: false } }),
+      'briefs/archive/001_a.md': goodBrief({ status: 'archived' }),
+      'briefs/002_b.md': goodBrief({}, '\n[a](archive/001_a.md)\n'),
+    });
+    const strict = await run(root, ['unarchive', '1', '--strict', '--no-color']);
+    expect(strict.code).toBe(EXIT_FAILED);
+    expect(strict.out).toContain('stale-link');
+    expect(existsSync(join(root, 'briefs', 'archive', '001_a.md'))).toBe(true);
+    const lenient = await run(root, ['unarchive', '1', '--no-color']);
+    expect(lenient.code).toBe(EXIT_OK);
+    expect(lenient.out).toContain('briefs/002_b.md:19');
+    expect(readFileSync(join(root, 'briefs', '002_b.md'), 'utf8')).toContain('[a](archive/001_a.md)');
+  });
+
   it('reports a conflict and an unexpected failure with exit 2', async () => {
     const root = repo('cli-archive-conflict', { 'briefs/001_a.md': goodBrief() });
     writeTree(root, { 'briefs/archive/001_a.md/blocker': '' });

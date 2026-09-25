@@ -17,6 +17,7 @@ import { brief, config, corpusOf, goodBrief } from './helpers.js';
  */
 
 const A = 'briefs/001_a.md';
+const B = 'briefs/002_b.md';
 const DATE = '2026-09-24';
 
 const table = (findings: readonly Finding[]): string[] =>
@@ -265,5 +266,71 @@ describe('dispositions, after 0.1.0', () => {
       '\n  **Rejected** after a blank line',
     ];
     for (const note of notes) expect(open(note), note).toEqual([]);
+  });
+});
+
+describe('links with rewriting off, after 0.1.0', () => {
+  const off = config({ archiving: { rewriteLinks: false } });
+  const STALE =
+    'warning stale-link: links on 2 line(s) of other live briefs will stop resolving when it moves: briefs/002_b.md:19, briefs/003_c.md:19' +
+    ' | turn "archiving.rewriteLinks" on to have them rewritten, or fix them by hand';
+  const files = {
+    [A]: goodBrief({}, '\n[docs](../docs/x.md)\n'),
+    [B]: goodBrief({}, '\nAfter [one](001_a.md#top) and [again](./001_a.md).\n'),
+    'briefs/003_c.md': goodBrief({}, '\n[a](001_a.md)\n'),
+    'briefs/archive/000_z.md': goodBrief({ status: 'archived' }, '\n[a](../001_a.md)\n'),
+  };
+
+  it('writes no other brief, and names the links it leaves behind', () => {
+    // The input the review archived with: the plan still wrote briefs/002_b.md.
+    const corpus = corpusOf(files, off);
+    const plan = planArchive(corpus, the(corpus, '001'), { date: DATE });
+    expect(plan.ops.map((o) => [o.kind, o.path])).toEqual([
+      ['write', 'briefs/archive/001_a.md'],
+      ['remove', A],
+    ]);
+    expect(plan.inboundRewritten).toEqual([]);
+    expect(plan.inboundFrozen).toEqual([{ file: 'briefs/archive/000_z.md', line: 19 }]);
+    expect(written(plan, 'briefs/archive/001_a.md')).toContain('[docs](../docs/x.md)');
+    expect(plan.blocking).toEqual([]);
+    expect(table(plan.warnings)).toEqual([`${A}:1 ${STALE}`]);
+    expect(table(planArchive(corpus, the(corpus, '001'), { date: DATE, strict: true }).blocking)).toEqual([`${A}:1 ${STALE.replace('warning', 'error')}`]);
+    // Rewriting on, the same links are rewritten and nothing is reported.
+    const on = corpusOf(files);
+    const rewritten = planArchive(on, the(on, '001'), { date: DATE });
+    expect(rewritten.inboundRewritten).toEqual([B, 'briefs/003_c.md']);
+    expect(rewritten.warnings).toEqual([]);
+  });
+
+  it('reopens under the same switch', () => {
+    const archived = corpusOf({ 'briefs/archive/001_a.md': goodBrief({ status: 'archived' }), [B]: goodBrief({}, '\n[a](archive/001_a.md)\n') }, off);
+    const back = planUnarchive(archived, the(archived, '001'));
+    expect(back.ops.map((o) => [o.kind, o.path])).toEqual([
+      ['write', A],
+      ['remove', 'briefs/archive/001_a.md'],
+    ]);
+    expect(table(back.warnings)).toEqual([
+      'briefs/archive/001_a.md:1 warning stale-link: links on 1 line(s) of other live briefs will stop resolving when it moves: briefs/002_b.md:19' +
+        ' | turn "archiving.rewriteLinks" on to have them rewritten, or fix them by hand',
+    ]);
+    expect(back.blocking).toEqual([]);
+    expect(planUnarchive(archived, the(archived, '001'), { strict: true }).blocking.map((f) => [f.rule, f.severity])).toEqual([['stale-link', 'error']]);
+  });
+
+  it('takes the severity of a stale link from the configuration', () => {
+    const quiet = corpusOf(files, config({ archiving: { rewriteLinks: false }, rules: { 'stale-link': 'off' } }));
+    const plan = planArchive(quiet, the(quiet, '001'), { date: DATE, strict: true });
+    expect(plan.warnings).toEqual([]);
+    expect(plan.blocking).toEqual([]);
+    const loud = corpusOf(files, config({ archiving: { rewriteLinks: false }, rules: { 'stale-link': 'error' } }));
+    expect(planArchive(loud, the(loud, '001'), { date: DATE }).blocking.map((f) => f.rule)).toEqual(['stale-link']);
+  });
+
+  it('names five places and counts the rest', () => {
+    const many = Object.fromEntries(['002_b', '003_c', '004_d', '005_e', '006_f', '007_g'].map((n) => [`briefs/${n}.md`, goodBrief({}, '\n[a](001_a.md)\n')]));
+    const corpus = corpusOf({ [A]: goodBrief(), ...many }, off);
+    expect(planArchive(corpus, the(corpus, '001'), { date: DATE }).warnings[0]?.message).toBe(
+      'links on 6 line(s) of other live briefs will stop resolving when it moves: briefs/002_b.md:19, briefs/003_c.md:19, briefs/004_d.md:19, briefs/005_e.md:19, briefs/006_f.md:19, and 1 more',
+    );
   });
 });

@@ -56,6 +56,7 @@ describe('the rule catalogue', () => {
       unscoped: 'note',
       'shared-directory': 'off',
       'scope-unmeasured': 'warning',
+      'stale-link': 'warning',
     });
   });
 });

@@ -13,7 +13,7 @@ import { access } from 'node:fs/promises';
 import { dirname, relative, resolve, sep } from 'node:path';
 
 import { applyPlan } from './apply.js';
-import { planArchive, type Plan, planUnarchive, type PullRequest, type Unmeasured } from './archive.js';
+import { planArchive, type Plan, planUnarchive, type PullRequest, type UnarchiveRequest, type Unmeasured } from './archive.js';
 import type { Brief } from './brief.js';
 import { collisionFindings, collisions, type CollisionOptions, type CollisionReport } from './collisions.js';
 import { type Config, DEFAULT_CONFIG, locateConfig, parseConfig } from './config.js';
@@ -298,8 +298,8 @@ export class BriefEngine {
     });
   }
 
-  planUnarchive(reference: string): Plan {
-    return planUnarchive(this.corpus, this.find(reference));
+  planUnarchive(reference: string, options: UnarchiveRequest = {}): Plan {
+    return planUnarchive(this.corpus, this.find(reference), options);
   }
 
   /** Executes a plan and reads the briefs again. A refused plan is never applied. */
