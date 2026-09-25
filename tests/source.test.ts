@@ -1,4 +1,5 @@
-import { readdirSync, readFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 
 import { describe, expect, it } from 'vitest';
 
@@ -23,24 +24,21 @@ function* walk(directory: string): Generator<string> {
 }
 
 const sources = [...walk('src')];
-const everything = [
-  ...sources,
-  ...walk('tests'),
-  ...walk('bin'),
-  ...walk('scripts'),
-  ...walk('docs'),
-  ...walk('.github'),
-  'README.md',
-  'CHANGELOG.md',
-  'CLAUDE.md',
-  'CONTRIBUTING.md',
-  'package.json',
-  'schema.json',
-  'stryker.config.mjs',
-];
+
+/**
+ * Every file the repository holds or is about to: tracked, or untracked and
+ * not ignored. A list kept by hand missed the configuration files and the
+ * briefs; git's does not. This suite is not the core one, so it may ask git.
+ */
+const everything = execFileSync('git', ['ls-files', '-z', '--cached', '--others', '--exclude-standard'], { encoding: 'utf8' })
+  .split('\0')
+  .filter((path) => path !== '' && existsSync(path));
 
 describe('the tree', () => {
   it('has LF line endings and no control characters but tabs', () => {
+    for (const file of ['briefs/002_a-mutation-gate-on-pull-requests.md', 'tsconfig.json', 'vitest.core.config.ts', '.gitattributes', 'LICENSE']) {
+      expect(everything, file).toContain(file);
+    }
     const offenders = everything.filter((file) => {
       const text = readFileSync(file, 'utf8');
       for (let i = 0; i < text.length; i += 1) {
