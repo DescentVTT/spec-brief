@@ -19,6 +19,7 @@ export default defineConfig({
       'tests/engine.test.ts',
       'tests/io.test.ts',
       'tests/source.test.ts',
+      'tests/vendor.test.ts',
       '**/node_modules/**',
     ],
     environment: 'node',

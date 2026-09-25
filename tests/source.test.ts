@@ -81,6 +81,19 @@ describe('the tree', () => {
     expect(configs.filter((name) => !globs.some((glob) => matchGlob(glob, name)))).toEqual([]);
   });
 
+  it('builds no RegExp at run time', () => {
+    // A pattern a user wrote, compiled to a backtracking RegExp, can take
+    // seconds to fail on one long name. Globs run on spec-core's automata; a
+    // RegExp here is a literal the author wrote and measured.
+    const code = (file: string): string =>
+      readFileSync(file, 'utf8')
+        .replace(/\/\*[\s\S]*?\*\//g, '')
+        .replace(/\/\/.*$/gm, '');
+    const offenders = sources.filter((file) => file.endsWith('.ts') && /\bRegExp\s*\(/.test(code(file)));
+    expect(offenders).toEqual([]);
+    expect(sources).toContain('src/vendor/spec-core/pattern/glob.ts');
+  });
+
   it('keeps I/O at the edges', () => {
     // The modules that meet the disk, git or the process. Everything else is
     // a pure function of its arguments, which is why the suite can hand it
