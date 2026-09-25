@@ -138,6 +138,7 @@ function expandBraces(pattern: string): string[] | string {
   return [pattern];
 }
 
+/** A brace group's alternatives: split on its own commas, not on a nested group's or a class's. */
 function splitTopLevel(body: string): string[] {
   const parts: string[] = [];
   let depth = 0;
@@ -145,7 +146,10 @@ function splitTopLevel(body: string): string[] {
   for (let i = 0; i < body.length; i += 1) {
     const ch = body.charAt(i);
     if (ch === '\\') i += 1;
-    else if (ch === '{') depth += 1;
+    else if (ch === '[') {
+      const close = classEnd(body, i);
+      if (close > 0) i = close;
+    } else if (ch === '{') depth += 1;
     else if (ch === '}') depth -= 1;
     else if (ch === ',' && depth === 0) {
       parts.push(body.slice(start, i));
