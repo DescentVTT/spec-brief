@@ -1,4 +1,4 @@
-import { readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { cpSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { afterAll, describe, expect, it } from 'vitest';
@@ -7,7 +7,7 @@ import { ConfigError, DEFAULT_CONFIG, resolveConfig } from '../src/config.js';
 import { BriefEngine, EngineError, isDate, today } from '../src/engine.js';
 import { MemoryFileSystem } from '../src/fs.js';
 import type { Git } from '../src/git.js';
-import { asPlugin, loadPlugins } from '../src/plugins.js';
+import { asPlugin, exportsTarget, loadPlugins } from '../src/plugins.js';
 import { commitAll, goodBrief, initRepo, tempDir, writeTree } from './helpers.js';
 
 const made: string[] = [];
@@ -354,6 +354,58 @@ describe('plugins', () => {
     );
     expect(plugins.map((p) => p.name)).toEqual(['obj', 'fac-x', 'named', 'pkg']);
     expect(plugins[2]?.options).toBe(1);
+  });
+
+  it('loads a package that exports only for import, found from the root or above it', async () => {
+    const root = dir('plugins-esm');
+    const fixture = join('tests', 'fixtures', 'esm-only-plugin');
+    cpSync(fixture, join(root, 'node_modules', 'esm-only-plugin'), { recursive: true });
+    cpSync(fixture, join(root, 'node_modules', '@acme', 'esm-only-plugin'), { recursive: true });
+    mkdirSync(join(root, 'sub'));
+    const found = await loadPlugins(
+      [
+        { module: 'esm-only-plugin', options: undefined },
+        { module: 'esm-only-plugin/extra', options: { suffix: 'x' } },
+      ],
+      join(root, 'sub'),
+    );
+    expect(found.map((p) => p.name)).toEqual(['esm-only', 'esm-extra-x']);
+    expect((await loadPlugins([{ module: '@acme/esm-only-plugin', options: undefined }], root)).map((p) => p.name)).toEqual(['esm-only']);
+    await expect(loadPlugins([{ module: 'esm-only-plugin/missing', options: undefined }], root)).rejects.toThrow(
+      'esm-only-plugin/missing: could not be loaded: esm-only-plugin exports no "./missing" for import',
+    );
+    writeTree(root, { 'node_modules/broken/package.json': '{' });
+    await expect(loadPlugins([{ module: 'broken', options: undefined }], root)).rejects.toThrow('broken: could not be loaded');
+  });
+
+  it('reads "exports" under the conditions of an import', () => {
+    expect(exportsTarget('./i.js', '.')).toBe('./i.js');
+    expect(exportsTarget('./i.js', './x')).toBeNull();
+    expect(exportsTarget(null, '.')).toBeNull();
+    expect(exportsTarget({ require: './r.cjs', import: './i.mjs' }, '.')).toBe('./i.mjs');
+    expect(exportsTarget({ node: { import: './n.mjs' }, default: './d.js' }, '.')).toBe('./n.mjs');
+    expect(exportsTarget({ browser: './b.js', default: './d.js' }, '.')).toBe('./d.js');
+    expect(exportsTarget({ require: './r.cjs' }, '.')).toBeNull();
+    expect(exportsTarget({ import: null, default: './d.js' }, '.')).toBeNull();
+    expect(exportsTarget({ '.': ['lib/bad.js', './good.js'] }, '.')).toBe('./good.js');
+    expect(exportsTarget({ '.': [{ require: './r.cjs' }] }, '.')).toBeNull();
+    expect(exportsTarget({ '.': './i.js', import: './x.js' }, '.')).toBeNull();
+    const map = { '.': './i.js', './a': { import: './a.js' }, './p/*': './dist/p/*.js', './p/x/*': './x/*.js', './hidden/*': null, './raw': './raw*.js' };
+    expect(exportsTarget(map, '.')).toBe('./i.js');
+    expect(exportsTarget(map, './a')).toBe('./a.js');
+    expect(exportsTarget(map, './p/y')).toBe('./dist/p/y.js');
+    expect(exportsTarget(map, './p/x/z')).toBe('./x/z.js');
+    expect(exportsTarget(map, './hidden/q')).toBeNull();
+    expect(exportsTarget(map, './raw')).toBe('./raw*.js');
+    expect(exportsTarget(map, './b')).toBeNull();
+    // Of two patterns with one prefix the longer key wins, and a pattern needs a match.
+    expect(exportsTarget({ './a*': './y/*.js', './a*b': './x/*.js' }, './a1b')).toBe('./x/1.js');
+    expect(exportsTarget({ './a*': './y/*.js' }, './a')).toBeNull();
+    expect(exportsTarget({ './a*b*': './z.js' }, './a1b2')).toBeNull();
+    // A target may not leave the package or reach into another.
+    expect(exportsTarget({ './*': './*.js' }, './../x')).toBeNull();
+    expect(exportsTarget({ './*': './*' }, './node_modules/x')).toBeNull();
+    expect(exportsTarget({ './*': './*' }, './a/./b')).toBeNull();
   });
 
   it('refuses a module that does not load, that exports no plugin, or that repeats a name', async () => {

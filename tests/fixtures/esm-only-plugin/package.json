@@ -1,0 +1,9 @@
+{
+  "name": "esm-only-plugin",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": { "import": "./index.js" },
+    "./extra": { "import": "./extra.js" }
+  }
+}

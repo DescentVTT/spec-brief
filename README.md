@@ -255,6 +255,8 @@ export default (options) => ({
 
 This is where integrations belong. A tool that defines a format - signed departures, recorded reproducers, a code graph's blast radius - is the one that can check it, and spec-brief carries no copy of formats it does not own. Loading a plugin runs its code, exactly as loading a linter configuration does.
 
+A path is relative to the root. A package is found from the root as an `import` there would find it, its `exports` read under the import conditions, so a plugin published as ESM only loads.
+
 ## What it does not do
 
 - **No status file.** There is no `manifest.json` to keep in step. A brief and the directory it sits in are the record; `list --format json` is the index, computed when asked. A committed index is also the one file every round merging in parallel edits.
