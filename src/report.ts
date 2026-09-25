@@ -345,6 +345,14 @@ export function matrixJson(report: CollisionReport): Record<string, unknown> {
 }
 
 /**
+ * The waves a schedule uses, in order. They appear in order too: a brief goes
+ * into a wave only when it is the first or the one before it is occupied.
+ */
+function wavesOf(s: Schedule): number[] {
+  return [...new Set(s.placements.map((p) => p.proposed))];
+}
+
+/**
  * The schedule for a person: each wave with its briefs, and under a brief whose
  * wave would change, why it goes where it goes. `written` is `null` when
  * nothing was asked to be written.
@@ -355,7 +363,7 @@ export function prettySchedule(s: Schedule, written: readonly string[] | null, s
   const width = Math.max(3, ...s.placements.map((p) => label(p.brief).length));
   const titleOf = (b: Brief): string => b.title ?? b.name;
   const titles = Math.max(0, ...s.placements.map((p) => titleOf(p.brief).length));
-  const waves = [...new Set(s.placements.map((p) => p.proposed))].sort((a, b) => a - b);
+  const waves = wavesOf(s);
   for (const wave of waves) {
     const here = s.placements.filter((p) => p.proposed === wave);
     out.push(paint(style, 'bold', `wave ${wave} · ${plural(here.length, 'brief')}`));
@@ -386,10 +394,11 @@ export function prettySchedule(s: Schedule, written: readonly string[] | null, s
     out.push(`${plural(moving, 'brief')} would move; "spec-brief schedule --write" writes the waves`);
   } else if (s.placements.length > 0) {
     out.push('the declared waves hold');
-  } else if (s.cycles.length === 0 && s.unplaced.length === 0 && s.deferred.length === 0) {
+  } else if (s.cycles.length === 0 && s.deferred.length === 0) {
+    // A brief is unplaced only behind a cycle or a deferral, so this is a corpus with no live brief.
     out.push('no live briefs');
   }
-  return out.join('\n').trimEnd();
+  return out.join('\n');
 }
 
 /** The schedule as JSON: a row per placed brief with its declared and proposed wave and why. */
@@ -400,7 +409,7 @@ export function scheduleJson(s: Schedule): Record<string, unknown> {
     if (p.reason === 'undecided') return { ...base, patterns: p.patterns };
     return base;
   };
-  const waves = [...new Set(s.placements.map((p) => p.proposed))].sort((a, b) => a - b);
+  const waves = wavesOf(s);
   return {
     first: s.first,
     waves: waves.map((wave) => ({ wave, briefs: s.placements.filter((p) => p.proposed === wave).map((p) => p.brief.id) })),

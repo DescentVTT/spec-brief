@@ -27,9 +27,17 @@ describe('archiving', () => {
   it('refuses a deferred brief, whose work has not run', () => {
     const corpus = corpusOf({ [A]: goodBrief({ status: 'deferred', trigger: 'when the second tenant signs' }) });
     const plan = planArchive(corpus, corpus.briefs[0]!, { date: '2026-09-24' });
-    expect(plan.blocking.map((f) => [f.rule, f.line, f.message, f.hint])).toEqual([
-      ['archive-deferred', 2, 'is deferred, and deferred work has not been executed', 'set "status: active" when its trigger fires and the round runs'],
+    expect(plan.blocking.map((f) => [f.rule, f.severity, f.line, f.message, f.hint])).toEqual([
+      ['archive-deferred', 'error', 2, 'is deferred, and deferred work has not been executed', 'set "status: active" when its trigger fires and the round runs'],
     ]);
+  });
+
+  it('matches a changed file to a literal scope path as itself or as a directory above it', () => {
+    const corpus = corpusOf({ [A]: goodBrief({ affectedFiles: '[src, lib/a.ts]', protectedFiles: '[src/db]' }) });
+    const changes = ['src/api/x.ts', 'src/db/schema.ts', 'src', 'lib/a.ts', 'lib/b.ts'].map((path) => ({ path, insertions: 1, deletions: 0 }));
+    const plan = planArchive(corpus, corpus.briefs[0]!, { date: '2026-09-24', commit: COMMIT, changes });
+    expect(plan.blocking.map((f) => [f.rule, f.path])).toEqual([['protected-file', 'src/db/schema.ts']]);
+    expect(plan.warnings.map((f) => [f.rule, f.paths])).toEqual([['out-of-scope', ['lib/b.ts']]]);
   });
 
   it('points a link a brief holds to itself at its new place, and plans no second write of it', () => {

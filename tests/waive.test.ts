@@ -51,6 +51,12 @@ describe('a waiver', () => {
     expect(plan.warnings[1]).toMatchObject({ file: A, brief: '001', path: 'src/a.ts' });
   });
 
+  it('matches by path, not by rule alone', () => {
+    const plan = applyWaivers(refused(), [{ plugin: 'p', waiver: { rule: 'protected-file', path: 'src/b.ts', reason: 'r' } }]);
+    expect(plan.blocking.map((f) => f.path)).toEqual(['src/a.ts']);
+    expect(plan.warnings.map((f) => f.path)).toEqual([undefined, 'src/b.ts']);
+  });
+
   it('takes one path at a time out of a refusal that names several, and the refusal with the last', () => {
     const waive = (path: string) => ({ plugin: 'p', waiver: { rule: 'out-of-scope', path, reason: 'r' } });
     const one = applyWaivers(refused(true), [waive('lib/y.ts')], true);

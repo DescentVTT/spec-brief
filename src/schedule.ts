@@ -85,7 +85,8 @@ export function byId(a: Brief, b: Brief): number {
   const y = label(b);
   const numeric = /^\d+$/.test(x) && /^\d+$/.test(y);
   if (numeric && Number(x) !== Number(y)) return Number(x) - Number(y);
-  if (x !== y) return x < y ? -1 : 1;
+  if (x < y) return -1;
+  if (x > y) return 1;
   return a.file < b.file ? -1 : a.file > b.file ? 1 : 0;
 }
 

@@ -16,6 +16,12 @@ describe('a trigger', () => {
       'the day the API is public',
       'post-launch',
       'Mayday',
+      // A word with a number in it is a name, not a date.
+      'v2',
+      '4k',
+      'q5',
+      'rc1',
+      '1stline',
     ]) {
       expect(namesAnEvent(trigger), trigger).toBe(true);
     }
@@ -44,6 +50,10 @@ describe('a trigger', () => {
       'a few months',
       'early next year',
       '(later)',
+      '((later))',
+      'the 1st',
+      '2nd',
+      '3rd',
       '',
       '  --  ',
     ]) {

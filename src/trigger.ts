@@ -36,19 +36,15 @@ const WHEN = new Set([
   ...['in', 'on', 'by', 'at', 'after', 'before', 'until', 'from', 'of', 'the', 'next', 'this', 'end', 'start', 'early', 'mid', 'late'],
 ]);
 
-/** A date or part of one: `2026`, `2026-10`, `2026-10-01`; a quarter, `Q3`; a number or an ordinal, `15`, `15th`. */
-const DATE = /^(?:\d{4}(?:-\d{2}){0,2}|q[1-4]|\d+(?:st|nd|rd|th)?)$/;
+/**
+ * A number or an ordinal - `2026`, `15`, `15th` - or a quarter, `Q3`. A date is
+ * its numbers: `2026-10-01` and `10/01/2026` are read a number at a time.
+ */
+const DATE = /^(?:q[1-4]|\d+(?:st|nd|rd|th)?)$/;
 
-function words(text: string): string[] {
-  return text
-    .toLowerCase()
-    .split(/[\s,;]+/)
-    .flatMap((word) => {
-      const bare = word.replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, '');
-      // An ISO date keeps its hyphens; "mid-2027" is two words.
-      return DATE.test(bare) ? [bare] : bare.split(/[-/.]/);
-    })
-    .filter((word) => word !== '');
+/** The runs of letters and digits, in lower case: `mid-2027` is two words, and punctuation none. */
+function words(text: string): readonly string[] {
+  return text.toLowerCase().match(/[\p{L}\p{N}]+/gu) ?? [];
 }
 
 /** Whether a trigger has a word that says what must happen, rather than only when. */

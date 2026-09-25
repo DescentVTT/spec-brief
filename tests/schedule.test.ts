@@ -167,6 +167,8 @@ describe('the order of briefs', () => {
     const briefs = ['10', '9', 'b', 'a', '9'].map((id, i) => brief(goodBrief({ id }), `briefs/${i}.md`, 'live', cfg));
     expect([...briefs].sort(byId).map((b) => `${b.id}@${b.file}`)).toEqual(['9@briefs/1.md', '9@briefs/4.md', '10@briefs/0.md', 'a@briefs/3.md', 'b@briefs/2.md']);
     expect(byId(briefs[1]!, briefs[1]!)).toBe(0);
+    expect(byId(briefs[4]!, briefs[1]!)).toBeGreaterThan(0);
+    expect(byId(briefs[1]!, briefs[4]!)).toBeLessThan(0);
     const unnamed = brief(goodBrief(), 'briefs/zz.md', 'live', cfg);
     expect(byId(unnamed, briefs[0]!)).toBeGreaterThan(0);
   });
@@ -325,6 +327,119 @@ describe('what schedule says', () => {
     expect((scheduleJson(pair)['briefs'] as unknown[])[1]).toMatchObject({ after: { brief: '001', wave: 1 }, passed: [] });
     const undecided = schedule(corpusOf({ [B(1)]: goodBrief({ affectedFiles: '[src/**]' }), [B(2)]: goodBrief({ affectedFiles: '["**/*.ts"]' }) }), { budget: 1 });
     expect((scheduleJson(undecided)['briefs'] as unknown[])[1]).toMatchObject({ passed: [{ wave: 1, reason: 'undecided', brief: '001', patterns: [['**/*.ts', 'src/**']] }] });
+  });
+});
+
+describe('the edges of the schedule', () => {
+  it('names the earliest of two dependencies in one wave as the one it runs after', () => {
+    const corpus = corpusOf({
+      [B(1)]: goodBrief({ affectedFiles: '[a]' }),
+      [B(2)]: goodBrief({ affectedFiles: '[b]' }),
+      [B(3)]: goodBrief({ affectedFiles: '[c]', dependsOn: '[2, 1]' }),
+    });
+    const after = schedule(corpus).placements[2]?.after;
+    expect([after?.brief.id, after?.wave]).toEqual(['001', 1]);
+  });
+
+  it('says nothing holds a brief with no scope that found its wave empty', () => {
+    const corpus = corpusOf({ [B(1)]: goodBrief(), [B(2)]: goodBrief({ affectedFiles: '[a]' }) });
+    expect(schedule(corpus).placements.map((p) => [p.brief.id, p.proposed, reasons(p)])).toEqual([
+      ['001', 1, ['nothing holds it later']],
+      ['002', 2, ['not wave 1, where 001 declares no affectedFiles and runs alone']],
+    ]);
+  });
+
+  it('writes each finding for its brief, a move from no wave, and every reason', () => {
+    const corpus = corpusOf({
+      [B(1)]: goodBrief({ affectedFiles: '[src/**]', dependsOn: '[2]' }),
+      [B(2)]: goodBrief({ affectedFiles: '[b]', wave: '1', dependsOn: '[1]' }),
+      [B(3)]: goodBrief({ affectedFiles: '[lib/**]', wave: '1' }),
+      [B(4)]: goodBrief({ affectedFiles: '[lib/a.ts, src/x.ts]' }),
+      [B(5)]: goodBrief({ affectedFiles: '[docs/**]', dependsOn: '[3]' }),
+    });
+    const findings = scheduleFindings(corpus, schedule(corpus));
+    expect(findings.map((f) => [f.rule, f.brief, f.message])).toEqual([
+      ['dependency-cycle', '001', 'dependencies form a cycle, so no wave can hold them: 001 -> 002 -> 001'],
+      ['wave-schedule', '004', 'declares no wave; the schedule puts it in wave 2: not wave 1, where 003 also writes lib/a.ts ("lib/a.ts" and "lib/**")'],
+      ['wave-schedule', '005', 'declares no wave; the schedule puts it in wave 2: after 003, in wave 1'],
+    ]);
+    const crowded = corpusOf({
+      [B(1)]: goodBrief({ affectedFiles: '[a/**]', wave: '1' }),
+      [B(2)]: goodBrief({ affectedFiles: '[b/**]', wave: '2', dependsOn: '[1]' }),
+      [B(3)]: goodBrief({ affectedFiles: '[b/x, a/y]', wave: '1', dependsOn: '[1]' }),
+    });
+    expect(scheduleFindings(crowded, schedule(crowded)).map((f) => f.message)).toEqual([
+      'declares wave 1; the schedule puts it in wave 3: after 001, in wave 1; not wave 2, where 002 also writes b/x ("b/x" and "b/**")',
+    ]);
+    const off = corpusOf(Object.fromEntries(corpus.briefs.map((b) => [b.file, b.text])), config({ rules: { 'wave-schedule': 'off' } }));
+    expect(scheduleFindings(off, schedule(off)).map((f) => f.rule)).toEqual(['dependency-cycle']);
+  });
+
+  it('writes a wave into an empty brief, keeping the empty line it had', () => {
+    const corpus = corpusOf({ [B(1)]: '' }, config({ status: { field: null } }));
+    expect(planWaves(schedule(corpus)).ops.map((op) => (op.kind === 'write' ? op.content : ''))).toEqual(['---\nwave: 1\n---\n\n']);
+  });
+
+  it('draws ids and titles of every width in their columns, in colour on a terminal', () => {
+    const cfg = config({ id: { source: 'frontmatter' }, files: '*.md' });
+    const corpus = corpusOf(
+      {
+        'briefs/a.md': goodBrief({ id: '7', title: 'Short', affectedFiles: '[a]', wave: '1' }),
+        'briefs/b.md': goodBrief({ id: '1000', title: 'A longer title', affectedFiles: '[a]' }),
+        'briefs/c.md': goodBrief({ id: '8', title: 'Mid title', affectedFiles: '[a]', wave: '3' }),
+      },
+      cfg,
+    );
+    expect(prettySchedule(schedule(corpus), null, { color: false }).split('\n')).toEqual([
+      'wave 1 · 1 brief',
+      '  7     Short',
+      'wave 2 · 1 brief',
+      '  8     Mid title       moves from wave 3',
+      '          not wave 1, where 7 also writes a ("a" and "a")',
+      'wave 3 · 1 brief',
+      '  1000  A longer title  moves from no wave',
+      '          not wave 1, where 7 also writes a ("a" and "a")',
+      '          not wave 2, where 8 also writes a ("a" and "a")',
+      '',
+      '2 briefs would move; "spec-brief schedule --write" writes the waves',
+    ]);
+    const esc = String.fromCharCode(27);
+    const painted = prettySchedule(schedule(corpus), null, { color: true });
+    expect(painted).toContain(`${esc}[1mwave 1 · 1 brief${esc}[22m`);
+    expect(painted).toContain(`${esc}[2mnot wave 1, where 7 also writes a ("a" and "a")${esc}[22m`);
+    const cycle = corpusOf({ [B(1)]: goodBrief({ dependsOn: '[2]' }), [B(2)]: goodBrief({ dependsOn: '[1]' }), [B(3)]: goodBrief({ status: 'deferred', trigger: 'when x' }), [B(4)]: goodBrief({ dependsOn: '[3]' }) });
+    expect(prettySchedule(schedule(cycle), [], { color: true }).split('\n')).toEqual([
+      `${esc}[31mcycle:${esc}[39m 001 -> 002 -> 001`,
+      `${esc}[2mwaits:${esc}[22m 001 on 002, which is in a cycle`,
+      `${esc}[2mwaits:${esc}[22m 002 on 001, which is in a cycle`,
+      `${esc}[2mwaits:${esc}[22m 004 on 003, which is deferred`,
+      `${esc}[2mdeferred: 003${esc}[22m`,
+    ]);
+    const onlyCycle = corpusOf({ [B(1)]: goodBrief({ dependsOn: '[2]' }), [B(2)]: goodBrief({ dependsOn: '[1]' }) });
+    expect(prettySchedule(schedule(onlyCycle), null, { color: false }).split('\n')).toEqual([
+      'cycle: 001 -> 002 -> 001',
+      'waits: 001 on 002, which is in a cycle',
+      'waits: 002 on 001, which is in a cycle',
+    ]);
+  });
+
+  it('says what it wrote, what it could not, and that waves already written hold', () => {
+    const corpus = corpusOf({ [B(1)]: goodBrief({ affectedFiles: '[a]' }), [B(2)]: goodBrief({ affectedFiles: '[a]' }) });
+    const s = schedule(corpus);
+    const esc = String.fromCharCode(27);
+    expect(prettySchedule(s, [B(1), B(2)], { color: false }).split('\n').at(-1)).toBe(`wrote the wave of 2 briefs: ${B(1)}, ${B(2)}`);
+    const unclosed = corpusOf({ [B(1)]: '---\nstatus: active\n' });
+    expect(prettySchedule(schedule(unclosed), [], { color: true }).split('\n').at(-1)).toBe(`${esc}[31mnothing was written: a front matter cannot be edited${esc}[39m`);
+    const settled = corpusOf({ [B(1)]: goodBrief({ wave: '1', affectedFiles: '[a]' }) });
+    expect(prettySchedule(schedule(settled), [], { color: false }).split('\n').at(-1)).toBe('the declared waves hold');
+    const waiting = corpusOf({ [B(1)]: goodBrief({ status: 'deferred', trigger: 'when x' }), [B(2)]: goodBrief({ status: 'deferred', trigger: 'when y' }) });
+    expect(prettySchedule(schedule(waiting), null, { color: false })).toBe('deferred: 001, 002');
+  });
+
+  it('gives a wave passed over for an unscoped brief no patterns or overlaps in JSON', () => {
+    const corpus = corpusOf({ [B(1)]: goodBrief(), [B(2)]: goodBrief({ affectedFiles: '[a]' }) });
+    const briefs = scheduleJson(schedule(corpus))['briefs'] as { passed: Record<string, unknown>[] }[];
+    expect(briefs[1]?.passed.map((p) => Object.keys(p))).toEqual([['wave', 'reason', 'brief']]);
   });
 });
 

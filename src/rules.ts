@@ -576,7 +576,8 @@ export const RULES: readonly Rule[] = [
               {
                 line,
                 message: `"${pattern}" in ${field} is not in the tree and is read as a file`,
-                hint: `write "${pattern.trim()}/" for a directory`,
+                // The reader trims every list item, so the pattern is as meant.
+                hint: `write "${pattern}/" for a directory`,
               },
             ];
           }
