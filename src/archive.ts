@@ -163,17 +163,29 @@ function globs(patterns: readonly string[]): Glob[] {
   });
 }
 
+/** Where a note's text starts: after its indentation and a list marker, if it has one. */
+const NOTE_START = /^[ \t]*(?:(?:[-*+]|\d{1,9}[.)])[ \t]+)?/;
+
 /**
- * Whether an open box carries a note that closes it: "Delegated to ...",
- * "Rejected ...". The note belongs to the box above it, so the search stops at
- * the first nested box: a child's note does not close its parent.
+ * Whether an open box carries a note that closes it: a line under the box,
+ * within its item, that starts with a disposition marker - "**Rejected** by
+ * ...", "- **Delegated to** 012". The box's own line is the task, not a note
+ * on it, and a marker in the middle of a sentence is a word in it: "Explain
+ * why the **Rejected** designs failed" is an open task. The note belongs to
+ * the box above it, so the search stops at the first nested box: a child's
+ * note does not close its parent.
+ *
+ * Where the note starts is read from the line as written, and the marker from
+ * the masked line, so a marker in code or a comment, or one after a code span,
+ * closes nothing.
  */
 function dispositioned(scanned: Scan, line: number, end: number, markers: readonly string[]): boolean {
   const boxes = new Set(scanned.tasks.map((t) => t.line));
-  for (let i = line; i < end; i += 1) {
-    if (i > line && boxes.has(i)) return false;
+  for (let i = line + 1; i < end; i += 1) {
+    if (boxes.has(i)) return false;
+    const start = (NOTE_START.exec(scanned.lines[i] as string) as RegExpExecArray)[0].length;
     const text = scanned.masked[i] as string;
-    if (markers.some((marker) => text.includes(marker))) return true;
+    if (markers.some((marker) => text.startsWith(marker, start))) return true;
   }
   return false;
 }

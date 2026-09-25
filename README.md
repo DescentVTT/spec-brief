@@ -99,7 +99,7 @@ Scopes are intersected as globs, not compared as strings: the two above share no
 Closes a round. Refused, with every reason, when:
 
 - the brief has lint errors, is a draft, or depends on a brief that is still live;
-- a task item is neither ticked nor dispositioned - an open box counts as closed when a note under it starts with one of the `dispositions` (`**Delegated`, `**Accepted debt`, `**Rejected` by default);
+- a task item is neither ticked nor dispositioned - an open box counts as closed when a note under it - a line of its item, bare or as a bullet, above any box nested in it - starts with one of the `dispositions` (`**Delegated`, `**Accepted debt`, `**Rejected` by default);
 - the working tree holds uncommitted work outside the brief directories (`--allow-dirty` to proceed);
 - the round's commit changed a file in `protectedFiles`.
 
@@ -136,7 +136,7 @@ Reopens an archived brief: the banner and the hash come off, the status goes bac
 | `placeholders` | `TBD`, `TODO`, `FIXME`, ... | Words that mark a section as unwritten. |
 | `fields` | `[]` | Front-matter keys the repository uses beyond the built-in ones. |
 | `archiving.tasks` | `"all"` | `"all"`, or the sections whose boxes must be closed. |
-| `archiving.dispositions` | `**Delegated`, `**Accepted debt`, `**Rejected` | Text under an open box that closes it. |
+| `archiving.dispositions` | `**Delegated`, `**Accepted debt`, `**Rejected` | What a note under an open box starts with to close it. |
 | `archiving.banner` | see [`src/config.ts`](src/config.ts) | Banner lines, with `{date}`, `{summary}`, `{pr}`, `{commit}`, `{diffstat}`, `{links}`, `{id}`, `{title}`, `{author}`. A line with an empty placeholder is left out. |
 | `archiving.rewriteLinks` | `true` | Rewrite relative links when a brief moves. |
 | `archiving.freeze` | `true` | Write an integrity hash, so a later edit is caught. |
