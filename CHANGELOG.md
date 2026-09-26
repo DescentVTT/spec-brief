@@ -2,6 +2,17 @@
 
 Notable changes, newest first. Versions follow [semver](https://semver.org).
 
+## 0.2.2
+
+A packaging fix: the tarball no longer carries spec-core's internal README.
+Nothing a command does has changed.
+
+### Fixed
+
+- **The package ships one README, its own.** `files` named `README.md`,
+  which npm reads as a name at any depth, so the tarball carried spec-core's
+  vendored README beside the licence it ships; the entry is `/README.md`.
+
 ## 0.2.1
 
 `spec-brief init` points `$schema` at the schema of the installed version, and

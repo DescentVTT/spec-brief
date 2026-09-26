@@ -150,9 +150,13 @@ describe('the documents', () => {
     // npm ships what `files` names, so a relative link to anything else is
     // dead on npmjs.com and in node_modules; such a file is linked on GitHub.
     const { files } = JSON.parse(readFileSync('package.json', 'utf8')) as { files: string[] };
-    const ships = (path: string): boolean => files.some((entry) => path === entry || path.startsWith(`${entry}/`));
+    // `/README.md` is the root's README: npm reads a name with no slash at any
+    // depth, and `README.md` packed spec-core's vendored README beside it.
+    const ships = (path: string): boolean => files.some((entry) => path === entry.replace(/^\//, '') || path.startsWith(`${entry}/`));
     const documents = everything.filter((path) => path.endsWith('.md') && ships(path));
     expect(documents).toEqual(expect.arrayContaining(['README.md', 'CHANGELOG.md']));
+    expect(files).toContain('/README.md');
+    expect(documents.filter((path) => path.startsWith('src/'))).toEqual([]);
     const REPOSITORY = 'https://github.com/DescentVTT/spec-brief/blob/main/';
     const dead: string[] = [];
     for (const document of documents) {
