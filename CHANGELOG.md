@@ -2,7 +2,15 @@
 
 Notable changes, newest first. Versions follow [semver](https://semver.org).
 
-## Unreleased
+## 0.2.0
+
+Scopes are read by spec-core's glob automaton, so a collision is proved with a
+file both briefs would write and protected paths are subtracted from a scope
+exactly. `spec-brief schedule` places briefs in waves from their dependencies
+and provable collisions. Deferred work waits on an observable trigger. A plugin
+may waive a `protected-file` or `out-of-scope` refusal, which is how
+spec-harness applies a signed ruling. Briefs are read with spec-core's
+CommonMark scanner, and the review of 0.1.0 is fixed throughout.
 
 ### Upgrading from 0.1.0
 
