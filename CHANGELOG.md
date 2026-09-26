@@ -122,11 +122,13 @@ Notable changes, newest first. Versions follow [semver](https://semver.org).
 - A plugin may export a `waive` hook beside its rules (ADR-0007, amended).
   After an archival is planned, and only when it has a refusal a plugin may
   lift, each hook is given `{ root, brief: { id, file, text }, findings,
-  base, commit }` and answers `[{ rule, path, reason }]`. A `protected-file`
-  or `out-of-scope` refusal it names by rule and path becomes a `waived`
-  note; a waiver for any other rule is ignored with a `waiver-ignored`
-  warning. A hook that throws or answers in another shape stops the run
-  with exit 2. This is how spec-harness's plugin lets a signed ruling allow
+  base, commit }`, a frozen copy, and answers `[{ rule, path, reason }]`. A
+  `protected-file` or `out-of-scope` refusal of the plan's own that it names
+  by rule and path becomes a `waived` note; a waiver for any other rule is
+  ignored with a `waiver-ignored` warning, and one that matches no refusal
+  changes nothing. A hook that returns nothing waives nothing; one that
+  throws - a write to the copy included - or answers in another shape stops
+  the run with exit 2. This is how spec-harness's plugin lets a signed ruling allow
   a protected file, without spec-brief reading signatures.
 - A `protected-file` refusal names its file in a new `path` field, one
   finding per file as before, and an `out-of-scope` finding lists its files
