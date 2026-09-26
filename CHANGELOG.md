@@ -4,6 +4,55 @@ Notable changes, newest first. Versions follow [semver](https://semver.org).
 
 ## Unreleased
 
+### Upgrading from 0.1.0
+
+- **A configuration that already uses the word "deferred" no longer loads.**
+  Deferred work is a new status, and its word is `"deferred"` unless the
+  configuration says otherwise, so `"status": { "draft": "deferred" }` now
+  names two statuses with one word and stops the run with exit 2: "the
+  status words must differ: "deferred" is the word for draft and deferred".
+  Set `"status": { "deferred": null }` where the repository defers no work,
+  or give the new status a word of its own, `"deferred": "parked"`.
+- **JSON documents are `schemaVersion: 2`**, every command's: the version
+  is one number for all of them, and `matrix`'s document changed meaning. A
+  collision is a pair of briefs and carries `overlaps`, a list of
+  `{ patterns, witness }`, in place of `patterns` and `witness`, and a
+  witness is always a file, never a directory; a `sharedDirectories` entry
+  carries `directories` in place of `directory`; and deferred briefs, and
+  the briefs waiting on them, left `waves[].briefs` for `deferred` and
+  `waiting`. `list`, `lint` and `archive` changed only by adding: `trigger`
+  and `sections`, a `"deferred"` status, and `path` and `paths` on a
+  finding. A reader of those documents reads version 2 as it read 1.
+- **`**` inside a name is an error**, where it was read as `*`: a scope
+  written `docs/**.md` is a `glob` error in `lint`, and a `files` or
+  `exclude` pattern written so stops the run with exit 2. Parentheses are
+  literal unless a group holds a `|`. Both are under "Globs" below.
+- **A note that continues its box's paragraph no longer closes the box**:
+  `- [ ] Add a cache` over `  **Rejected** by 012` refuses an archival as
+  `open-task` until the note is a bullet or has a blank line above it. See
+  the entry on open boxes below.
+
+### Breaking (library API)
+
+- `Config['status']['deferred']` is required, `null` where a repository
+  has no such word. A configuration from `resolveConfig` or
+  `DEFAULT_CONFIG` has it; one built by hand must set it.
+- `Status` gains `'deferred'`, and `Format` and `FORMATS` gain
+  `'gitlab'`: an exhaustive `switch` over either needs the new case.
+- `CollisionReport` gains the required `deferred` and `waiting`, and
+  `WaveMatrix` the required `undecided`; a report built by hand carries
+  them. A wave's `briefs` no longer holds a deferred brief or one waiting on
+  deferred work.
+- `Collision` carries `overlaps` in place of `patterns` and `witness`, and
+  `SharedDirectory` carries `directories` in place of `directory`, as the
+  JSON does.
+- `parseGlob`'s `isFile` option is replaced by `literal` (`'file'`,
+  `'directory'`, `'either'` or a function, such as `readingIn(files)`), a
+  `Glob` carries `compiled` and `literals` in place of `alternatives`, and
+  `intersectGlobs` throws where the search is undecided.
+
+### Changes
+
 - Markdown is read by spec-core's scanner and front matter by its reader,
   copied into `src/vendor/spec-core/` beside the glob engine and verified by
   hash (ADR-0001, amended). What a brief's structure is stays as it was: a
@@ -100,14 +149,12 @@ Notable changes, newest first. Versions follow [semver](https://semver.org).
 - Deferred work has a status: `status.deferred` in configuration, `"deferred"`
   by default and `null` for a repository without one. A deferred brief lives
   in the briefs directory, is never ready, is listed and left out by
-  `matrix`, and is refused by `archive` as `archive-deferred`. So is a brief
-  that depends on deferred work, directly or through another brief: `matrix`
-  lists it under `waits`, and in JSON under `waiting` with the brief it waits
-  on, and compares it with nothing, as `schedule` places it nowhere. Before,
-  the matrix checked it in the wave it declared and could fail where the
-  schedule said the waves held. It names the
+  `matrix`, and is refused by `archive` as `archive-deferred`. It names the
   event that brings it back in `trigger`, a new built-in field that `list`
-  reports.
+  reports. A brief that depends on deferred work, directly or through another
+  brief, runs in no wave either: `matrix` lists it under `waits`, and in JSON
+  under `waiting` with the brief it waits on, and compares it with nothing,
+  as `schedule` places it nowhere.
 - `deferral-trigger`, an error: a deferred brief with no `trigger`, or one
   that is only a date or a time - `2026-10`, `Q3`, `next month`, `October`,
   `in two weeks` - or a placeholder. "when the second tenant signs" and
@@ -122,8 +169,8 @@ Notable changes, newest first. Versions follow [semver](https://semver.org).
   `wave` in the front matter of each brief that moves, every other line
   untouched, as one transaction, and writes nothing over a cycle. A declared
   wave that differs from the computed one is judged as `lint` and `matrix`
-  judge it - no collision in it, dependencies before it, dependents after it
-  - and one that holds is a person's choice to keep: its move is a note.
+  judge it: no collision in it, dependencies before it, dependents after it.
+  One that holds is a person's choice to keep, and its move is a note.
   Exit 0 when every declared wave holds, 1 when a brief declares no wave or
   one that does not hold, or on a cycle. Pretty, JSON, SARIF, GitHub and
   GitLab output; `wave-schedule`, an error by default, is the finding per
@@ -137,8 +184,8 @@ Notable changes, newest first. Versions follow [semver](https://semver.org).
   ignored with a `waiver-ignored` warning, and one that matches no refusal
   changes nothing. A hook that returns nothing waives nothing; one that
   throws - a write to the copy included - or answers in another shape stops
-  the run with exit 2. This is how spec-harness's plugin lets a signed ruling allow
-  a protected file, without spec-brief reading signatures.
+  the run with exit 2. This is how spec-harness's plugin lets a signed ruling
+  allow a protected file, without spec-brief reading signatures.
 - A `protected-file` refusal names its file in a new `path` field, one
   finding per file as before, and an `out-of-scope` finding lists its files
   in `paths`. Both appear in the JSON of `archive`; a plugin reads them.
@@ -149,12 +196,10 @@ Notable changes, newest first. Versions follow [semver](https://semver.org).
   hashes the rule, the file and the message but not the line.
 - 24 lint rules and 5 collision rules.
 - The library's `parseGlob`, `matchGlob`, `intersectGlobs` and `globBase`
-  keep their signatures over the new engine. `parseGlob`'s `isFile` option is
-  replaced by `literal` (`'file'`, `'directory'`, `'either'` or a function,
-  such as `readingIn(files)`), a `Glob` carries `compiled` and `literals` in
-  place of `alternatives`, and `intersectGlobs` throws where the search is
-  undecided. `globWitness`, `globCovers`, `globBases`, `readingIn`, `meet`,
-  `scopeOf` and `contradictions` are new. `intersectTokens` is gone.
+  keep their signatures over the new engine, with the options and shapes
+  under "Breaking (library API)" above. `globWitness`, `globCovers`,
+  `globBases`, `readingIn`, `meet`, `scopeOf`, `contradictions` and
+  `waitingOnDeferred` are new. `intersectTokens` is gone.
 - A `shared-directory` finding has a hint, and a `glob` finding says what a
   scope pattern looks like.
 - Versions are published by CI through npm's trusted publishing, with
@@ -184,11 +229,6 @@ Notable changes, newest first. Versions follow [semver](https://semver.org).
   many pairs of their patterns meet, and the finding lists every pair with a
   path both cover. A pair writing into several shared directories is likewise
   one `shared-directory` finding.
-- JSON documents are `schemaVersion: 2`. In `matrix --format json` a
-  collision carries `overlaps`, a list of `{ patterns, witness }`, in place of
-  `patterns` and `witness`, and a `sharedDirectories` entry carries
-  `directories` in place of `directory`. The library's `Collision` and
-  `SharedDirectory` change the same way.
 - A plugin package whose `exports` offer only the `import` condition loads.
   Packages were resolved with `require.resolve`, which reads `exports` under
   the require conditions, so an ESM-only plugin could not be found.
