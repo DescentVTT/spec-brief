@@ -15,6 +15,7 @@ import { lint, sortFindings } from '../src/lint.js';
 import { scan } from '../src/markdown.js';
 import { matrixJson, prettyMatrix } from '../src/report.js';
 import { renderNewBrief, nextId } from '../src/scaffold.js';
+import { schedule } from '../src/schedule.js';
 import { toJsonSchema, validate } from '../src/schema.js';
 import { labelMatches, lineEnding, normaliseLabel, slugify } from '../src/text.js';
 import { brief, config, corpusOf, goodBrief } from './helpers.js';
@@ -409,6 +410,38 @@ describe('collisions', () => {
     expect(prettyMatrix(collisions(corpus), { color: true }).split('\n').slice(-1)).toEqual([`${String.fromCharCode(27)}[2mdeferred: 002, 003${String.fromCharCode(27)}[22m`]);
     const only = corpusOf({ 'briefs/002_b.md': goodBrief({ status: 'deferred', trigger: 'when x' }) });
     expect(prettyMatrix(collisions(only), { color: false })).toBe('deferred: 002');
+  });
+
+  it('leaves out a brief that waits on deferred work, as schedule places it nowhere, and says what it waits on', () => {
+    const corpus = corpusOf({
+      'briefs/001_a.md': goodBrief({ wave: '1', affectedFiles: '[src/**]' }),
+      'briefs/002_b.md': goodBrief({ status: 'deferred', trigger: 'when x', affectedFiles: '[lib/**]' }),
+      // Waits on 002, and in its declared wave would collide with 001.
+      'briefs/003_c.md': goodBrief({ wave: '1', dependsOn: '[2]', affectedFiles: '[src/auth/**]' }),
+      // Waits through 003, and declares no wave: waiting, not unscheduled.
+      'briefs/004_d.md': goodBrief({ dependsOn: '[1, 3]', affectedFiles: '[src/auth/x.ts]' }),
+    });
+    const s = schedule(corpus);
+    expect(s.placements.map((p) => [p.brief.id, p.declared, p.proposed])).toEqual([['001', 1, 1]]);
+    for (const report of [collisions(corpus), collisions(corpus, { all: true })]) {
+      expect(report.waves.map((w) => w.briefs.map((b) => b.id))).toEqual([['001']]);
+      expect(report.waiting.map((w) => [w.brief.id, w.waitsOn.id])).toEqual([
+        ['003', '002'],
+        ['004', '003'],
+      ]);
+      expect(report.waiting.map((w) => w.brief)).toEqual(s.unplaced.map((u) => u.brief));
+      expect(report.unscheduled).toEqual([]);
+      expect(collisionFindings(corpus, report)).toEqual([]);
+      expect(matrixJson(report)['waiting']).toEqual([
+        { id: '003', file: 'briefs/003_c.md', waitsOn: '002' },
+        { id: '004', file: 'briefs/004_d.md', waitsOn: '003' },
+      ]);
+    }
+    expect(prettyMatrix(collisions(corpus), { color: false }).split('\n').slice(-3)).toEqual([
+      'waits: 003 on 002, which is deferred',
+      'waits: 004 on 003, which waits on deferred work',
+      'deferred: 002',
+    ]);
   });
 
   it('names a file as the witness, never the directory a trailing globstar is under', () => {

@@ -88,3 +88,19 @@ written, `matrix` finds no collision in it, `lint` finds every dependency in an
 earlier wave, every unscoped brief is alone, and scheduling it again moves
 nothing (`tests/schedule.test.ts`). The cost of a run is one witness search
 per pair of patterns of briefs it compares, a fraction of a millisecond each.
+
+## Amended 2026-09-26
+
+A review before release found `schedule` and `matrix` disagreeing about the
+same briefs.
+
+**What waits on deferred work runs in no wave, for `matrix` too.** A brief
+that depends on a deferred brief, directly or through another, is placed
+nowhere and keeps the wave it declares. `matrix` still compared it in that
+wave, so `schedule` could exit 0 - the waves hold - while `matrix` failed on
+a collision with a brief the schedule had placed there. Now `matrix` treats
+it as it treats the deferred brief: listed, with the brief it waits on, and
+compared with nothing. The generated corpus defers a brief in half its
+rounds and checks that the briefs `matrix` leaves out are the ones the
+schedule could not place, so "once written, `matrix` finds no collision" is
+checked with deferrals in it.

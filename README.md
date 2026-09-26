@@ -84,7 +84,7 @@ Live briefs with their status, wave, task count and readiness. A brief is *ready
 
 ### `spec-brief matrix`
 
-Compares the `affectedFiles` of every pair of live briefs in the same wave, `--all-waves` for every pair. Deferred briefs are listed and left out.
+Compares the `affectedFiles` of every pair of live briefs in the same wave, `--all-waves` for every pair. Deferred briefs, and briefs that wait on one directly or through another, are listed and left out: they run in no wave until the deferred work comes back, as `schedule` places them nowhere, so the two agree on which briefs run side by side.
 
 ```text
 wave 1 · 3 briefs

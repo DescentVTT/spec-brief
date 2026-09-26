@@ -19,7 +19,7 @@
 import type { FileOp } from './archive.js';
 import { type Brief, lineOfField } from './brief.js';
 import { undecidedFinding, unscopedFinding } from './collisions.js';
-import { type Corpus, dependencyCycles, resolveDependency } from './corpus.js';
+import { byId, type Corpus, dependencyCycles, liveDependencies } from './corpus.js';
 import { editable, setEntry } from './frontmatter.js';
 import { readingIn, WITNESS_BUDGET } from './glob.js';
 import { configuredSeverity } from './lint.js';
@@ -79,24 +79,7 @@ function label(brief: Brief): string {
   return brief.id ?? brief.name;
 }
 
-/** Briefs by id, numbers by value; by path where two ids agree. */
-export function byId(a: Brief, b: Brief): number {
-  const x = label(a);
-  const y = label(b);
-  const numeric = /^\d+$/.test(x) && /^\d+$/.test(y);
-  if (numeric && Number(x) !== Number(y)) return Number(x) - Number(y);
-  if (x < y) return -1;
-  if (x > y) return 1;
-  return a.file < b.file ? -1 : a.file > b.file ? 1 : 0;
-}
-
-/** The live briefs a brief depends on, by id. Archived ones are done, and unknown ones are the dependency rule's. */
-function liveDependencies(corpus: Corpus, brief: Brief): Brief[] {
-  const targets = brief.dependsOn
-    .map((d) => resolveDependency(corpus, d))
-    .filter((t): t is Brief => t !== undefined && t !== brief && t.phase === 'live');
-  return [...new Set(targets)].sort(byId);
-}
+export { byId } from './corpus.js';
 
 /** The first brief in a wave this one cannot share it with, or `null` when it can join. */
 function clash(own: Scope, wave: number, here: readonly Scope[], budget: number): Passed | null {

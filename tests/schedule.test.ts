@@ -530,7 +530,9 @@ describe('writing the waves', () => {
    * Checked against the matrix and lint rather than against itself: every
    * schedule of a generated corpus, once written, has no collision and no
    * wave-order finding, keeps each unscoped brief alone, and is its own
-   * schedule - writing it again would change nothing.
+   * schedule - writing it again would change nothing. Half the corpora defer a
+   * brief, and the briefs waiting on it keep whatever wave they declare: the
+   * matrix leaves out the same briefs the schedule places nowhere.
    */
   it('writes waves the matrix finds no collision in and lint finds in order, and that schedule to themselves', async () => {
     let seed = 20260926;
@@ -539,9 +541,10 @@ describe('writing the waves', () => {
       return seed % n;
     };
     const patterns = ['src/**', 'src/a/**', 'src/a/x.ts', 'src/*.ts', 'lib/**', 'lib/y.ts', 'docs/**', '**/*.md', 'test/**', 'src/b/'];
-    const seen = { shared: 0, moved: 0, passed: 0 };
+    const seen = { shared: 0, moved: 0, passed: 0, waiting: 0 };
     for (let round = 0; round < 25; round += 1) {
       const count = 3 + random(6);
+      const deferred = random(2) === 0 ? 1 + random(count) : 0;
       const files: Record<string, string> = {};
       for (let i = 1; i <= count; i += 1) {
         const scope = Array.from({ length: random(3) }, () => patterns[random(patterns.length)] as string);
@@ -551,11 +554,12 @@ describe('writing the waves', () => {
         if (deps.length > 0) front['dependsOn'] = `[${[...new Set(deps)].join(', ')}]`;
         if (random(3) === 0) front['protectedFiles'] = JSON.stringify([patterns[random(patterns.length)]]);
         if (random(2) === 0) front['wave'] = String(1 + random(3));
+        if (i === deferred) Object.assign(front, { status: 'deferred', trigger: 'when the second tenant signs' });
         files[B(i)] = goodBrief(front);
       }
       const corpus = corpusOf(files);
       const s = schedule(corpus);
-      expect(s.placements, JSON.stringify(files)).toHaveLength(count);
+      expect(s.placements.length + s.unplaced.length + s.deferred.length, JSON.stringify(files)).toBe(count);
       const written = { ...files };
       for (const op of planWaves(s).ops) if (op.kind === 'write') written[op.path] = op.content;
       const after = buildCorpus(
@@ -566,16 +570,21 @@ describe('writing the waves', () => {
       const matrix = collisions(after);
       expect(matrix.waves.flatMap((w) => w.collisions), label).toEqual([]);
       expect(matrix.waves.flatMap((w) => w.undecided), label).toEqual([]);
+      expect(matrix.waiting.map((w) => w.brief.id), label).toEqual(s.unplaced.map((u) => u.brief.id));
       for (const wave of matrix.waves) {
         if (wave.briefs.some((b) => b.affectedFiles.length === 0)) expect(wave.briefs, label).toHaveLength(1);
       }
-      expect((await lint(after)).filter((f) => f.rule === 'wave-order'), label).toEqual([]);
+      // A brief placed nowhere keeps the wave it declares, which the schedule vouches for nothing about.
+      const placed = new Set(s.placements.map((p) => p.brief.file));
+      expect((await lint(after)).filter((f) => f.rule === 'wave-order' && placed.has(f.file)), label).toEqual([]);
       expect(moves(schedule(after)), label).toEqual([]);
       seen.shared += matrix.waves.filter((w) => w.briefs.length > 1).length;
       seen.moved += moves(s).length;
       seen.passed += s.placements.filter((p) => p.passed.length > 0).length;
+      seen.waiting += s.unplaced.filter((u) => u.brief.wave !== null).length;
     }
-    // The corpus exercises sharing a wave, moving and passing one over, not only the easy case.
-    expect(seen).toEqual({ shared: 23, moved: 81, passed: 54 });
+    // The corpus exercises sharing a wave, moving and passing one over, and
+    // briefs waiting on deferred work with a wave declared, not only the easy case.
+    expect(seen).toEqual({ shared: 14, moved: 66, passed: 32, waiting: 8 });
   });
 });
