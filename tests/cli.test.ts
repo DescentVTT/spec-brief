@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, rmSync } from 'node:fs';
+import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { afterAll, describe, expect, it } from 'vitest';
@@ -271,6 +271,7 @@ describe('schedule', () => {
       '  003  A brief',
       'wave 2 · 1 brief',
       '  002  A brief  moves from wave 1',
+      '         wave 1 does not hold: 001 there also writes src/auth/session.ts',
       '         not wave 1, where 001 also writes src/auth/session.ts ("src/**/session.ts" and "src/auth/**")',
       '',
       '1 brief would move; "spec-brief schedule --write" writes the waves',
@@ -295,6 +296,33 @@ describe('schedule', () => {
     expect(again.code).toBe(EXIT_OK);
     expect(again.out.split('\n').at(-2)).toBe('the declared waves hold');
     expect((await run(root, ['matrix'])).code).toBe(EXIT_OK);
+  });
+
+  it('passes a wave a person moved later by hand, which lint and matrix accept, and notes the move', async () => {
+    const byHand = { ...files, 'briefs/002_b.md': files['briefs/002_b.md'].replace('wave: 1', 'wave: 3') };
+    const root = plain('cli-schedule-by-hand', byHand);
+    const pretty = await run(root, ['schedule', '--no-color']);
+    expect(pretty.code).toBe(EXIT_OK);
+    expect(pretty.out.split('\n').slice(3)).toEqual([
+      'wave 2 · 1 brief',
+      '  002  A brief  moves from wave 3',
+      '         wave 3 also holds',
+      '         not wave 1, where 001 also writes src/auth/session.ts ("src/**/session.ts" and "src/auth/**")',
+      '',
+      '1 brief could move, and the declared waves hold; "spec-brief schedule --write" writes the computed ones',
+      '',
+    ]);
+    expect((await run(root, ['schedule', '--format', 'github'])).out.startsWith(
+      '::notice file=briefs/002_b.md,line=3,title=spec-brief wave-schedule::declares wave 3, which holds; the schedule puts it in wave 2',
+    )).toBe(true);
+    // A note is not a warning: --strict passes it too.
+    expect((await run(root, ['schedule', '--strict'])).code).toBe(EXIT_OK);
+    expect((await run(root, ['lint'])).code).toBe(EXIT_OK);
+    expect((await run(root, ['matrix'])).code).toBe(EXIT_OK);
+    // Moved into a wave where it collides, it fails as matrix does.
+    writeFileSync(join(root, 'briefs/003_c.md'), goodBrief({ wave: '3', affectedFiles: '[src/auth/session.ts]' }));
+    expect((await run(root, ['schedule'])).code).toBe(EXIT_FAILED);
+    expect((await run(root, ['matrix'])).code).toBe(EXIT_FAILED);
   });
 
   it('reports the written files as JSON, and prints the findings the view does not show', async () => {

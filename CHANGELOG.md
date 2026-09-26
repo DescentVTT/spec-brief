@@ -120,10 +120,14 @@ Notable changes, newest first. Versions follow [semver](https://semver.org).
   brief and the file that kept it out of a wave - and deferred briefs, the
   briefs waiting on them, and dependency cycles are listed. `--write` sets
   `wave` in the front matter of each brief that moves, every other line
-  untouched, as one transaction, and writes nothing over a cycle. Exit 0 when
-  the declared waves hold, 1 when they would change or on a cycle. Pretty,
-  JSON, SARIF and GitHub output; `wave-schedule`, an error by default, is the
-  finding per move.
+  untouched, as one transaction, and writes nothing over a cycle. A declared
+  wave that differs from the computed one is judged as `lint` and `matrix`
+  judge it - no collision in it, dependencies before it, dependents after it
+  - and one that holds is a person's choice to keep: its move is a note.
+  Exit 0 when every declared wave holds, 1 when a brief declares no wave or
+  one that does not hold, or on a cycle. Pretty, JSON, SARIF, GitHub and
+  GitLab output; `wave-schedule`, an error by default, is the finding per
+  move, and a note for a move whose declared wave holds.
 - A plugin may export a `waive` hook beside its rules (ADR-0007, amended).
   After an archival is planned, and only when it has a refusal a plugin may
   lift, each hook is given `{ root, brief: { id, file, text }, findings,

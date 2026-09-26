@@ -624,7 +624,11 @@ export const COLLISION_RULES: readonly RuleInfo[] = [
   },
   { id: 'unscoped', severity: 'note', description: 'A brief sharing a wave declares the files it writes.' },
   { id: 'shared-directory', severity: 'off', description: 'Briefs in one wave do not write into the same directory.' },
-  { id: 'wave-schedule', severity: 'error', description: 'A brief declares the wave the schedule computes for it.' },
+  {
+    id: 'wave-schedule',
+    severity: 'error',
+    description: 'A brief declares a wave that holds: the one the schedule computes, or one lint and matrix accept, which is a note.',
+  },
 ];
 
 /**
