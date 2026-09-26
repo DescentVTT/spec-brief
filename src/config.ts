@@ -101,6 +101,14 @@ export const BANNER_PLACEHOLDERS: readonly string[] = [
 
 export const SCHEMA_URL = 'https://raw.githubusercontent.com/DescentVTT/spec-brief/main/schema.json';
 
+/**
+ * The `$schema` `init` writes, the path the README recommends: the schema of
+ * the version installed, which is the one that loads the file. `SCHEMA_URL`
+ * follows main, and would flag a key the installed version accepts, or pass
+ * one it refuses, as soon as the two differ.
+ */
+export const SCHEMA_PATH = './node_modules/@descent-vtt/spec-brief/schema.json';
+
 const SEVERITY: Schema = { type: 'string', enum: ['off', 'note', 'warning', 'error'] };
 const STRINGS: Schema = { type: 'array', items: { type: 'string', minLength: 1 } };
 
@@ -457,7 +465,7 @@ export function initialConfig(briefs: string, archive: string): Record<string, u
     return Object.keys(out).length === 1 ? s.name : out;
   };
   return {
-    $schema: SCHEMA_URL,
+    $schema: SCHEMA_PATH,
     briefs,
     archive,
     files: d.files,

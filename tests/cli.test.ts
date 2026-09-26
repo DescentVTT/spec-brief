@@ -91,7 +91,9 @@ describe('init and new', () => {
       out: 'wrote .spec-brief.json\nwrote briefs/.gitkeep\nwrote briefs/archive/.gitkeep\nnext: spec-brief new "<title>"\n',
       err: '',
     });
-    expect(JSON.parse(readFileSync(join(root, '.spec-brief.json'), 'utf8'))).toEqual(expect.objectContaining({ briefs: 'briefs' }));
+    expect(JSON.parse(readFileSync(join(root, '.spec-brief.json'), 'utf8'))).toEqual(
+      expect.objectContaining({ $schema: './node_modules/@descent-vtt/spec-brief/schema.json', briefs: 'briefs' }),
+    );
     expect((await run(root, ['init'])).err).toBe('spec-brief: .spec-brief.json already exists here; edit it instead\n');
   });
 
