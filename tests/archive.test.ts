@@ -128,6 +128,24 @@ describe('refusals', () => {
     const live = corpus.live[0]!;
     expect(planArchive(corpus, live, { date: '2026-09-24' }).blocking.map((f) => f.rule)).toEqual(['archive-exists']);
   });
+
+  it('refuses front matter it would have to write into and cannot, once, and leaves it as written', async () => {
+    const open = '---\nstatus: active\n\n# T\n';
+    const cfg = config({ archiving: { banner: [] } });
+    const corpus = corpusOf({ [A]: open }, cfg);
+    const plan = planArchive(corpus, the(corpus, '001'), { date: '2026-09-24' });
+    expect(plan.blocking.map((f) => [f.rule, f.line, f.message, f.hint])).toEqual([
+      ['front-matter', 1, 'the front matter is never closed, so it cannot be written into', 'close the front matter with a "---" line'],
+    ]);
+    expect(write(plan, 'briefs/archive/001_a.md')).toBe(open);
+    // Lint reports it already where it is an error; the refusal is not said twice.
+    const findings = await lint(corpus);
+    const refused = planArchive(corpus, the(corpus, '001'), { date: '2026-09-24', findings }).blocking;
+    expect(refused.filter((f) => f.rule === 'front-matter').map((f) => f.message)).toEqual(['the front matter opened on line 1 is never closed']);
+    // A plan that writes nothing into the front matter has nothing to refuse.
+    const untouched = corpusOf({ [A]: open }, config({ status: { field: null }, archiving: { banner: [], freeze: false } }));
+    expect(planArchive(untouched, the(untouched, '001'), { date: '2026-09-24' }).blocking).toEqual([]);
+  });
 });
 
 describe('the archived text', () => {
@@ -310,6 +328,16 @@ describe('reopening', () => {
     const cfg = config({ status: { field: null }, archiving: { rewriteLinks: false } });
     const corpus = corpusOf({ 'briefs/archive/001_a.md': `${BANNER_OPEN}\n> x\n${BANNER_CLOSE}\n\n# T\n` }, cfg);
     expect(write(planUnarchive(corpus, corpus.briefs[0]!), A)).toBe('# T\n');
+  });
+
+  it('refuses to reopen a brief whose front matter it cannot write into', () => {
+    const open = '---\nstatus: archived\n\n# T\n';
+    const corpus = corpusOf({ 'briefs/archive/001_a.md': open });
+    expect(planUnarchive(corpus, corpus.briefs[0]!).blocking.map((f) => f.message)).toEqual(['the front matter is never closed, so it cannot be written into']);
+    const noField = corpusOf({ 'briefs/archive/001_a.md': open }, config({ status: { field: null } }));
+    const reopened = planUnarchive(noField, noField.briefs[0]!);
+    expect(reopened.blocking).toEqual([]);
+    expect(write(reopened, A)).toBe(open);
   });
 });
 
