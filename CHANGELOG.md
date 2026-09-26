@@ -4,6 +4,12 @@ Notable changes, newest first. Versions follow [semver](https://semver.org).
 
 ## Unreleased
 
+- Nothing is written into front matter that is never closed. `unarchive`
+  refuses such a brief as `front-matter`, as `schedule --write` does, and so
+  does `archive` where lint's own `front-matter` error does not refuse it
+  already. `unarchive` stopped with an unexpected error, as `archive` did with
+  an empty banner template, and `archive` otherwise prepended a second block
+  above the banner.
 - Globs are spec-core's `path` dialect, matched and intersected by its
   automaton, which is copied into `src/vendor/spec-core/` and verified by
   hash. The syntax is unchanged; what it means changes in four places.

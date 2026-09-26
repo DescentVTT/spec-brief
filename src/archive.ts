@@ -11,7 +11,7 @@
 import { BANNER_CLOSE, BANNER_OPEN, type Brief, lineOfField } from './brief.js';
 import type { Config } from './config.js';
 import { type Corpus, resolveDependency } from './corpus.js';
-import { readFrontMatter, removeEntry, renderScalar, setEntry } from './frontmatter.js';
+import { editable, readFrontMatter, removeEntry, renderScalar, setEntry } from './frontmatter.js';
 import type { CommitInfo, FileChange } from './git.js';
 import { type Glob, matchGlob, parseGlob } from './glob.js';
 import { INTEGRITY_FIELD, integrityOf } from './integrity.js';
@@ -300,6 +300,24 @@ function withIntegrity(lines: readonly string[]): string[] {
   return setEntry(placed, readFrontMatter(placed), INTEGRITY_FIELD, hash);
 }
 
+/**
+ * Whether a plan can write into the brief's front matter: it has none, or one
+ * that is closed. The front-matter rule reports one never closed, and a plan
+ * that `edits` the front matter and is not refused by it already - the rule
+ * lowered, or a reopening, which lint does not gate - is refused here. It
+ * leaves the front matter as written rather than half edited.
+ */
+function writable(brief: Brief, edits: boolean, blocking: Finding[]): boolean {
+  const frontMatter = brief.frontMatter;
+  if (frontMatter === null || editable(frontMatter)) return true;
+  if (edits && !blocking.some((f) => f.rule === 'front-matter')) {
+    blocking.push(
+      problem(brief, 'front-matter', 'error', 1, 'the front matter is never closed, so it cannot be written into', 'close the front matter with a "---" line'),
+    );
+  }
+  return false;
+}
+
 interface Place {
   readonly file: string;
   readonly line: number;
@@ -489,11 +507,12 @@ export function planArchive(corpus: Corpus, brief: Brief, request: ArchiveReques
   };
   const banner = renderBanner(config.archiving.banner, values);
   if (banner.length > 0) lines = withBanner(lines, banner);
-  if (config.status.field !== null) {
+  const writes = writable(brief, config.status.field !== null || config.archiving.freeze, blocking);
+  if (writes && config.status.field !== null) {
     lines = setEntry(lines, readFrontMatter(lines), config.status.field, renderScalar(config.status.archived));
   }
   lines = removeEntry(lines, readFrontMatter(lines), INTEGRITY_FIELD);
-  if (config.archiving.freeze) lines = withIntegrity(lines);
+  if (writes && config.archiving.freeze) lines = withIntegrity(lines);
 
   const incoming = inbound(corpus, brief, to);
   staleLinks(corpus, brief, incoming.stale, request.strict === true, blocking, warnings);
@@ -600,8 +619,9 @@ export function planUnarchive(corpus: Corpus, brief: Brief, request: UnarchiveRe
   }
   lines = withoutBanner(lines, brief.banner);
   lines = removeEntry(lines, readFrontMatter(lines), INTEGRITY_FIELD);
-  if (config.status.field !== null) {
-    lines = setEntry(lines, readFrontMatter(lines), config.status.field, renderScalar(config.status.active));
+  const field = config.status.field;
+  if (writable(brief, field !== null, blocking) && field !== null) {
+    lines = setEntry(lines, readFrontMatter(lines), field, renderScalar(config.status.active));
   }
 
   const incoming = inbound(corpus, brief, to);

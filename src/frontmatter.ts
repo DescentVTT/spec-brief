@@ -345,3 +345,8 @@ export function removeEntry(lines: readonly string[], frontMatter: FrontMatter |
   if (entry === undefined) return [...lines];
   return [...lines.slice(0, entry.line), ...lines.slice(entry.end)];
 }
+
+/** Front matter an edit can be written into: one that is closed. */
+export function editable(frontMatter: FrontMatter): boolean {
+  return frontMatter.close >= 0;
+}
