@@ -96,6 +96,10 @@ Notable changes, newest first. Versions follow [semver](https://semver.org).
   does not refuse it already. `unarchive` stopped with an unexpected error on
   a block never closed, as `archive` did with an empty banner template, and
   `archive` otherwise prepended a second block above the banner.
+- Reopening a brief that had no front matter, in a repository with no status
+  field, gives it back with none. Archival wrote a block to hold the
+  integrity hash, and `unarchive` took the hash out and left `---` over
+  `---` behind; a block the reopening empties now goes with it.
 - A carriage return that ends no line, as a `\r\r\n` ending leaves one, is
   read as a space; line numbers are unchanged. A front-matter line ending in
   one now reads, where it was "not a key: value line".

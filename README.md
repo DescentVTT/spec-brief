@@ -137,7 +137,7 @@ spec-brief reads git and never writes it. Review the change and commit it with t
 
 ### `spec-brief unarchive <brief>`
 
-Reopens an archived brief: the banner and the hash come off, the status goes back to the live word, and the links are rewritten again. A brief archived and reopened is the brief it was, blank lines and final newline included, with two exceptions: the status line is written in its plain spelling, and a relative link that had to be rewritten comes back in its shortest form (`./b.md` returns as `b.md`).
+Reopens an archived brief: the banner and the hash come off, the status goes back to the live word, and the links are rewritten again. A brief archived and reopened is the brief it was, blank lines and final newline included, with four exceptions: the status line is written in its plain spelling; a relative link that had to be rewritten comes back in its shortest form (`./b.md` returns as `b.md`); an empty front matter block, `---` over `---`, comes back as none, since archival gives a brief with no front matter a block for its hash and reopening takes away a block it leaves empty; and a brief whose lines end in both LF and CRLF comes back with the ending of its first line throughout.
 
 ### Every command
 
