@@ -198,12 +198,14 @@ A repository whose briefs have eight ordered sections, `proposed` and `archived`
 
 Section names compare without case, typographic quotes, emphasis, a leading number or a trailing colon, and a heading may add a qualifier after a separator: `## 2. Commander’s Intent:` fills `Commander's Intent`, and `## Invariants (must hold)` fills `Invariants`.
 
+A brief is read as CommonMark reads it wherever that decides what is code or a comment - fenced and indented code, `<pre>`, `<script>`, `<style>` and `<textarea>` blocks, code spans, HTML comments - and nothing inside those is structure. A section, and the title, is an ATX heading, `## Name`, outside a block quote: prose over a `---` line is prose and a rule, and a heading quoted from another document is not one of the brief's sections. A task is a list item outside a block quote with `[ ]`, `[x]` or `[X]`. The links archival rewrites are the ones that write a destination: `[text](dest)`, `![alt](dest)` - one inside a link's text too - and a definition, `[label]: dest`, through which a reference is rewritten once.
+
 ## Rules
 
 <!-- rules:start -->
 | Rule | Default | Reports |
 | --- | --- | --- |
-| `front-matter` | error | Front matter that does not parse, a duplicate key, YAML beyond the flat subset. |
+| `front-matter` | error | Front matter that does not parse, a duplicate key, YAML beyond the flat subset, TOML. |
 | `field` | error | A field spec-brief reads with a value of the wrong shape: a wave that is not a whole number, a list where one value belongs. |
 | `unknown-field` | warning | A front-matter key nobody declared, with the one probably meant. |
 | `status` | error | No status, a word the configuration does not use, or a status that disagrees with the directory. |

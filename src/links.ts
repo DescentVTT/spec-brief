@@ -7,7 +7,7 @@
  * the file's own relative links, and the links other live briefs hold to it.
  */
 
-import { linksOf, type Scan } from './markdown.js';
+import type { Scan } from './markdown.js';
 
 /** A destination that is a path relative to the file holding it. */
 export function isRelativeTarget(target: string): boolean {
@@ -112,7 +112,7 @@ export function rewriteLinks(
   const lines = [...scanned.lines];
   let count = 0;
   const byLine = new Map<number, { start: number; end: number; replacement: string }[]>();
-  for (const link of linksOf(scanned)) {
+  for (const link of scanned.links) {
     if (!isRelativeTarget(link.target)) continue;
     const { path, suffix } = splitTarget(link.target);
     if (path === '') continue;
@@ -140,11 +140,11 @@ export function rewriteLinks(
 /** Lines of `scanned` holding a relative link that resolves, from `directory`, to `target`. */
 export function linesLinkingTo(scanned: Scan, directory: string, target: string): number[] {
   const found = new Set<number>();
-  for (const link of linksOf(scanned)) {
+  for (const link of scanned.links) {
     if (!isRelativeTarget(link.target)) continue;
     const { path } = splitTarget(link.target);
     if (path !== '' && resolveFrom(directory, decode(path)) === target) found.add(link.line);
   }
-  // Lines are scanned in order, so the set is already ascending.
+  // Links come in the order of their lines, so the set is already ascending.
   return [...found];
 }

@@ -4,12 +4,50 @@ Notable changes, newest first. Versions follow [semver](https://semver.org).
 
 ## Unreleased
 
-- Nothing is written into front matter that is never closed. `unarchive`
-  refuses such a brief as `front-matter`, as `schedule --write` does, and so
-  does `archive` where lint's own `front-matter` error does not refuse it
-  already. `unarchive` stopped with an unexpected error, as `archive` did with
-  an empty banner template, and `archive` otherwise prepended a second block
-  above the banner.
+- Markdown is read by spec-core's scanner and front matter by its reader,
+  copied into `src/vendor/spec-core/` beside the glob engine and verified by
+  hash (ADR-0001, amended). What a brief's structure is stays as it was: a
+  section, and the title, is an ATX heading, `## Name`, outside a block
+  quote, so prose over a `---` line is still prose and a rule, not a section,
+  and a heading quoted from another document is not one of the brief's; a task
+  is a list item outside a block quote with `[ ]`, `[x]` or `[X]`. What counts
+  as code, a comment or a link is now what CommonMark says it is:
+  - **Indented code and raw-text HTML are code.** Four spaces at the top
+    level after a blank line, and a `<pre>`, `<script>`, `<style>` or
+    `<textarea>` block, hold no heading, task or link: a box in an indented
+    example no longer refuses an archival, and a fence indented four spaces
+    there no longer hides the rest of the brief.
+  - **A `<!--` in the middle of a line with no `-->` after it is text.** It
+    hid everything after it, so every later section was missing. One that
+    opens a line still runs to the end.
+  - **A heading's text leaves out a comment on its line**:
+    `## Intent <!-- required -->` fills `Intent`, where it was reported
+    missing.
+  - **A code span may close on a later line of its paragraph**, and a link
+    inside one is not rewritten.
+  - **A thematic break ends a task**, so a note after `***` no longer closes
+    the box above it; and **a tab indents to the next multiple of four
+    columns**, so a tab-indented note under a box indented by two spaces is
+    part of the item.
+  - **A link is one CommonMark reads.** `a](b.md)` and `[a](b.md c)` are text
+    and are no longer rewritten on archival; a definition in a block quote
+    is, and so is a destination after link text that runs over lines.
+  - **TOML front matter** between `+++` lines is recognised. `front-matter`
+    reports it, where it was read as body text and only the missing status
+    was reported.
+- Nothing is written into front matter that cannot hold it: TOML, or a block
+  never closed. `schedule --write` and `unarchive` refuse such a brief as
+  `front-matter`, and so does `archive` where lint's own `front-matter` error
+  does not refuse it already. `unarchive` stopped with an unexpected error on
+  a block never closed, as `archive` did with an empty banner template, and
+  `archive` otherwise prepended a second block above the banner.
+- A carriage return that ends no line, as a `\r\r\n` ending leaves one, is
+  read as a space; line numbers are unchanged. A front-matter line ending in
+  one now reads, where it was "not a key: value line".
+- Library API: `Brief.frontMatter` is spec-core's `FrontMatter`. It gains
+  `kind` (`'yaml'` or `'toml'`), and each entry gains `parent`, `keyStart`,
+  `valueStart` and `valueEnd`, offsets into the brief's `lines` joined by
+  `\n`. `Brief.scan` gains `links`, the destinations archival rewrites.
 - Globs are spec-core's `path` dialect, matched and intersected by its
   automaton, which is copied into `src/vendor/spec-core/` and verified by
   hash. The syntax is unchanged; what it means changes in four places.

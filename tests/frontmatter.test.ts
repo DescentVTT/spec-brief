@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  editable,
   findEntry,
   isNull,
   keyName,
@@ -262,5 +263,28 @@ describe('editing', () => {
     expect(removeEntry(lines, readFrontMatter(lines), 'deps')).toEqual(['---', 'status: proposed', 'date: 2026-09-24', '---', '', '# T']);
     expect(removeEntry(lines, readFrontMatter(lines), 'absent')).toEqual(lines);
     expect(removeEntry(['# T'], null, 'x')).toEqual(['# T']);
+  });
+});
+
+describe('what spec-brief reads with spec-core\'s reader', () => {
+  it('recognises TOML front matter, reads nothing from it, and says so', () => {
+    const fm = readFrontMatter(['+++', 'status = "active"', '+++', '', '# T']);
+    expect(fm).toEqual({ kind: 'toml', close: 2, entries: [], problems: [{ line: 0, message: 'TOML front matter is not read; write YAML between "---" lines' }] });
+  });
+
+  it('writes only into YAML front matter that is closed', () => {
+    expect(editable(read('---\na: 1\n---'))).toBe(true);
+    expect(editable(read('---\na: 1'))).toBe(false);
+    expect(editable(read('+++\na = 1\n+++'))).toBe(false);
+  });
+
+  it('keeps the lines of a brief whose line holds a carriage return that ends nothing', () => {
+    const lines = ['---', 'a: 1\rb', 'c: 2', '---'];
+    const fm = readFrontMatter(lines);
+    expect(fm?.entries.map((e) => [e.key, e.line])).toEqual([
+      ['a', 1],
+      ['c', 2],
+    ]);
+    expect(setEntry(lines, fm, 'c', '3')).toEqual(['---', 'a: 1\rb', 'c: 3', '---']);
   });
 });

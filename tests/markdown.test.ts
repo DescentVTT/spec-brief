@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { hasContent, linksOf, scan, sectionsOf, titleOf } from '../src/markdown.js';
+import { hasContent, scan, sectionsOf, titleOf } from '../src/markdown.js';
 
 const lines = (text: string): string[] => text.split('\n');
 
@@ -26,7 +26,8 @@ describe('masking', () => {
 
   it("opens a fence at any indentation, as a list item's fence is, and a heading at three spaces at most", () => {
     expect(scan(lines('   ```\n# in\n```\n# out')).headings.map((h) => h.text)).toEqual(['out']);
-    expect(scan(lines('    ```\n# hidden\n    ```\n# visible')).headings.map((h) => h.text)).toEqual(['visible']);
+    // Outside a list, four spaces after a blank line are indented code, so a fence written there is code.
+    expect(scan(lines('para\n\n    ```\n# visible')).headings.map((h) => h.text)).toEqual(['visible']);
     expect(scan(lines('   ## three')).headings.length).toBe(1);
     expect(scan(lines('    ## four')).headings.length).toBe(0);
   });
@@ -34,7 +35,7 @@ describe('masking', () => {
   it('keeps boxes and links in a fence inside a nested list item out of the structure', () => {
     const s = scan(lines('- [x] item\n  - nested\n\n    ```md\n    - [ ] write the thing\n    [x](../foo.md)\n    ```'));
     expect(s.tasks.map((t) => t.text)).toEqual(['item']);
-    expect(linksOf(s)).toEqual([]);
+    expect(s.links).toEqual([]);
   });
 
   it('blanks comments in both masks, across lines, and resumes after them', () => {
@@ -65,7 +66,7 @@ describe('masking', () => {
   });
 
   it('blanks everything before the body start', () => {
-    const s = scan(lines('---\n# fm\n---\n# body'), 3);
+    const s = scan(lines('---\n# fm\n---\n# body'));
     expect(s.headings.map((h) => h.text)).toEqual(['body']);
     expect(s.prose[1]).toBe('    ');
   });
@@ -160,7 +161,7 @@ describe('task items', () => {
 describe('links', () => {
   it('finds inline links, images and reference definitions with their columns', () => {
     const s = scan(lines('[a](x.md) and ![i](img/p.png "title")\n[ref]: ../y.md\n  [r2]:   <z w.md>'));
-    expect(linksOf(s)).toEqual([
+    expect(s.links).toEqual([
       { line: 0, start: 4, end: 8, target: 'x.md' },
       { line: 0, start: 19, end: 28, target: 'img/p.png' },
       { line: 1, start: 7, end: 14, target: '../y.md' },
@@ -170,20 +171,110 @@ describe('links', () => {
 
   it('balances parentheses in a destination and stops at the closing one', () => {
     const s = scan(lines('[w](a_(b).md) and [e]()'));
-    expect(linksOf(s).map((l) => l.target)).toEqual(['a_(b).md']);
+    expect(s.links.map((l) => l.target)).toEqual(['a_(b).md']);
   });
 
   it('skips spaces before a destination, and an unclosed angle bracket', () => {
     const s = scan(lines('[a]( spaced.md) [b](<open'));
-    expect(linksOf(s).map((l) => l.target)).toEqual(['spaced.md']);
+    expect(s.links.map((l) => l.target)).toEqual(['spaced.md']);
   });
 
   it('ignores links in code and comments', () => {
     const s = scan(lines('`[a](x.md)`\n<!-- [b](y.md) -->\n```\n[c](z.md)\n```'));
-    expect(linksOf(s)).toEqual([]);
+    expect(s.links).toEqual([]);
   });
 
   it('reads an empty definition as no link', () => {
-    expect(linksOf(scan(lines('[ref]:')))).toEqual([]);
+    expect(scan(lines('[ref]:')).links).toEqual([]);
+  });
+});
+
+/**
+ * spec-core's scanner reports more than a brief's structure. What spec-brief
+ * takes from it is decided in src/markdown.ts (ADR-0001, amended 2026-09-26),
+ * and each decision is held here by the input that tells it apart.
+ */
+describe('the dialect read from spec-core', () => {
+  it('takes ATX headings for sections, and reads a setext underline as the prose and rule it looks like', () => {
+    const s = scan(lines('Title\n=====\n\n## Notes\n\nFirst part\n---\n\nSecond part'));
+    expect(s.headings).toEqual([{ line: 3, level: 2, text: 'Notes' }]);
+    expect(titleOf(s)).toBeUndefined();
+    expect(sectionsOf(s).map((x) => [x.heading.text, x.end])).toEqual([['Notes', 9]]);
+    expect(s.prose[5]).toBe('First part');
+  });
+
+  it('leaves a heading or a box in a block quote to the document it was quoted from', () => {
+    const s = scan(lines('## Own\nx\n> ## Quoted\n> - [ ] quoted\n- [ ] own'));
+    expect(s.headings.map((h) => h.text)).toEqual(['Own']);
+    expect(s.tasks.map((t) => t.text)).toEqual(['own']);
+  });
+
+  it('reads a task only in the boxes GFM renders', () => {
+    const s = scan(lines('- [ ] a\n- [x] b\n- [X] c\n- [~] d\n- [?] e\n- [-] f\n- plain'));
+    expect(s.tasks.map((t) => [t.text, t.checked])).toEqual([
+      ['a', false],
+      ['b', true],
+      ['c', true],
+    ]);
+  });
+
+  it('reads a heading as a reader sees it, without a comment on its line', () => {
+    expect(scan(lines('## Goals <!-- required -->')).headings[0]?.text).toBe('Goals');
+  });
+
+  it('masks indented code and raw-text HTML, and reads nothing in them', () => {
+    const s = scan(lines('para\n\n    - [ ] code\n    [x](y.md)\n\n<pre>\n## pre\n- [ ] in pre\n[p](q.md)\n</pre>\n- [ ] after'));
+    expect(s.tasks.map((t) => t.text)).toEqual(['after']);
+    expect(s.headings).toEqual([]);
+    expect(s.links).toEqual([]);
+    expect(s.masked[2]?.trim()).toBe('');
+    expect(s.prose[2]).toBe('    - [ ] code');
+  });
+
+  it('closes a code span on a later line of its paragraph', () => {
+    const s = scan(lines('see `a\n[x](y.md)` end'));
+    expect(s.links).toEqual([]);
+    expect(s.masked).toEqual(['see   ', `${' '.repeat(10)} end`]);
+  });
+
+  it('ends a task at a thematic break, and nests a line indented by a tab', () => {
+    expect(scan(lines('- [ ] a\n***\n**Rejected** by 012')).tasks[0]?.end).toBe(1);
+    // A tab reaches column four, deeper than the marker at column two.
+    expect(scan(lines('  - [ ] a\n\n\t**Rejected** by 012')).tasks[0]?.end).toBe(3);
+  });
+
+  it('reads only the links and definitions that write a destination', () => {
+    const s = scan(lines('[i](a.md) ![img](b.png) [r][def] [def] <https://x> [[wiki]] a](c.md) [d](e.md f)\n\n[def]: g.md'));
+    expect(s.links).toEqual([
+      { line: 0, start: 4, end: 8, target: 'a.md' },
+      { line: 0, start: 17, end: 22, target: 'b.png' },
+      { line: 2, start: 7, end: 11, target: 'g.md' },
+    ]);
+  });
+
+  it('reads an image inside a link, in the order of the columns', () => {
+    expect(scan(lines('[![i](a.png)](b.md)')).links).toEqual([
+      { line: 0, start: 6, end: 11, target: 'a.png' },
+      { line: 0, start: 14, end: 18, target: 'b.md' },
+    ]);
+    // The link's text runs onto a second line, where its own destination is.
+    expect(scan(lines('[a ![i](one.png)\nmore](two.md)')).links).toEqual([
+      { line: 0, start: 8, end: 15, target: 'one.png' },
+      { line: 1, start: 6, end: 12, target: 'two.md' },
+    ]);
+    expect(scan(lines('[`![i](a.png)`](b.md)')).links.map((l) => l.target)).toEqual(['b.md']);
+  });
+
+  it('reads a definition in a block quote', () => {
+    expect(scan(lines('> [ref]: ../q.md')).links).toEqual([{ line: 0, start: 9, end: 16, target: '../q.md' }]);
+  });
+
+  it('keeps the lines of a brief whose line holds a carriage return that ends nothing', () => {
+    // spec-core ends a line at a lone CR; a brief's lines end at LF or CRLF only.
+    const s = scan(['a\rb [x](y.md)', 'c\rd', '## H', '- [ ] t\r']);
+    expect(s.headings).toEqual([{ line: 2, level: 2, text: 'H' }]);
+    expect(s.links).toEqual([{ line: 0, start: 8, end: 12, target: 'y.md' }]);
+    expect(s.tasks).toEqual([{ line: 3, end: 4, checked: false, text: 't' }]);
+    expect(s.prose).toHaveLength(4);
   });
 });

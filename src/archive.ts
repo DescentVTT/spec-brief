@@ -302,17 +302,26 @@ function withIntegrity(lines: readonly string[]): string[] {
 
 /**
  * Whether a plan can write into the brief's front matter: it has none, or one
- * that is closed. The front-matter rule reports one never closed, and a plan
- * that `edits` the front matter and is not refused by it already - the rule
- * lowered, or a reopening, which lint does not gate - is refused here. It
- * leaves the front matter as written rather than half edited.
+ * closed and written in YAML. One never closed, or TOML, cannot be written
+ * into. The front-matter rule reports both, and a plan that `edits` the front
+ * matter and is not refused by it already - the rule lowered, or a reopening,
+ * which lint does not gate - is refused here. It leaves the front matter as
+ * written rather than half edited.
  */
 function writable(brief: Brief, edits: boolean, blocking: Finding[]): boolean {
   const frontMatter = brief.frontMatter;
   if (frontMatter === null || editable(frontMatter)) return true;
   if (edits && !blocking.some((f) => f.rule === 'front-matter')) {
+    const open = frontMatter.close < 0;
     blocking.push(
-      problem(brief, 'front-matter', 'error', 1, 'the front matter is never closed, so it cannot be written into', 'close the front matter with a "---" line'),
+      problem(
+        brief,
+        'front-matter',
+        'error',
+        1,
+        open ? 'the front matter is never closed, so it cannot be written into' : 'the front matter is TOML, which spec-brief does not write',
+        open ? 'close the front matter with a "---" line' : 'write the front matter as YAML between "---" lines',
+      ),
     );
   }
   return false;
