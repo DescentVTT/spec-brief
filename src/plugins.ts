@@ -30,13 +30,16 @@ const IMPORT_CONDITIONS = new Set(['node', 'import', 'module-sync', 'default']);
  * A target of "exports": a path inside the package, `null` where the package
  * refuses the subpath, `undefined` where no condition matched and a fallback
  * may still. A target that is not a "./" path, or that climbs out of the
- * package, is refused, as Node refuses it.
+ * package or into another, is refused, as Node refuses it: its segments are
+ * split on a backslash too, since `join` reads one as a separator on Windows,
+ * where "pkg/..\..\outside" would otherwise climb out of node_modules.
  */
 function exportTarget(value: unknown, match: string | null): string | null | undefined {
   if (typeof value === 'string') {
     if (!value.startsWith('./')) return null;
     const path = match === null ? value : value.replaceAll('*', match);
-    return path.split('/').slice(1).some((part) => part === '..' || part === '.' || part === 'node_modules') ? null : path;
+    const parts = path.slice(2).split(/[\\/]/);
+    return parts.some((part) => part === '..' || part === '.' || part.toLowerCase() === 'node_modules') ? null : path;
   }
   if (Array.isArray(value)) {
     for (const item of value) {

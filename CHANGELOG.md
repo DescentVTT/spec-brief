@@ -232,6 +232,10 @@ Notable changes, newest first. Versions follow [semver](https://semver.org).
 - A plugin package whose `exports` offer only the `import` condition loads.
   Packages were resolved with `require.resolve`, which reads `exports` under
   the require conditions, so an ESM-only plugin could not be found.
+  A subpath is held to `exports` as Node holds it: a target, or what a
+  `*` matched, with a `.`, `..` or `node_modules` segment is refused,
+  split on `/` and on a backslash alike, so `pkg/..\..\outside` cannot
+  climb out of `node_modules` on Windows.
 - A brace group is split on its own commas only: `{[,]x,y}` has the two
   alternatives `[,]x` and `y`, where a comma or brace inside a class used to
   split the group or unbalance it.
