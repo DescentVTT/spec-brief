@@ -127,7 +127,7 @@ The result is the same every time for the same briefs. It is a valid schedule, n
 Closes a round. Refused, with every reason, when:
 
 - the brief has lint errors, is a draft, or depends on a brief that is still live;
-- a task item is neither ticked nor dispositioned - an open box counts as closed when a note under it starts with one of the `dispositions` (`**Delegated`, `**Accepted debt`, `**Rejected` by default), a note being a block of its own in the item, above any box nested in it: a bullet, or a paragraph after a blank line. A line that continues the box's paragraph is the box's sentence wrapping, not a note, so `- [ ] Explain why the` over `  **Rejected** designs failed` is open;
+- a task item is neither ticked nor dispositioned - an open box counts as closed when a note under it starts with one of the `dispositions` (`**Delegated`, `**Accepted debt`, `**Rejected` by default), a note being a line under the box, above any box nested in it, that starts a bullet, a paragraph after a blank line, or a line after one that ends a sentence. A line that continues a sentence is the box's text wrapping, not a note, so `- [ ] Explain why the` over `  **Rejected** designs failed` is open, and `- [ ] Add a cache.` over `  **Rejected** by 012` is closed;
 - the working tree holds uncommitted work outside the brief directories (`--allow-dirty` to proceed);
 - the round's commit changed a file in `protectedFiles` - one refusal per file, naming it, unless a plugin that verifies rulings [waives it](#waiving-a-refusal).
 
