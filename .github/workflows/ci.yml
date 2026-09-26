@@ -8,8 +8,12 @@ on:
   # The release workflow runs the whole matrix again on the commit it publishes.
   workflow_call:
 
+# Called by the release, `github.workflow` is the caller's name, so its CI has a
+# group of its own: a push to main cannot cancel a release rehearsal's CI
+# halfway, and a rehearsal cannot cancel main's. A pull request's runs, and
+# main's, still replace their own older ones.
 concurrency:
-  group: ci-${{ github.event.pull_request.number || github.ref }}
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 # Nothing here writes to the repository.
