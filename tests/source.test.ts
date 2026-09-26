@@ -6,7 +6,9 @@ import { describe, expect, it } from 'vitest';
 import { releaseOf } from '../scripts/release.js';
 import { HELP } from '../src/cli.js';
 import { matchGlob, parseGlob } from '../src/glob.js';
+import { dirOf, isRelativeTarget, resolveFrom, splitTarget } from '../src/links.js';
 import { ARCHIVE_RULES, COLLISION_RULES, RULES } from '../src/rules.js';
+import { scanMarkdown } from '../src/vendor/spec-core/markdown/index.js';
 
 /**
  * Claims the repository makes about itself, checked rather than trusted: a
@@ -141,6 +143,30 @@ describe('the documents', () => {
     // pull request that bumps the version, before anyone tags it.
     const { version } = JSON.parse(readFileSync('package.json', 'utf8')) as { version: string };
     expect(releaseOf(`v${version}`, version, readFileSync('CHANGELOG.md', 'utf8'))).toMatchObject({ version });
+  });
+
+  it('the documents the package ships link only to files it ships, or by URL to a file the repository holds', () => {
+    // npm ships what `files` names, so a relative link to anything else is
+    // dead on npmjs.com and in node_modules; such a file is linked on GitHub.
+    const { files } = JSON.parse(readFileSync('package.json', 'utf8')) as { files: string[] };
+    const ships = (path: string): boolean => files.some((entry) => path === entry || path.startsWith(`${entry}/`));
+    const documents = everything.filter((path) => path.endsWith('.md') && ships(path));
+    expect(documents).toEqual(expect.arrayContaining(['README.md', 'CHANGELOG.md']));
+    const REPOSITORY = 'https://github.com/DescentVTT/spec-brief/blob/main/';
+    const dead: string[] = [];
+    for (const document of documents) {
+      for (const link of scanMarkdown(readFileSync(document, 'utf8')).links) {
+        if (link.form !== 'inline' && link.form !== 'definition') continue;
+        const { path } = splitTarget(link.target);
+        if (link.target.startsWith(REPOSITORY)) {
+          if (!everything.includes(path.slice(REPOSITORY.length))) dead.push(`${document}: ${link.target}`);
+        } else if (isRelativeTarget(link.target)) {
+          const resolved = resolveFrom(dirOf(document), decodeURIComponent(path));
+          if (resolved === null || !ships(resolved) || !existsSync(resolved)) dead.push(`${document}: ${link.target}`);
+        }
+      }
+    }
+    expect(dead).toEqual([]);
   });
 
   it('every ADR has a status and a date, and the index lists them all', () => {

@@ -20,6 +20,13 @@ Notable changes, newest first. Versions follow [semver](https://semver.org).
 - The scanner makes a document's links, list items and directives mask the
   first time they are read, and keeps them. The answers are the same.
 
+### Fixed
+
+- The README's links to `docs/adr/` and `src/config.ts` are GitHub URLs. The
+  package ships neither, so the relative links were dead on npmjs.com and in
+  `node_modules`. A test holds every link in a document the package ships to
+  a file it ships, or to one the repository holds by URL.
+
 ## 0.2.0
 
 Scopes are read by spec-core's glob automaton, so a collision is proved with a

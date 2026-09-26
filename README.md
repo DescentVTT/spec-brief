@@ -165,7 +165,7 @@ Reopens an archived brief: the banner and the hash come off, the status goes bac
 | `fields` | `[]` | Front-matter keys the repository uses beyond the built-in ones. |
 | `archiving.tasks` | `"all"` | `"all"`, or the sections whose boxes must be closed. |
 | `archiving.dispositions` | `**Delegated`, `**Accepted debt`, `**Rejected` | What a note under an open box starts with to close it. |
-| `archiving.banner` | see [`src/config.ts`](src/config.ts) | Banner lines, with `{date}`, `{summary}`, `{pr}`, `{commit}`, `{diffstat}`, `{links}`, `{id}`, `{title}`, `{author}`. A line with an empty placeholder is left out. |
+| `archiving.banner` | see [`src/config.ts`](https://github.com/DescentVTT/spec-brief/blob/main/src/config.ts) | Banner lines, with `{date}`, `{summary}`, `{pr}`, `{commit}`, `{diffstat}`, `{links}`, `{id}`, `{title}`, `{author}`. A line with an empty placeholder is left out. |
 | `archiving.rewriteLinks` | `true` | Rewrite relative links when a brief moves: its own, and the ones other live briefs hold to it. Off, neither is edited, and the links other briefs are left holding are reported as `stale-link`. |
 | `archiving.freeze` | `true` | Write an integrity hash, so a later edit is caught. |
 | `archiving.base` | `null` | Branch the diff is measured from, such as `"main"`. |
@@ -332,7 +332,7 @@ export default () => ({
 
 ## Design
 
-The decisions and what they cost are in [`docs/adr/`](docs/adr/README.md).
+The decisions and what they cost are in [`docs/adr/`](https://github.com/DescentVTT/spec-brief/blob/main/docs/adr/README.md).
 
 ## License
 
