@@ -91,6 +91,59 @@ export function isReady(corpus: Corpus, brief: Brief): boolean {
   return brief.dependsOn.every((dependency) => resolveDependency(corpus, dependency)?.phase === 'archived');
 }
 
+function label(brief: Brief): string {
+  return brief.id ?? brief.name;
+}
+
+/** Briefs by id, numbers by value; by path where two ids agree. */
+export function byId(a: Brief, b: Brief): number {
+  const x = label(a);
+  const y = label(b);
+  const numeric = /^\d+$/.test(x) && /^\d+$/.test(y);
+  if (numeric && Number(x) !== Number(y)) return Number(x) - Number(y);
+  if (x < y) return -1;
+  if (x > y) return 1;
+  return a.file < b.file ? -1 : a.file > b.file ? 1 : 0;
+}
+
+/** The live briefs a brief depends on, by id. Archived ones are done, and unknown ones are the dependency rule's. */
+export function liveDependencies(corpus: Corpus, brief: Brief): Brief[] {
+  const targets = brief.dependsOn
+    .map((d) => resolveDependency(corpus, d))
+    .filter((t): t is Brief => t !== undefined && t !== brief && t.phase === 'live');
+  return [...new Set(targets)].sort(byId);
+}
+
+/** A live brief that cannot start before deferred work, and the dependency it waits through. */
+export interface Waiting {
+  readonly brief: Brief;
+  /** The deferred brief it depends on, or the brief through which it waits on one; the first by id. */
+  readonly waitsOn: Brief;
+}
+
+/**
+ * Live briefs that wait on deferred work: each depends on a deferred brief,
+ * or on a brief that waits on one. Neither can start before an event nobody
+ * has scheduled, so neither runs in a wave (ADR-0011): `schedule` places them
+ * nowhere and `matrix` compares them with nothing. By id.
+ */
+export function waitingOnDeferred(corpus: Corpus): Waiting[] {
+  const candidates = corpus.live.filter((b) => b.status !== 'deferred');
+  const dependencies = new Map(candidates.map((b) => [b, liveDependencies(corpus, b)]));
+  const held = new Set<Brief>();
+  const holds = (d: Brief): boolean => d.status === 'deferred' || held.has(d);
+  // Each pass holds another brief or is the last, so there is at most one pass more than there are briefs.
+  for (let grew = true; grew; ) {
+    grew = false;
+    for (const brief of candidates) {
+      if (held.has(brief) || !(dependencies.get(brief) as Brief[]).some(holds)) continue;
+      held.add(brief);
+      grew = true;
+    }
+  }
+  return [...held].sort(byId).map((brief) => ({ brief, waitsOn: (dependencies.get(brief) as Brief[]).find(holds) as Brief }));
+}
+
 /**
  * Dependency cycles among live briefs, each as the ids along it with the first
  * repeated at the end. Found with Tarjan's algorithm; each strongly connected

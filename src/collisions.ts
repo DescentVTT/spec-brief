@@ -18,7 +18,7 @@
 
 import type { Brief } from './brief.js';
 import { lineOfField } from './brief.js';
-import type { Corpus } from './corpus.js';
+import { type Corpus, waitingOnDeferred, type Waiting } from './corpus.js';
 import { globBases, readingIn, WITNESS_BUDGET } from './glob.js';
 import { configuredSeverity } from './lint.js';
 import { meet, type Overlap, type Scope, scopeOf } from './scope.js';
@@ -65,6 +65,12 @@ export interface CollisionReport {
   readonly unscheduled: readonly Brief[];
   /** Deferred briefs, which wait for their trigger and run in no wave. */
   readonly deferred: readonly Brief[];
+  /**
+   * Briefs that depend on a deferred brief, or on one that waits on one. They
+   * cannot start before the deferred work, so they run in no wave either, and
+   * are compared with nothing - as `schedule` places them nowhere. By id.
+   */
+  readonly waiting: readonly Waiting[];
 }
 
 export interface CollisionOptions {
@@ -107,9 +113,11 @@ export function collisions(corpus: Corpus, options: CollisionOptions = {}): Coll
   const reading = readingIn(options.repoFiles ?? null);
   const budget = options.budget ?? WITNESS_BUDGET;
   const deferred = corpus.live.filter((b) => b.status === 'deferred');
-  const live = corpus.live.filter((b) => b.status !== 'deferred');
+  const waiting = waitingOnDeferred(corpus);
+  const held = new Set(waiting.map((w) => w.brief));
+  const live = corpus.live.filter((b) => b.status !== 'deferred' && !held.has(b));
   const scopes = new Map(live.map((brief) => [brief, scopeOf(brief, reading)]));
-  if (options.all === true) return { waves: [matrix(null, live, scopes, budget)], unscheduled: [], deferred };
+  if (options.all === true) return { waves: [matrix(null, live, scopes, budget)], unscheduled: [], deferred, waiting };
   const byWave = new Map<number, Brief[]>();
   const unscheduled: Brief[] = [];
   for (const brief of live) {
@@ -117,7 +125,7 @@ export function collisions(corpus: Corpus, options: CollisionOptions = {}): Coll
     else byWave.set(brief.wave, [...(byWave.get(brief.wave) ?? []), brief]);
   }
   const waves = [...byWave.keys()].sort((a, b) => a - b).map((wave) => matrix(wave, byWave.get(wave) as Brief[], scopes, budget));
-  return { waves, unscheduled, deferred };
+  return { waves, unscheduled, deferred, waiting };
 }
 
 function label(brief: Brief): string {

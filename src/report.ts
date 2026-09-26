@@ -26,10 +26,12 @@ export type Format = 'pretty' | 'json' | 'sarif' | 'github' | 'gitlab';
 export const FORMATS: readonly Format[] = ['pretty', 'json', 'sarif', 'github', 'gitlab'];
 
 /**
- * The version of the JSON documents this tool prints. Bumped when a field
- * changes meaning. 2: a collision in `matrix` is a pair of briefs, with every
- * pair of patterns that meets, and a shared-directory entry lists its
- * directories.
+ * The version of the JSON documents this tool prints, every command's alike.
+ * Bumped when a field changes meaning. 2: a collision in `matrix` is a pair of
+ * briefs, with every pair of patterns that meets and a witness that is always
+ * a file; a shared-directory entry lists its directories; and deferred briefs,
+ * and the briefs waiting on them, leave `waves[].briefs` for `deferred` and
+ * `waiting`.
  */
 export const JSON_SCHEMA_VERSION = 2;
 
@@ -317,6 +319,10 @@ export function prettyMatrix(report: CollisionReport, style: Style): string {
   if (report.unscheduled.length > 0) {
     out.push(paint(style, 'dim', `no wave: ${report.unscheduled.map(label).join(', ')}`));
   }
+  for (const w of report.waiting) {
+    const why = w.waitsOn.status === 'deferred' ? 'which is deferred' : 'which waits on deferred work';
+    out.push(`${paint(style, 'dim', 'waits:')} ${label(w.brief)} on ${label(w.waitsOn)}, ${why}`);
+  }
   if (report.deferred.length > 0) {
     out.push(paint(style, 'dim', `deferred: ${report.deferred.map(label).join(', ')}`));
   }
@@ -341,6 +347,7 @@ export function matrixJson(report: CollisionReport): Record<string, unknown> {
     })),
     unscheduled: report.unscheduled.map((b) => b.id),
     deferred: report.deferred.map((b) => b.id),
+    waiting: report.waiting.map((w) => ({ id: w.brief.id, file: w.brief.file, waitsOn: w.waitsOn.id })),
   };
 }
 

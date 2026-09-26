@@ -100,7 +100,12 @@ Notable changes, newest first. Versions follow [semver](https://semver.org).
 - Deferred work has a status: `status.deferred` in configuration, `"deferred"`
   by default and `null` for a repository without one. A deferred brief lives
   in the briefs directory, is never ready, is listed and left out by
-  `matrix`, and is refused by `archive` as `archive-deferred`. It names the
+  `matrix`, and is refused by `archive` as `archive-deferred`. So is a brief
+  that depends on deferred work, directly or through another brief: `matrix`
+  lists it under `waits`, and in JSON under `waiting` with the brief it waits
+  on, and compares it with nothing, as `schedule` places it nowhere. Before,
+  the matrix checked it in the wave it declared and could fail where the
+  schedule said the waves held. It names the
   event that brings it back in `trigger`, a new built-in field that `list`
   reports.
 - `deferral-trigger`, an error: a deferred brief with no `trigger`, or one

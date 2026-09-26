@@ -54,6 +54,8 @@ export {
   pendingDependencies,
   resolveDependency,
   type SourceFile,
+  type Waiting,
+  waitingOnDeferred,
 } from './corpus.js';
 export { type ArchiveOptions, BriefEngine, EngineError, type EngineSetup, type NewOptions, type OpenOptions, today } from './engine.js';
 export { type FileSystem, MemoryFileSystem, NodeFileSystem } from './fs.js';

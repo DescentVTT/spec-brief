@@ -409,6 +409,7 @@ describe('collisions, after 0.1.0', () => {
       ],
       unscheduled: ['004'],
       deferred: [],
+      waiting: [],
     });
   });
 
@@ -438,6 +439,7 @@ describe('collisions, after 0.1.0', () => {
       waves: [{ wave: 1, briefs: ['001', '002', '003'], collisions: [], undecided: [], sharedDirectories: [{ a: '001', b: '002', directories: ['x'] }], unscoped: ['003'] }],
       unscheduled: [],
       deferred: [],
+      waiting: [],
     });
     expect(inWords(['a/', 'b/'])).toBe('a/ and b/');
     expect(inWords([])).toBe('');
