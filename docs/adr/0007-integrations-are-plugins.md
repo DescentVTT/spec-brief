@@ -42,9 +42,9 @@ rules, a `waive` hook.
 - **What it is asked.** After the archive is planned, the engine - the edge
   that meets plugins - calls each plugin's `waive` with the root, the brief (id,
   file, text), the plan's refusals, the base and the commit, all as one frozen
-  copy. It asks only when
-  the plan has a refusal a plugin may lift: a hook may read git and verify
-  signatures, and a plan with nothing to lift has no question for it.
+  copy. It asks only when the plan has a refusal a plugin may lift: a hook may
+  read git and verify signatures, and a plan with nothing to lift has no
+  question for it.
 - **What it may answer.** A list of `{ rule, path, reason }`. Only
   `protected-file` and `out-of-scope` can be waived: a verifier can say a file
   was allowed to change, and whether the round is done - its boxes, its
@@ -59,8 +59,9 @@ rules, a `waive` hook.
   has waived nothing.
 - **What a failure means.** A hook that throws, or answers in another shape,
   stops the run with exit 2, as a plugin that fails to load does. A write to
-  the frozen copy throws, so a hook that tries to change the plan stops it. An archival
-  decided without the check the configuration asked for is not one to trust.
+  the frozen copy throws, so a hook that tries to change the plan stops it.
+  An archival decided without the check the configuration asked for is not
+  one to trust.
 
 For this, a refusal must name its path. **`protected-file` is one finding per
 file**, with a `path` field - each protected file changed is its own defect,
