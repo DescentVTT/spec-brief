@@ -369,6 +369,27 @@ describe('reopening', () => {
     expect(write(planUnarchive(after, the(after, '001')), A)).toBe(text);
   });
 
+  it('rewrites an image inside a link and the link, each once, and restores both on reopening', () => {
+    // spec-core lists the image after the link it lies in, and spec-brief reads
+    // the link's text as well: one destination found twice is rewritten once.
+    const text = goodBrief({}, '\n[![b](img/x.png)](../docs/a.md) and [x ![c](img/y.png) y](<../docs/b c.md>)\n');
+    const inbound = goodBrief({}, '\nSee [![a](img/x.png)](001_a.md).\n');
+    const corpus = corpusOf({ [A]: text, [B]: inbound });
+    const plan = planArchive(corpus, the(corpus, '001'), { date: '2026-09-24' });
+    expect(plan.blocking).toEqual([]);
+    expect(plan.linksRewritten).toBe(4);
+    const archived = write(plan, 'briefs/archive/001_a.md');
+    expect(archived).toContain('\n[![b](../img/x.png)](../../docs/a.md) and [x ![c](../img/y.png) y](<../../docs/b c.md>)\n');
+    // Another brief's badge resolves from where it was; only its link moves.
+    const other = write(plan, B);
+    expect(other).toContain('\nSee [![a](img/x.png)](archive/001_a.md).\n');
+    const after = corpusOf({ 'briefs/archive/001_a.md': archived, [B]: other });
+    const back = planUnarchive(after, the(after, '001'));
+    expect(back.linksRewritten).toBe(4);
+    expect(write(back, A)).toBe(text);
+    expect(write(back, B)).toBe(inbound);
+  });
+
   it('refuses to reopen a brief whose front matter it cannot write into', () => {
     const toml = '+++\nstatus = "archived"\n+++\n\n# T\n';
     const corpus = corpusOf({ 'briefs/archive/001_a.md': toml, 'briefs/archive/002_b.md': '---\nstatus: archived\n\n# T\n' });

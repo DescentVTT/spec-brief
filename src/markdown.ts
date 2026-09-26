@@ -13,8 +13,9 @@
  *   space, `x` or `X`. The scanner reads `[~]`, `[?]` and others as well,
  *   which a brief does not write.
  * - A link destination is one written in the link or in a definition: the
- *   inline form and the definition, images included, an image inside a link's
- *   text too. A reference is rewritten through its definition, once.
+ *   inline form and the definition, images included, an image or a link inside
+ *   a link's text too, each once. A reference is rewritten through its
+ *   definition, once.
  *
  * Everything here is in 0-based lines of the brief's `lines`, and columns
  * within them.
@@ -63,7 +64,7 @@ export interface Scan {
   readonly masked: readonly string[];
   readonly headings: readonly Heading[];
   readonly tasks: readonly TaskItem[];
-  /** Destinations outside code and comments, in the order of their lines and columns. */
+  /** Destinations outside code and comments, each once, in the order of their lines and columns. */
   readonly links: readonly LinkDestination[];
 }
 
@@ -74,19 +75,27 @@ function isBox(checkbox: string | null): boolean {
 
 /**
  * The links that write their destination - inline links and images, and
- * definitions - with offsets into the text scanned `at` that offset.
+ * definitions - with offsets into the text scanned `at` that offset, added to
+ * `found` by the offset of the destination.
  *
  * A link's text may hold an image, `[![diagram](d.png)](d.md)`, whose
- * destination moves with the brief as the link's does. spec-core reads the
- * link and resumes after it, so its text is read again here. Each text is
- * shorter than the one it came from, so the reading ends.
+ * destination moves with the brief as the link's does. spec-core lists it
+ * after the link, and reads nothing else there: not a link in the text,
+ * `[a [b](b.md)](c.md)`, which CommonMark takes as the link where spec-core
+ * takes the outer pair, nor an image in an image's alt text or a wiki link's.
+ * So each text is read again here, which finds spec-core's image a second
+ * time. It is one destination, kept once, because two rewrites of the same
+ * columns would write the second over the first. Each text is shorter than
+ * the one it came from, so the reading ends.
  */
-function written(core: MarkdownScan, at: number): Link[] {
-  return core.links.flatMap((link) => {
-    const inner = written(scanMarkdown(link.text), at + core.text.indexOf(link.text, link.start));
-    if (link.form !== 'inline' && link.form !== 'definition') return inner;
-    return [{ ...link, targetStart: at + link.targetStart, targetEnd: at + link.targetEnd }, ...inner];
-  });
+function written(core: MarkdownScan, at: number, found: Map<number, Link>): Map<number, Link> {
+  for (const link of core.links) {
+    written(scanMarkdown(link.text), at + core.text.indexOf(link.text, link.start), found);
+    if (link.form === 'inline' || link.form === 'definition') {
+      found.set(at + link.targetStart, { ...link, targetStart: at + link.targetStart, targetEnd: at + link.targetEnd });
+    }
+  }
+  return found;
 }
 
 /** Scans a brief's lines, which carry no byte-order mark. */
@@ -103,7 +112,7 @@ export function scan(lines: readonly string[]): Scan {
     tasks: core.listItems
       .filter((item) => isBox(item.checkbox) && item.quoteDepth === 0)
       .map((item) => ({ line: item.line - 1, end: item.endLine, checked: item.checkbox !== ' ', text: item.firstLine })),
-    links: written(core, 0)
+    links: [...written(core, 0, new Map()).values()]
       .map((link) => {
         // A link's text may run over lines; its destination is on the last.
         const at = core.index.positionAt(link.targetStart);
