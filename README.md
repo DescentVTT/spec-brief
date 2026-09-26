@@ -125,7 +125,7 @@ Exit 0 when the declared waves already hold, 1 when they would change or the dep
 Closes a round. Refused, with every reason, when:
 
 - the brief has lint errors, is a draft, or depends on a brief that is still live;
-- a task item is neither ticked nor dispositioned - an open box counts as closed when a note under it starts with one of the `dispositions` (`**Delegated`, `**Accepted debt`, `**Rejected` by default), a note being a line of the item, bare or as a bullet, above any box nested in it;
+- a task item is neither ticked nor dispositioned - an open box counts as closed when a note under it starts with one of the `dispositions` (`**Delegated`, `**Accepted debt`, `**Rejected` by default), a note being a block of its own in the item, above any box nested in it: a bullet, or a paragraph after a blank line. A line that continues the box's paragraph is the box's sentence wrapping, not a note, so `- [ ] Explain why the` over `  **Rejected** designs failed` is open;
 - the working tree holds uncommitted work outside the brief directories (`--allow-dirty` to proceed);
 - the round's commit changed a file in `protectedFiles` - one refusal per file, naming it, unless a plugin that verifies rulings [waives it](#waiving-a-refusal).
 

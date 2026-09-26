@@ -89,9 +89,19 @@ merge base was the commit itself and the empty diff passed every check. A brief
 with a scope whose round's changes are unknown now gets `scope-unmeasured`: a
 warning, a refusal under `--strict`, and a hint naming what to pass.
 
-**A disposition is a note that starts with a marker**, on a line under the box
-and within its item. A marker anywhere in the item used to count, the box's own
-text included.
+**A disposition is a note that starts with a marker**, a block of its own
+under the box and within its item: a bullet, or a paragraph after a blank
+line. A marker anywhere in the item used to count, the box's own text
+included. A line that continues the box's paragraph, indented or lazily, is
+not a note either: `- [ ] Explain why the` over `  **Rejected** designs
+failed` is the box's sentence wrapping, and nothing in the syntax tells it
+from `- [ ] Add a cache` over `  **Rejected** by 012`. So both are read as
+the box's text, and the second refuses until its note is a bullet or has a
+blank line above it; the hint says so. That costs a convention: the measured
+repository writes its notes as the line after the box's text, under boxes it
+also ticks, and a note written that way under an open box now refuses rather
+than closing it. A refusal names the box and the fix; an archival that
+passed over a wrapped task would have said nothing.
 
 **`archiving.rewriteLinks` governs both directions.** The links live briefs
 hold to the moving brief were rewritten whatever the switch said. Off, no other
