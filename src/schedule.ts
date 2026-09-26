@@ -110,24 +110,34 @@ function clash(own: Scope, wave: number, here: readonly Scope[], budget: number)
   return null;
 }
 
+/** What a declared wave is judged against. */
+interface Judge {
+  /** The briefs the matrix compares: none deferred, none waiting on deferred work. */
+  readonly compared: readonly Brief[];
+  /** Every live brief's live dependencies, and the live briefs that depend on each, by id. */
+  readonly dependencies: ReadonlyMap<Brief, readonly Brief[]>;
+  readonly dependents: ReadonlyMap<Brief, readonly Brief[]>;
+  readonly scope: (b: Brief) => Scope;
+  readonly budget: number;
+}
+
 /**
  * Why a brief's declared wave does not hold, judged as `lint` and `matrix`
  * judge it: against the waves the other briefs declare, not the ones proposed.
  * Collisions are with the briefs the matrix compares; the dependency order is
  * wave-order's, both ways, over every live brief.
  */
-function breachesOf(corpus: Corpus, brief: Brief, wave: number, compared: readonly Brief[], scope: (b: Brief) => Scope, budget: number): Breach[] {
+function breachesOf(brief: Brief, wave: number, judge: Judge): Breach[] {
   const out: Breach[] = [];
-  for (const dependency of liveDependencies(corpus, brief)) {
+  for (const dependency of judge.dependencies.get(brief) as Brief[]) {
     if (dependency.wave !== null && dependency.wave >= wave) out.push({ reason: 'dependency', brief: dependency, wave: dependency.wave });
   }
-  for (const other of [...corpus.live].sort(byId)) {
-    if (other.wave === null || other.wave > wave || !liveDependencies(corpus, other).includes(brief)) continue;
-    out.push({ reason: 'dependent', brief: other, wave: other.wave });
+  for (const other of judge.dependents.get(brief) ?? []) {
+    if (other.wave !== null && other.wave <= wave) out.push({ reason: 'dependent', brief: other, wave: other.wave });
   }
-  for (const other of compared) {
+  for (const other of judge.compared) {
     if (other === brief || other.wave !== wave) continue;
-    const overlaps = meet(scope(brief), scope(other), budget).overlaps;
+    const overlaps = meet(judge.scope(brief), judge.scope(other), judge.budget).overlaps;
     if (overlaps.length > 0) out.push({ reason: 'collision', brief: other, overlaps });
   }
   return out;
@@ -147,9 +157,14 @@ export function schedule(corpus: Corpus, options: ScheduleOptions = {}): Schedul
     scopes.set(b, known);
     return known;
   };
-  // The briefs the matrix compares: none that waits on deferred work.
   const waiting = new Set(waitingOnDeferred(corpus).map((w) => w.brief));
-  const compared = briefs.filter((b) => !waiting.has(b));
+  // Deferred briefs too: lint's wave-order reads every live brief's wave.
+  const everyDependency = new Map(corpus.live.map((b) => [b, liveDependencies(corpus, b)]));
+  const dependents = new Map<Brief, Brief[]>();
+  for (const b of [...corpus.live].sort(byId)) {
+    for (const d of everyDependency.get(b) as Brief[]) dependents.set(d, [...(dependents.get(d) ?? []), b]);
+  }
+  const judge: Judge = { compared: briefs.filter((b) => !waiting.has(b)), dependencies: everyDependency, dependents, scope, budget };
 
   const waveOf = new Map<Brief, number>();
   const occupants = new Map<number, Scope[]>();
@@ -178,7 +193,7 @@ export function schedule(corpus: Corpus, options: ScheduleOptions = {}): Schedul
     }
     waveOf.set(next, wave);
     occupants.set(wave, [...(occupants.get(wave) ?? []), own]);
-    const breaches = next.wave === null || next.wave === wave ? [] : breachesOf(corpus, next, next.wave, compared, scope, budget);
+    const breaches = next.wave === null || next.wave === wave ? [] : breachesOf(next, next.wave, judge);
     placements.push({ brief: next, declared: next.wave, proposed: wave, after, passed, unscoped: own.affected.length === 0, breaches });
   }
 
