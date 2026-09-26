@@ -644,7 +644,7 @@ describe('configuration', () => {
       '"archive" must be a directory inside the repository, not "../b/archive"',
     ]);
     expect(problems({ archive: '../../x' })).toEqual(['"archive" must be a directory inside the repository, not "../../x"']);
-    expect(problems({ status: { draft: 'Done', active: 'done' } })).toEqual(['the status words for draft, active, deferred and archived must differ']);
+    expect(problems({ status: { draft: 'Done', active: 'done' } })).toEqual(['the status words must differ: "Done" is the word for draft and active; give one of them another word']);
     expect(problems({ archiving: { banner: ['{nope}'] } })).toEqual([
       '"archiving.banner" uses {nope}; the placeholders are {date}, {summary}, {pr}, {commit}, {diffstat}, {links}, {id}, {title}, {author}',
     ]);

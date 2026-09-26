@@ -42,7 +42,7 @@ files -> brief.ts -> corpus.ts -> rules.ts / collisions.ts / schedule.ts / archi
 | `archive.ts` | Planning archival and its reverse. |
 | `apply.ts` | Executing a plan as a transaction. |
 | `scaffold.ts` | New briefs and the next id. |
-| `report.ts` | Pretty, JSON, SARIF and GitHub output. |
+| `report.ts` | Pretty, JSON, SARIF, GitHub and GitLab output. |
 | `fs.ts`, `git.ts`, `plugins.ts` | The edges: the disk, git, and loading plugins. |
 | `engine.ts` | The pieces composed over a real or an in-memory repository. |
 | `cli.ts` | Arguments, dispatch, exit codes. |

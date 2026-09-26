@@ -83,6 +83,9 @@ export { type Format, FORMATS, githubCommands, gitlabCodeQuality, JSON_SCHEMA_VE
 export { ARCHIVE_RULES, COLLISION_RULES, type Rule, type RuleContext, type RuleInfo, type RuleResult, RULES } from './rules.js';
 export { nextId, renderNewBrief } from './scaffold.js';
 export {
+  type Breach,
+  breachReasons,
+  holds,
   moves,
   type Passed,
   type Placement,

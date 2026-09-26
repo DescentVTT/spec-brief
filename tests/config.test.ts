@@ -137,7 +137,13 @@ describe('resolving a configuration', () => {
   it('refuses relationships the schema cannot express', () => {
     expect(problems({ briefs: 'b', archive: './b/' })).toEqual(['"briefs" and "archive" must be different directories']);
     expect(problems({ briefs: 'b', archive: 'b\\' })).toEqual(['"briefs" and "archive" must be different directories']);
-    expect(problems({ status: { active: 'Done', archived: 'done' } })).toEqual(['the status words for draft, active, deferred and archived must differ']);
+    expect(problems({ status: { active: 'Done', archived: 'done' } })).toEqual(['the status words must differ: "Done" is the word for active and archived; give one of them another word']);
+    // A 0.1 configuration that spelt its drafts "deferred" meets the new status's default word.
+    expect(problems({ status: { draft: 'deferred' } })).toEqual([
+      'the status words must differ: "deferred" is the word for draft and deferred; give one of them another word, or set "status.deferred" to null where no work is deferred',
+    ]);
+    expect(problems({ status: { draft: 'deferred', deferred: null } })).toEqual([]);
+    expect(problems({ status: { draft: 'x', active: 'X', archived: 'x' } })).toEqual(['the status words must differ: "x" is the word for draft, active and archived; give all but one another word']);
     expect(problems({ files: '[' })).toEqual(['"files" pattern "[": a "[" is never closed']);
     expect(problems({ exclude: ['ok.md', '{'] })).toEqual(['"exclude" pattern "{": a "{" is never closed']);
     expect(problems({ archiving: { banner: ['{date} {sumary}'] } })).toEqual([

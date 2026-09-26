@@ -18,7 +18,7 @@ import { dirname, join } from 'node:path';
 import { parseGlob } from './glob.js';
 import { normalisePath } from './links.js';
 import { type Schema, toJsonSchema, validate } from './schema.js';
-import { templateHoles } from './text.js';
+import { inWords, templateHoles } from './text.js';
 import type { SeveritySetting } from './types.js';
 
 export interface SectionRule {
@@ -363,9 +363,20 @@ function checkConfig(config: Config): string[] {
   const briefs = inside('briefs', config.briefs);
   const archive = inside('archive', config.archive);
   if (briefs !== null && briefs === archive) problems.push('"briefs" and "archive" must be different directories');
-  const words = statusWords(config);
-  if (new Set(words.map((w) => w.toLowerCase())).size !== words.length) {
-    problems.push('the status words for draft, active, deferred and archived must differ');
+  // Named by the statuses that share a word: a 0.1 configuration that spelt
+  // another status "deferred" meets the default for the new one here.
+  const sharing = new Map<string, { word: string; keys: string[] }>();
+  for (const key of ['draft', 'active', 'deferred', 'archived'] as const) {
+    const word = config.status[key];
+    if (word === null) continue;
+    const group = sharing.get(word.toLowerCase()) ?? { word, keys: [] };
+    group.keys.push(key);
+    sharing.set(word.toLowerCase(), group);
+  }
+  for (const { word, keys } of sharing.values()) {
+    if (keys.length < 2) continue;
+    const orNull = keys.includes('deferred') ? ', or set "status.deferred" to null where no work is deferred' : '';
+    problems.push(`the status words must differ: "${word}" is the word for ${inWords(keys)}; give ${keys.length === 2 ? 'one of them' : 'all but one'} another word${orNull}`);
   }
   // A pattern that does not parse would match nothing, and a run over no briefs reads as clean.
   for (const [key, pattern] of [['files', config.files], ...config.exclude.map((e) => ['exclude', e] as const)] as const) {
