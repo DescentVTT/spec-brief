@@ -55,7 +55,7 @@
     "test:mutation:full": "stryker run",
     "schema": "npm run build && node scripts/write-schema.mjs",
     "selfcheck": "node ./bin/spec-brief.js lint",
-    "prepublishOnly": "npm run clean && npm run build"
+    "prepublishOnly": "node -e \"if (process.env.GITHUB_ACTIONS !== 'true') { console.error('npm publish is refused outside GitHub Actions: a release is a v* tag, staged by CI with provenance.'); process.exit(1) }\" && npm run clean && npm run build"
   },
   "dependencies": {},
   "devDependencies": {
