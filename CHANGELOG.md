@@ -2,7 +2,13 @@
 
 Notable changes, newest first. Versions follow [semver](https://semver.org).
 
-## Unreleased
+## 0.2.1
+
+`spec-brief init` points `$schema` at the schema of the installed version, and
+the README's links to files the package does not ship resolve on npmjs.com and
+in `node_modules`. spec-core's scanner now reads an image inside a link's text
+itself; archival rewrites and restores such a badge as 0.2.0 did, each
+destination once. Nothing needs to change in a repository that upgrades.
 
 ### Changed
 

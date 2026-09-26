@@ -1,6 +1,6 @@
 {
   "name": "@descent-vtt/spec-brief",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Lifecycle management for task briefs: lint the contract, map parallel collisions, and archive a round in one atomic command.",
   "keywords": [
     "agents",
