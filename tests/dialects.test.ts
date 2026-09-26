@@ -589,7 +589,7 @@ describe('configuration', () => {
 
   it('writes out for init every section with its aliases, its switches and its hint', () => {
     expect(initialConfig('b', 'b/done')).toEqual({
-      $schema: 'https://raw.githubusercontent.com/DescentVTT/spec-brief/main/schema.json',
+      $schema: './node_modules/@descent-vtt/spec-brief/schema.json',
       briefs: 'b',
       archive: 'b/done',
       files: '[0-9]*.md',

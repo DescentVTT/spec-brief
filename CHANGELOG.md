@@ -22,6 +22,12 @@ Notable changes, newest first. Versions follow [semver](https://semver.org).
 
 ### Fixed
 
+- `spec-brief init` points `$schema` at
+  `./node_modules/@descent-vtt/spec-brief/schema.json`, the schema of the
+  version installed, as the README recommends. It wrote a URL on GitHub that
+  follows main, so an editor judged the configuration by a schema the
+  installed version might not share. A configuration `init` already wrote
+  keeps its URL until it is edited; either loads.
 - The README's links to `docs/adr/` and `src/config.ts` are GitHub URLs. The
   package ships neither, so the relative links were dead on npmjs.com and in
   `node_modules`. A test holds every link in a document the package ships to

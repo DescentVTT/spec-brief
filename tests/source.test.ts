@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest';
 
 import { releaseOf } from '../scripts/release.js';
 import { HELP } from '../src/cli.js';
+import { initialConfig } from '../src/config.js';
 import { matchGlob, parseGlob } from '../src/glob.js';
 import { dirOf, isRelativeTarget, resolveFrom, splitTarget } from '../src/links.js';
 import { ARCHIVE_RULES, COLLISION_RULES, RULES } from '../src/rules.js';
@@ -167,6 +168,16 @@ describe('the documents', () => {
       }
     }
     expect(dead).toEqual([]);
+  });
+
+  it('init points $schema where the README does, at the schema the package ships', () => {
+    // A schema that moves with main, as init wrote before 0.2.1, judges a
+    // configuration by rules the installed version may not have.
+    const pkg = JSON.parse(readFileSync('package.json', 'utf8')) as { name: string; files: string[] };
+    const written = initialConfig('briefs', 'briefs/archive')['$schema'];
+    expect(written).toBe(`./node_modules/${pkg.name}/schema.json`);
+    expect(pkg.files).toContain('schema.json');
+    expect(readme).toContain(`"$schema": "${String(written)}"`);
   });
 
   it('every ADR has a status and a date, and the index lists them all', () => {
