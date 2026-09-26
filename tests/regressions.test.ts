@@ -287,13 +287,13 @@ describe('dispositions, after 0.1.0', () => {
         ['open-task', '"Explain why the" is neither ticked nor dispositioned'],
       ]);
     }
-    // Any line that continues a paragraph continues it, whatever it says.
+    // A line that continues a sentence continues it, whatever it says.
     const continuing = [
       '  **Rejected** by the rule.',
       '\t**Rejected** by the rule.',
       '**Rejected** because it folds into the item',
-      '\n  First the context.\n  **Rejected** on the second line',
-      '  - First the context.\n  **Rejected** under a bullet, lazily',
+      '\n  First the context, which\n  **Rejected** designs share',
+      '\n  First the context:\n  **Rejected** after a colon, which introduces',
     ];
     for (const note of continuing) expect(open(note), note).toEqual(OPEN);
   });
@@ -312,6 +312,23 @@ describe('dispositions, after 0.1.0', () => {
       '  - First the context.\n  - **Rejected** in a bullet of its own',
     ];
     for (const note of notes) expect(open(note), note).toEqual([]);
+  });
+
+  it('closes a box with a note on the line after a sentence ends, as notes are written', () => {
+    // The measured repository's form: the note is the line after the box's
+    // text, or after a paragraph of context, once its sentence has ended.
+    const after = (box: string, rest: string): string[] => {
+      const corpus = corpusOf({ [A]: goodBrief({}, `\n- [ ] ${box}\n${rest}\n`) });
+      return planArchive(corpus, the(corpus, '001'), { date: DATE }).blocking.map((f) => f.message);
+    };
+    expect(after('Migrate the cache.', '  **Rejected** by the rule.')).toEqual([]);
+    expect(after('Migrate the cache?', '**Rejected**, lazily.')).toEqual([]);
+    expect(after('Migrate the cache (all of it).', '  **Delegated to** 012')).toEqual([]);
+    expect(after('Migrate the **cache.**', '  **Rejected** by the rule.')).toEqual([]);
+    expect(after('Migrate the cache', '\n  First the context.\n  **Rejected** on the next line')).toEqual([]);
+    expect(after('Migrate the cache', '  - First the context.\n  **Rejected** under a bullet, lazily')).toEqual([]);
+    // Not after a stop inside the line, or a number.
+    expect(after('Migrate v1.2 to the', '  **Rejected** schema')).toEqual(['"Migrate v1.2 to the" is neither ticked nor dispositioned']);
   });
 });
 

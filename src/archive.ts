@@ -185,17 +185,21 @@ function globs(patterns: readonly string[]): Glob[] {
 /** A list marker opening a line, after its indentation. */
 const ITEM_START = /^[ \t]*(?:[-*+]|\d{1,9}[.)])[ \t]+/;
 
+/** A line that ends a sentence: a stop, then only closing marks. */
+const SENTENCE_END = /[.!?][)\]*_"'`]*[ \t]*$/;
+
 /** Where a note's text starts: after its indentation and a list marker, if it has one. */
 const NOTE_START = /^[ \t]*(?:(?:[-*+]|\d{1,9}[.)])[ \t]+)?/;
 
 /**
- * Whether an open box carries a note that closes it: a block of its own under
- * the box, within its item, that starts with a disposition marker - a bullet,
- * "- **Delegated to** 012", or a paragraph after a blank line, "**Rejected**
- * by ...". A line that continues a paragraph, indented or lazily, is not one:
- * under the box it is the box's own sentence wrapping, and "- [ ] Explain why
- * the" over "**Rejected** designs failed" is an open task, as a marker in the
- * middle of the box's line is a word in it. The note belongs to the box above
+ * Whether an open box carries a note that closes it: a line under the box,
+ * within its item, that starts with a disposition marker and starts a note -
+ * a bullet, "- **Delegated to** 012", a paragraph after a blank line, or a
+ * line after one that ends a sentence, "... did not." over "**Rejected** by
+ * ...", which is how notes are written where they are written most. A line
+ * that continues a sentence is not one: "- [ ] Explain why the" over
+ * "**Rejected** designs failed" is the box's own sentence wrapping, and an
+ * open task, as a marker in the middle of the box's line is a word in it. The note belongs to the box above
  * it, so the search stops at the first nested box: a child's note does not
  * close its parent.
  *
@@ -208,8 +212,9 @@ function dispositioned(scanned: Scan, line: number, end: number, markers: readon
   for (let i = line + 1; i < end; i += 1) {
     if (boxes.has(i)) return false;
     const written = scanned.lines[i] as string;
-    const opensBlock = ITEM_START.test(written) || (scanned.lines[i - 1] as string).trim() === '';
-    if (!opensBlock) continue;
+    const above = scanned.lines[i - 1] as string;
+    const startsNote = ITEM_START.test(written) || above.trim() === '' || SENTENCE_END.test(above);
+    if (!startsNote) continue;
     const start = (NOTE_START.exec(written) as RegExpExecArray)[0].length;
     const text = scanned.masked[i] as string;
     if (markers.some((marker) => text.startsWith(marker, start))) return true;

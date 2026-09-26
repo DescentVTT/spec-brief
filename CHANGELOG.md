@@ -216,15 +216,17 @@ Notable changes, newest first. Versions follow [semver](https://semver.org).
   warning that names the next step, and a refusal under `--strict`. It is the
   first archive rule, and configuration sets its severity like any other.
 - An open box is closed only by a note under it that starts with a
-  disposition marker, and a note is a block of its own in the item: a
-  bullet, `  - **Rejected** by 012`, or a paragraph after a blank line. A
-  marker anywhere in the item used to count, the box's own text included, so
-  `- [ ] Explain why the **Rejected** designs failed` archived as
-  dispositioned, and so did the same sentence wrapped after "the", indented
-  or not. A line that continues the box's paragraph no longer closes it,
-  whatever it starts with: a note written as `- [ ] Add a cache` over
-  `  **Rejected** by 012` now refuses the archival as `open-task`, and the
-  hint says to make it a bullet or put a blank line above it.
+  disposition marker, and a note starts a bullet, a paragraph after a blank
+  line, or a line after one that ends a sentence (`.`, `?` or `!`, then
+  only closing marks). A marker anywhere in the item used to count, the
+  box's own text included, so `- [ ] Explain why the **Rejected** designs
+  failed` archived as dispositioned, and so did the same sentence wrapped
+  after "the", indented or not. A line that continues a sentence no longer
+  closes the box, whatever it starts with; `- [ ] Add a cache.` over
+  `  **Rejected** by 012` still does. A note under a box whose text ends
+  without a stop, `- [ ] Add a cache` over `  **Rejected** by 012`, now
+  refuses the archival as `open-task`, and the hint says to make it a bullet
+  or put a blank line above it.
 - `archiving.rewriteLinks: false` now holds for the links other briefs hold
   to a moving brief, which were rewritten regardless. Those left pointing at
   the old path are reported as `stale-link`, a warning naming each file and

@@ -89,19 +89,20 @@ merge base was the commit itself and the empty diff passed every check. A brief
 with a scope whose round's changes are unknown now gets `scope-unmeasured`: a
 warning, a refusal under `--strict`, and a hint naming what to pass.
 
-**A disposition is a note that starts with a marker**, a block of its own
-under the box and within its item: a bullet, or a paragraph after a blank
-line. A marker anywhere in the item used to count, the box's own text
-included. A line that continues the box's paragraph, indented or lazily, is
-not a note either: `- [ ] Explain why the` over `  **Rejected** designs
-failed` is the box's sentence wrapping, and nothing in the syntax tells it
-from `- [ ] Add a cache` over `  **Rejected** by 012`. So both are read as
-the box's text, and the second refuses until its note is a bullet or has a
-blank line above it; the hint says so. That costs a convention: the measured
-repository writes its notes as the line after the box's text, under boxes it
-also ticks, and a note written that way under an open box now refuses rather
-than closing it. A refusal names the box and the fix; an archival that
-passed over a wrapped task would have said nothing.
+**A disposition is a note that starts with a marker**, on a line under the
+box and within its item that starts a note: a bullet, a paragraph after a
+blank line, or a line after one that ends a sentence. A marker anywhere in
+the item used to count, the box's own text included. A line that continues a
+sentence is not a note: `- [ ] Explain why the` over `  **Rejected** designs
+failed` is the box's sentence wrapping. CommonMark cannot tell that from
+`- [ ] Add a cache.` over `  **Rejected** by 012` - both are one paragraph -
+but the stop can: the measured repository writes every note as the line after
+a finished sentence, under the box's text or a paragraph of context, and a
+sentence wrapped before a marker has not finished. What that misses is a note
+under a box whose text has no stop, `- [ ] Add a cache` over
+`  **Rejected** by 012`; it refuses, and the hint says to make the note a
+bullet or put a blank line above it. A refusal names the box and the fix; an
+archival that passed over a wrapped task would have said nothing.
 
 **A front matter block archival created goes when the brief reopens.** A
 brief with no front matter, in a repository with no status field, is given a
