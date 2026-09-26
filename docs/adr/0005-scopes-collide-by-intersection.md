@@ -99,3 +99,20 @@ workstation of ADR-0009, where scope patterns decide in a fraction of a
 millisecond. A pair the search cannot decide is `collision-undecided`, a
 warning, and never a collision or a clean pair; a pattern whose protection it
 cannot decide is a `scope-contradiction` warning rather than an error.
+
+## Amended 2026-09-26: two stars in a name, and parentheses
+
+spec-core cbe2223 changed two readings, and the copy took them
+([ADR-0001](0001-no-runtime-dependencies.md), amended).
+
+**`**` inside a name is refused.** `docs/**.md` was read as `docs/*.md`, as
+gitignore, bash and minimatch read it; the tools the family replaced read it
+three ways, and the quiet one-level reading dropped every nested document from
+a scope that used to include them. A scope that silently narrows misses
+collisions, so the pattern is an error, `glob` in `lint`, with the two
+spellings it could have meant.
+
+**A group is an extended glob only when it holds a `|`.** `+(a|b)` is refused
+as before, with `{a,b}` as the way to write it; `C++(notes).md` and
+`report(2017).md` are names with parentheses in them, as ripgrep and
+`.gitignore` read them, where they used to be refused.

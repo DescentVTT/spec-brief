@@ -50,6 +50,15 @@ describe('the vendored spec-core', () => {
     });
   }
 
+  it("ships spec-core's licence with the compiled copies", () => {
+    // The package carries dist/vendor/spec-core/**, spec-core's code under MIT,
+    // so its notice goes in the tarball beside them.
+    expect(readFileSync(`${ROOT}/LICENSE`, 'utf8')).toMatch(/^MIT License\n/);
+    const pkg = JSON.parse(readFileSync('package.json', 'utf8')) as { files: string[] };
+    expect(pkg.files).toContain(`${ROOT}/LICENSE`);
+    expect(readdirSync(ROOT).sort()).toEqual(['LICENSE', 'README.md', 'VENDOR.json', ...Object.keys(record.modules)].sort());
+  });
+
   it('is measured in spec-core, not in this repository', () => {
     // Its mutation sweep and its oracle are spec-core's; counted here, the copy
     // would pad or dilute a score about code this repository owns.

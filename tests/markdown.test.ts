@@ -231,6 +231,14 @@ describe('the dialect read from spec-core', () => {
     expect(s.prose[2]).toBe('    - [ ] code');
   });
 
+  it("reads indented code inside an item four columns past the item's text", () => {
+    // The item's text starts at column two, so code starts at column six.
+    const s = scan(lines('- [ ] a\n\n      - [ ] code\n\n    - [ ] nested'));
+    expect(s.tasks.map((t) => t.text)).toEqual(['a', 'nested']);
+    // A fence that deep is code, and hides nothing after it.
+    expect(scan(lines('- [ ] a\n\n      ```\n- [ ] b')).tasks.map((t) => t.text)).toEqual(['a', 'b']);
+  });
+
   it('closes a code span on a later line of its paragraph', () => {
     const s = scan(lines('see `a\n[x](y.md)` end'));
     expect(s.links).toEqual([]);

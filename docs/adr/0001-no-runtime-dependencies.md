@@ -106,3 +106,16 @@ from the five spec-* repositories read as briefs, and archiving then
 reopening each of those rewrites the same links and returns the same text as
 0.1 did; the differences appear on the inputs written to show them. The two
 modules went from 673 lines to 184.
+
+## Amended 2026-09-26: copied again at cbe2223
+
+The copy was taken again at spec-core cbe2223, with spec-core's `LICENSE`.
+The package carries the compiled copies under `dist/vendor/spec-core/`, which
+are spec-core's code under MIT, so its notice ships too: `files` names it, and
+`tests/vendor.test.ts` and spec-core's `vendor.mjs --check` both require it.
+Two of the changes are about globs ([ADR-0005](0005-scopes-collide-by-intersection.md),
+amended). The third is the scanner's: a list item's text starts at its content
+column, and indented code inside an item starts four columns past it, where
+four columns anywhere in a list used to be the item's text. A fence line that
+deep is code, or paragraph text, and opens no fence that would hide the rest
+of the brief.

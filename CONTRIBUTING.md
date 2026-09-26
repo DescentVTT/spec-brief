@@ -27,7 +27,7 @@ files -> brief.ts -> corpus.ts -> rules.ts / collisions.ts / schedule.ts / archi
 | `markdown.ts` | spec-core's scanner in spec-brief's dialect: ATX headings and sections outside block quotes, GFM task boxes, the link destinations archival rewrites. |
 | `glob.ts` | Scope patterns over spec-core's `path` dialect: spec-brief's refusals, reading a literal from the tree, the 0.1 library functions. |
 | `scope.ts` | A brief's writable scope, affected less protected; where two scopes meet; patterns the protections cover. |
-| `vendor/spec-core/` | spec-core's `pattern` and `markdown` modules, with the `path` and `text` modules they import, copied by its `scripts/vendor.mjs` and verified by hash. Never edited here. |
+| `vendor/spec-core/` | spec-core's `pattern` and `markdown` modules, with the `path` and `text` modules they import, copied by its `scripts/vendor.mjs` and verified by hash, with spec-core's `LICENSE`, which the package ships. Never edited here. |
 | `links.ts` | Relative paths, and rewriting links when a file moves. |
 | `schema.ts` | A small schema language that validates and renders JSON Schema. |
 | `config.ts` | What configuration may say, the defaults, and loading. |

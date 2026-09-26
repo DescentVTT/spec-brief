@@ -16,7 +16,9 @@ Notable changes, newest first. Versions follow [semver](https://semver.org).
     level after a blank line, and a `<pre>`, `<script>`, `<style>` or
     `<textarea>` block, hold no heading, task or link: a box in an indented
     example no longer refuses an archival, and a fence indented four spaces
-    there no longer hides the rest of the brief.
+    there no longer hides the rest of the brief. Inside a list item, code
+    starts four columns past the item's text: a box written that deep after a
+    blank line is code, and a fence that deep opens nothing.
   - **A `<!--` in the middle of a line with no `-->` after it is text.** It
     hid everything after it, so every later section was missing. One that
     opens a line still runs to the end.
@@ -35,6 +37,10 @@ Notable changes, newest first. Versions follow [semver](https://semver.org).
   - **TOML front matter** between `+++` lines is recognised. `front-matter`
     reports it, where it was read as body text and only the missing status
     was reported.
+  - **An inline list on the line under its key** - `affectedFiles:` and then
+    `  [src/**]` - is reported as "an inline list starts on the line after
+    its key; write it after the colon", where the advice was to quote it,
+    which would have made the list a string.
 - Nothing is written into front matter that cannot hold it: TOML, or a block
   never closed. `schedule --write` and `unarchive` refuse such a brief as
   `front-matter`, and so does `archive` where lint's own `front-matter` error
@@ -50,7 +56,19 @@ Notable changes, newest first. Versions follow [semver](https://semver.org).
   `\n`. `Brief.scan` gains `links`, the destinations archival rewrites.
 - Globs are spec-core's `path` dialect, matched and intersected by its
   automaton, which is copied into `src/vendor/spec-core/` and verified by
-  hash. The syntax is unchanged; what it means changes in four places.
+  hash. The syntax is unchanged but for two refusals; what it means changes
+  in four places.
+  - **`**` inside a name is an error**: `docs/**.md`, `**.ts`, `a**b`. It
+    was read as `*`, one level, and dropped every nested file from a scope
+    that tools elsewhere read as recursive. The message says to write
+    `docs/**/*.md` for any depth, or `*.md` for one level. A scope pattern
+    written so is a `glob` error in `lint`, and a `files` or `exclude`
+    pattern stops the run with exit 2.
+  - **Parentheses are literal unless a group holds a `|`**:
+    `C++(notes).md`, `*(2017).md` and `@(a)` are names, where every
+    `?(`, `*(`, `+(`, `@(` or `!(` was refused as an extended glob.
+    `+(a|b)` is still refused, and the message now says to write `{a,b}`,
+    and a literal parenthesis as `[(]`.
   - **A literal path is read from the tree.** A file the tree holds is that
     file, a directory it holds is everything beneath it, and a path it does
     not hold is a file unless written with a trailing `/`. The extension
