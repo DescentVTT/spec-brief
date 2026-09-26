@@ -104,3 +104,27 @@ compared with nothing. The generated corpus defers a brief in half its
 rounds and checks that the briefs `matrix` leaves out are the ones the
 schedule could not place, so "once written, `matrix` finds no collision" is
 checked with deferrals in it.
+
+**A declared wave that holds is kept.** The README, and the alternatives above,
+said a person could move a brief later by hand and `lint` and `matrix`
+would check it. But `wave-schedule` was an error for every brief whose
+declared wave differed from the computed one, and the CI recipe runs
+`schedule`, so any such move failed CI however valid. The rule now judges the
+declared wave as `lint` and `matrix` do, against the waves the other briefs
+declare: a brief there it collides with, a dependency in the same wave or a
+later one, a brief depending on it in the same wave or an earlier one. A
+declared wave with none of those holds, and its move is a note, which fails no
+run, `--strict` included; one with any of them, or a brief with no wave, is
+the rule's finding at its configured severity, error by default. `schedule`
+still proposes one answer and `--write` still writes it: the computed wave is
+what the tool recommends, and a valid one is what it accepts. That takes half
+of the alternative the table set aside - the output is still "the" schedule,
+the same for the same briefs, but exit 0 now means every declared wave holds
+rather than every declared wave is the computed one. An unscoped
+brief sharing its declared wave, and a pair the search cannot decide, are what
+`matrix` reports as a note and a warning, and they do not break the wave here
+either: on a declared wave, the two commands agree.
+
+The alternatives considered: defaulting `wave-schedule` to a warning passes
+a valid move, but also a brief that declares no wave, which nothing else
+reports; and dropping the rule leaves `schedule` in CI with nothing to say.

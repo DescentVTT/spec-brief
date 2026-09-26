@@ -17,7 +17,7 @@ import type { Config, SectionRule } from './config.js';
 import type { CollisionReport } from './collisions.js';
 import { summarise } from './lint.js';
 import { ARCHIVE_RULES, COLLISION_RULES, RULES } from './rules.js';
-import { moves, type Passed, reasons, type Schedule } from './schedule.js';
+import { type Breach, breachReasons, holds, moves, type Passed, reasons, type Schedule } from './schedule.js';
 import { inWords } from './text.js';
 import type { Finding, Severity } from './types.js';
 
@@ -382,7 +382,9 @@ export function prettySchedule(s: Schedule, written: readonly string[] | null, s
       }
       const from = p.declared === null ? 'no wave' : `wave ${p.declared}`;
       out.push(`  ${label(p.brief).padEnd(width)}  ${title.padEnd(titles)}  ${paint(style, 'yellow', `moves from ${from}`)}`);
-      for (const reason of reasons(p)) out.push(`  ${' '.repeat(width)}    ${paint(style, 'dim', reason)}`);
+      // Why the declared wave holds or does not comes first: it decides whether the move is asked for.
+      const verdict = p.declared === null ? [] : holds(p) ? [`wave ${p.declared} also holds`] : [`wave ${p.declared} does not hold: ${breachReasons(p).join('; ')}`];
+      for (const reason of [...verdict, ...reasons(p)]) out.push(`  ${' '.repeat(width)}    ${paint(style, 'dim', reason)}`);
     }
   }
   if (waves.length > 0) out.push('');
@@ -397,6 +399,8 @@ export function prettySchedule(s: Schedule, written: readonly string[] | null, s
     out.push(`wrote the wave of ${plural(written.length, 'brief')}: ${written.join(', ')}`);
   } else if (written !== null && moving > 0) {
     out.push(paint(style, 'red', s.cycles.length > 0 ? 'nothing was written: the dependencies form a cycle' : 'nothing was written: a front matter cannot be edited'));
+  } else if (moving > 0 && moves(s).every(holds)) {
+    out.push(`${plural(moving, 'brief')} could move, and the declared waves hold; "spec-brief schedule --write" writes the computed ones`);
   } else if (moving > 0) {
     out.push(`${plural(moving, 'brief')} would move; "spec-brief schedule --write" writes the waves`);
   } else if (s.placements.length > 0) {
@@ -410,6 +414,10 @@ export function prettySchedule(s: Schedule, written: readonly string[] | null, s
 
 /** The schedule as JSON: a row per placed brief with its declared and proposed wave and why. */
 export function scheduleJson(s: Schedule): Record<string, unknown> {
+  const breach = (b: Breach): Record<string, unknown> =>
+    b.reason === 'collision'
+      ? { reason: b.reason, brief: b.brief.id, overlaps: b.overlaps.map((o) => ({ patterns: o.patterns, witness: o.witness })) }
+      : { reason: b.reason, brief: b.brief.id, wave: b.wave };
   const passed = (p: Passed): Record<string, unknown> => {
     const base = { wave: p.wave, reason: p.reason, brief: p.brief.id };
     if (p.reason === 'collision') return { ...base, overlaps: p.overlaps.map((o) => ({ patterns: o.patterns, witness: o.witness })) };
@@ -426,6 +434,8 @@ export function scheduleJson(s: Schedule): Record<string, unknown> {
       declared: p.declared,
       proposed: p.proposed,
       moves: p.proposed !== p.declared,
+      holds: holds(p),
+      breaches: p.breaches.map(breach),
       after: p.after === null ? null : { brief: p.after.brief.id, wave: p.after.wave },
       passed: p.passed.map(passed),
       unscoped: p.unscoped,

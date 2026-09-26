@@ -106,9 +106,11 @@ Computes the waves the live briefs can run in, drafts included, and sets each be
 wave 1 · 2 briefs
   001  Rotate session tokens
   003  Audit log            moves from wave 2
+         wave 2 also holds
          nothing holds it later
 wave 2 · 1 brief
   002  Store sessions       moves from wave 1
+         wave 1 does not hold: 001 there also writes src/auth/session.ts
          not wave 1, where 001 also writes src/auth/session.ts ("src/**/session.ts" and "src/auth/**")
 
 waits: 007 on 006, which is deferred
@@ -116,9 +118,9 @@ deferred: 006
 2 briefs would move; "spec-brief schedule --write" writes the waves
 ```
 
-Each move says why: the dependency that sets the earliest wave, and for every wave passed over, the brief there and the file both would write. A deferred brief, and one that waits on it, is placed nowhere; a dependency cycle is an error, and nothing in or after it is placed. `--write` sets `wave` in the front matter of each brief whose wave changes - every other line as it was, in one transaction - and writes nothing over a cycle. `--format json` gives an orchestrator the waves, each brief's declared and proposed wave with the reasons, and what waits on what; `sarif`, `github` and `gitlab` carry a `wave-schedule` finding per move.
+Each move says why: the dependency that sets the earliest wave, and for every wave passed over, the brief there and the file both would write. It says first whether the declared wave holds - whether `lint` and `matrix` would pass it: no brief there that it collides with, its dependencies in earlier waves, and the briefs that depend on it in later ones. A deferred brief, and one that waits on it, is placed nowhere; a dependency cycle is an error, and nothing in or after it is placed. `--write` sets `wave` in the front matter of each brief whose wave changes - every other line as it was, in one transaction - and writes nothing over a cycle. `--format json` gives an orchestrator the waves, each brief's declared and proposed wave with the reasons and whether the declared one holds, and what waits on what; `sarif`, `github` and `gitlab` carry a `wave-schedule` finding per move.
 
-Exit 0 when the declared waves already hold, 1 when they would change or the dependencies form a cycle, 2 when the run cannot be trusted. The result is the same every time for the same briefs. It is a valid schedule, not always the shortest: no fast method promises the fewest waves, and a person can always move a brief later by hand, which `lint` and `matrix` then check.
+The result is the same every time for the same briefs. It is a valid schedule, not always the shortest: no fast method promises the fewest waves, and a person can always move a brief later by hand, which `lint` and `matrix` then check. So a move is an error only when the declared wave does not hold, or there is none: a declared wave that holds is the person's to keep, and its move is a note. Exit 0 when every declared wave holds, 1 when a brief declares no wave or one that does not hold, or the dependencies form a cycle, 2 when the run cannot be trusted.
 
 ### `spec-brief archive <brief>`
 
@@ -233,7 +235,7 @@ A brief is read as CommonMark reads it wherever that decides what is code or a c
 | `collision-undecided` | warning | Two briefs in one wave whose collision the search could not decide within its budget (`matrix`), or a wave `schedule` passed over for it. |
 | `unscoped` | note | A brief sharing a wave that declares no scope (`matrix`), or one `schedule` runs alone. |
 | `shared-directory` | off | Two briefs in one wave writing into the same directory (`matrix`). |
-| `wave-schedule` | error | A brief whose declared wave is not the one `schedule` computes, with the reason (`schedule`). |
+| `wave-schedule` | error | A brief with no wave, or a declared wave that does not hold - a collision in it, a dependency out of order - with the wave `schedule` computes and why (`schedule`). A declared wave that holds and is not the computed one is a note. |
 | `scope-unmeasured` | warning | A brief with a scope archived without the files its round changed, so nothing checked the scope (`archive`). |
 | `stale-link` | warning | Links in live briefs left pointing where a brief used to be, when `archiving.rewriteLinks` is off (`archive`, `unarchive`). |
 <!-- rules:end -->

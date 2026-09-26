@@ -4,7 +4,7 @@ import { collisions } from '../src/collisions.js';
 import { buildCorpus, type Corpus } from '../src/corpus.js';
 import { lint } from '../src/lint.js';
 import { prettySchedule, scheduleJson } from '../src/report.js';
-import { byId, moves, planWaves, reasons, type Schedule, schedule, scheduleFindings } from '../src/schedule.js';
+import { breachReasons, byId, holds, moves, planWaves, reasons, type Schedule, schedule, scheduleFindings } from '../src/schedule.js';
 import type { Finding } from '../src/types.js';
 import { brief, config, corpusOf, goodBrief } from './helpers.js';
 
@@ -237,8 +237,9 @@ describe('what schedule says', () => {
     const { corpus, s } = said();
     expect(table(scheduleFindings(corpus, s))).toEqual([
       'briefs/004_x.md:5 error dependency-cycle: dependencies form a cycle, so no wave can hold them: 004 -> 005 -> 004 | a cycle can never become ready; remove the dependency that is not real',
-      'briefs/002_x.md:3 error wave-schedule: declares wave 1; the schedule puts it in wave 2: not wave 1, where 001 also writes src/a.ts ("src/a.ts" and "src/**") | run "spec-brief schedule --write", or set "wave: 2"',
-      'briefs/003_x.md:3 error wave-schedule: declares wave 1; the schedule puts it in wave 3: it declares no affectedFiles, so it runs in a wave of its own | run "spec-brief schedule --write", or set "wave: 3"',
+      'briefs/002_x.md:3 error wave-schedule: declares wave 1, which does not hold (001 there also writes src/a.ts); the schedule puts it in wave 2: not wave 1, where 001 also writes src/a.ts ("src/a.ts" and "src/**") | run "spec-brief schedule --write", or set "wave: 2"',
+      // Unscoped beside others is what the matrix notes, not an error it fails on, so the declared wave holds.
+      'briefs/003_x.md:3 note wave-schedule: declares wave 1, which holds; the schedule puts it in wave 3: it declares no affectedFiles, so it runs in a wave of its own | keep wave 1, or run "spec-brief schedule --write" for wave 3',
       'briefs/003_x.md:1 note unscoped: declares no affectedFiles, so it cannot be checked against the 2 other brief(s) the schedule places; it runs alone in wave 3 | list the files or globs this round writes under "affectedFiles"',
     ]);
   });
@@ -251,7 +252,7 @@ describe('what schedule says', () => {
     );
     expect(scheduleFindings(quiet, schedule(quiet)).map((f) => [f.rule, f.severity])).toEqual([
       ['wave-schedule', 'warning'],
-      ['wave-schedule', 'warning'],
+      ['wave-schedule', 'note'],
     ]);
     const alone = corpusOf({ [B(1)]: goodBrief() });
     expect(scheduleFindings(alone, schedule(alone)).map((f) => f.rule)).toEqual(['wave-schedule']);
@@ -273,9 +274,11 @@ describe('what schedule says', () => {
       '  001  A brief',
       'wave 2 · 1 brief',
       '  002  A brief  moves from wave 1',
+      '         wave 1 does not hold: 001 there also writes src/a.ts',
       '         not wave 1, where 001 also writes src/a.ts ("src/a.ts" and "src/**")',
       'wave 3 · 1 brief',
       '  003  A brief  moves from wave 1',
+      '         wave 1 also holds',
       '         it declares no affectedFiles, so it runs in a wave of its own',
       '',
       'cycle: 004 -> 005 -> 004',
@@ -317,13 +320,27 @@ describe('what schedule says', () => {
         { wave: 3, briefs: ['003'] },
       ],
       briefs: [
-        { id: '001', file: 'briefs/001_x.md', declared: 1, proposed: 1, moves: false, after: null, passed: [], unscoped: false, reasons: ['nothing holds it later'] },
+        {
+          id: '001',
+          file: 'briefs/001_x.md',
+          declared: 1,
+          proposed: 1,
+          moves: false,
+          holds: true,
+          breaches: [],
+          after: null,
+          passed: [],
+          unscoped: false,
+          reasons: ['nothing holds it later'],
+        },
         {
           id: '002',
           file: 'briefs/002_x.md',
           declared: 1,
           proposed: 2,
           moves: true,
+          holds: false,
+          breaches: [{ reason: 'collision', brief: '001', overlaps: [{ patterns: ['src/a.ts', 'src/**'], witness: 'src/a.ts' }] }],
           after: null,
           passed: [{ wave: 1, reason: 'collision', brief: '001', overlaps: [{ patterns: ['src/a.ts', 'src/**'], witness: 'src/a.ts' }] }],
           unscoped: false,
@@ -335,6 +352,8 @@ describe('what schedule says', () => {
           declared: 1,
           proposed: 3,
           moves: true,
+          holds: true,
+          breaches: [],
           after: null,
           passed: [
             { wave: 1, reason: 'unscoped', brief: '001' },
@@ -398,10 +417,41 @@ describe('the edges of the schedule', () => {
       [B(3)]: goodBrief({ affectedFiles: '[b/x, a/y]', wave: '1', dependsOn: '[1]' }),
     });
     expect(scheduleFindings(crowded, schedule(crowded)).map((f) => f.message)).toEqual([
-      'declares wave 1; the schedule puts it in wave 3: after 001, in wave 1; not wave 2, where 002 also writes b/x ("b/x" and "b/**")',
+      'declares wave 1, which does not hold (it depends on 001, in wave 1; 001 there also writes a/y); the schedule puts it in wave 3: after 001, in wave 1; not wave 2, where 002 also writes b/x ("b/x" and "b/**")',
     ]);
     const off = corpusOf(Object.fromEntries(corpus.briefs.map((b) => [b.file, b.text])), config({ rules: { 'wave-schedule': 'off' } }));
     expect(scheduleFindings(off, schedule(off)).map((f) => f.rule)).toEqual(['dependency-cycle']);
+  });
+
+  it('judges a declared wave as lint and matrix would: dependencies before it, dependents after it, no collision in it', () => {
+    const corpus = corpusOf({
+      // Moved later by hand past 002, which depends on it: lint's wave-order would fail on 002.
+      [B(1)]: goodBrief({ affectedFiles: '[a]', wave: '3' }),
+      [B(2)]: goodBrief({ affectedFiles: '[b]', wave: '2', dependsOn: '[1]' }),
+      [B(3)]: goodBrief({ affectedFiles: '[c]', wave: '1' }),
+      // Moved later by hand into a wave shared only with a brief that waits on deferred work, which the matrix leaves out.
+      [B(4)]: goodBrief({ status: 'deferred', trigger: 'when x' }),
+      [B(5)]: goodBrief({ affectedFiles: '[d]', wave: '5', dependsOn: '[4]' }),
+      [B(6)]: goodBrief({ affectedFiles: '[d]', wave: '5' }),
+    });
+    const s = schedule(corpus);
+    expect(moves(s).map((p) => [p.brief.id, p.declared, p.proposed, holds(p), breachReasons(p)])).toEqual([
+      ['001', 3, 1, false, ['002 depends on it, in wave 2']],
+      ['006', 5, 1, true, []],
+    ]);
+    expect(scheduleFindings(corpus, s).map((f) => [f.brief, f.severity])).toEqual([
+      ['001', 'error'],
+      ['006', 'note'],
+    ]);
+    expect(collisions(corpus).waves.flatMap((w) => w.collisions)).toEqual([]);
+    // A dependency declared in the same wave breaks it the other way.
+    const same = corpusOf({ [B(1)]: goodBrief({ affectedFiles: '[a]', wave: '2' }), [B(2)]: goodBrief({ affectedFiles: '[b]', wave: '2', dependsOn: '[1]' }) });
+    expect(moves(schedule(same)).map((p) => [p.brief.id, breachReasons(p)])).toEqual([['002', ['it depends on 001, in wave 2']]]);
+    // A schedule whose every move holds says so.
+    const later = corpusOf({ [B(1)]: goodBrief({ affectedFiles: '[a]', wave: '4' }), [B(2)]: goodBrief({ affectedFiles: '[b]', wave: '1' }) });
+    expect(prettySchedule(schedule(later), null, { color: false }).split('\n').at(-1)).toBe(
+      '1 brief could move, and the declared waves hold; "spec-brief schedule --write" writes the computed ones',
+    );
   });
 
   it('writes a wave into an empty brief, keeping the empty line it had', () => {
@@ -424,6 +474,7 @@ describe('the edges of the schedule', () => {
       '  7     Short',
       'wave 2 · 1 brief',
       '  8     Mid title       moves from wave 3',
+      '          wave 3 also holds',
       '          not wave 1, where 7 also writes a ("a" and "a")',
       'wave 3 · 1 brief',
       '  1000  A longer title  moves from no wave',
