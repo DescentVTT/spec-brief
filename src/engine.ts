@@ -282,7 +282,7 @@ export class BriefEngine {
     return { written: plan.ops.map((op) => op.path), refused: [] };
   }
 
-  /** Live briefs that can run now: not drafts, every dependency archived. */
+  /** Live briefs that can run now: every dependency archived, and neither a draft nor deferred. */
   ready(): Brief[] {
     return this.corpus.live.filter((b) => isReady(this.corpus, b));
   }
