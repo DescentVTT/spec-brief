@@ -38,7 +38,8 @@
     "README.md",
     "bin",
     "dist",
-    "schema.json"
+    "schema.json",
+    "src/vendor/spec-core/LICENSE"
   ],
   "publishConfig": {
     "access": "public"

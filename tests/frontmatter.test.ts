@@ -199,6 +199,8 @@ describe('lists', () => {
     expect(reason('---\nk:\n  sub: 1\n---')).toBe('nested mappings are not supported; flatten the key');
     expect(reason('---\nk:\n  folded text\n---')).toBe('the value continues on the next line; keep it on one line, or quote it');
     expect(reason('---\nk: first\n  second\n---')).toBe('the value continues on the next line; keep it on one line, or quote it');
+    // Quoting it, as the advice above says, would turn the list into a string.
+    expect(reason('---\nk:\n  [src/**]\n---')).toBe('an inline list starts on the line after its key; write it after the colon');
     expect(reason('---\nk:\n  - a\n    - b\n---')).toBe('a list item is continued or nested; keep each item on one line');
     expect(reason('---\nk:\n  - a\n  more\n---')).toBe('a list item is continued or nested; keep each item on one line');
     expect(reason('---\nk:\n  -\n---')).toBe('a list item is empty');

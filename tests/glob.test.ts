@@ -43,7 +43,16 @@ describe('parsing', () => {
     expect(error('')).toBe('the pattern is empty');
     expect(error('   ')).toBe('the pattern is empty');
     expect(error('src\\auth')).toBe('"\\" escapes glob syntax; separate directories with "/"');
-    expect(error('src/+(a|b)')).toBe('extended globs such as "+(a|b)" are not supported');
+    expect(error('src/+(a|b)')).toBe(
+      'extended globs such as "+(a|b)" are not supported: write alternatives as "{a,b}", and a literal parenthesis as "[(]"',
+    );
+    // Two stars inside a name were read as one, which dropped every nested
+    // file from a scope written "docs/**.md".
+    for (const pattern of ['docs/**.md', '**.ts', 'a**b']) {
+      expect(error(pattern), pattern).toBe(
+        '"**" means any number of directories only as a whole segment: write "docs/**/*.md" for any depth, or "*.md" for one level',
+      );
+    }
     expect(error('../x')).toBe('a pattern cannot climb out of its root with ".."');
     expect(error('.')).toBe('the pattern names no path');
     expect(error('./')).toBe('the pattern names the root itself, not a path under it');
@@ -67,6 +76,13 @@ describe('parsing', () => {
 
   it('reads a lone closing brace as the literal it can only be', () => {
     expect(matches('a}b', 'a}b')).toBe(true);
+  });
+
+  it('reads parentheses as literal unless a group holds a "|"', () => {
+    expect(matches('notes/C++(notes).md', 'notes/C++(notes).md')).toBe(true);
+    expect(matches('*(2017).md', 'report(2017).md')).toBe(true);
+    expect(matches('@(a)', '@(a)')).toBe(true);
+    expect(matches('@(a)', 'a')).toBe(false);
   });
 
   it('keeps the source as written and records nothing literal about a pattern with glob syntax', () => {
