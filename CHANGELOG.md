@@ -2,6 +2,15 @@
 
 Notable changes, newest first. Versions follow [semver](https://semver.org).
 
+## Unreleased
+
+### Changed
+
+- `npm publish` in a checkout refuses to run outside GitHub Actions, so a
+  version cannot reach npm from a workstation by mistake, without provenance;
+  spec-harness 0.1.0 did. The release never runs it: it stages a tarball it
+  packed.
+
 ## 0.2.0
 
 Scopes are read by spec-core's glob automaton, so a collision is proved with a
