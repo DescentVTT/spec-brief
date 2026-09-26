@@ -10,6 +10,7 @@ import {
   removeEntry,
   renderScalar,
   setEntry,
+  setEntryKeepingComment,
   type YamlValue,
 } from '../src/frontmatter.js';
 
@@ -259,6 +260,22 @@ describe('editing', () => {
     expect(setEntry(['# T'], null, 'status', 'active')).toEqual(['---', 'status: active', '---', '# T']);
     const unclosed = ['---', 'a: 1'];
     expect(() => setEntry(unclosed, readFrontMatter(unclosed), 'b', '2')).toThrow('never closed');
+  });
+
+  it('keeps a comment after a single-line value when asked to, and nothing else', () => {
+    const commented = ['---', 'status: proposed # the word we use', 'deps:', '  - a # first', 'wave: 2  # after the review', 'empty: # none yet', 'hash: 2#x', 'quoted: "x" # q', '---'];
+    const fm = readFrontMatter(commented);
+    const set = (key: string, value: string): string | undefined => setEntryKeepingComment(commented, fm, key, value).find((l) => l.startsWith(`${key}:`));
+    expect(set('wave', '3')).toBe('wave: 3  # after the review');
+    expect(set('status', 'archived')).toBe('status: archived # the word we use');
+    expect(set('empty', '1')).toBe('empty: 1 # none yet');
+    expect(set('quoted', 'y')).toBe('quoted: y # q');
+    // A "#" with no space before it is part of the value, not a comment.
+    expect(set('hash', '3')).toBe('hash: 3');
+    // A block value is rewritten whole, as setEntry does, and a key that is new has no comment to keep.
+    expect(setEntryKeepingComment(commented, fm, 'deps', '[b]')).toEqual(setEntry(commented, fm, 'deps', '[b]'));
+    expect(setEntryKeepingComment(commented, fm, 'new', '1')).toEqual(setEntry(commented, fm, 'new', '1'));
+    expect(setEntryKeepingComment(['# T'], null, 'wave', '1')).toEqual(['---', 'wave: 1', '---', '# T']);
   });
 
   it('removes an entry with its value lines, and a missing key changes nothing', () => {

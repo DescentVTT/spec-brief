@@ -167,7 +167,8 @@ Notable changes, newest first. Versions follow [semver](https://semver.org).
   brief and the file that kept it out of a wave - and deferred briefs, the
   briefs waiting on them, and dependency cycles are listed. `--write` sets
   `wave` in the front matter of each brief that moves, every other line
-  untouched, as one transaction, and writes nothing over a cycle. A declared
+  untouched and a comment after the old wave kept, as one transaction, and
+  writes nothing over a cycle. A declared
   wave that differs from the computed one is judged as `lint` and `matrix`
   judge it: no collision in it, dependencies before it, dependents after it.
   One that holds is a person's choice to keep, and its move is a note.

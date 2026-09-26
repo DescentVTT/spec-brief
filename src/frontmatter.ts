@@ -10,7 +10,7 @@
  * `\n`, which for a brief are its `lines`, not its `text`.
  */
 
-import { readFrontMatter as readText, type FrontMatter } from './vendor/spec-core/markdown/index.js';
+import { findEntry, readFrontMatter as readText, setEntry, type FrontMatter } from './vendor/spec-core/markdown/index.js';
 import { textOfLines } from './text.js';
 
 export {
@@ -31,6 +31,24 @@ export {
 /** Reads the front matter at the top of `lines`, or `null` when there is none. */
 export function readFrontMatter(lines: readonly string[]): FrontMatter | null {
   return readText(textOfLines(lines));
+}
+
+/**
+ * Sets one key as `setEntry` does, and keeps a comment that followed the old
+ * value on its line: `wave: 2  # after the review` becomes `wave: 3  # after
+ * the review`. spec-core's editor writes the key and the value alone, and a
+ * comment beside a value is often the only record of why it was chosen. A
+ * value over several lines is rewritten as `setEntry` rewrites it.
+ */
+export function setEntryKeepingComment(lines: readonly string[], frontMatter: FrontMatter | null, key: string, rendered: string): string[] {
+  const edited = setEntry(lines, frontMatter, key, rendered);
+  const entry = findEntry(frontMatter, key);
+  if (entry === undefined || entry.end !== entry.line + 1) return edited;
+  // Offsets count in the lines joined by one character each.
+  const lineStart = lines.slice(0, entry.line).reduce((sum, line) => sum + line.length + 1, 0);
+  const rest = (lines[entry.line] as string).slice(entry.valueEnd - lineStart);
+  if (!/^[ \t]+#/.test(rest)) return edited;
+  return edited.map((line, i) => (i === entry.line ? `${line}${rest}` : line));
 }
 
 /** Front matter an edit can be written into: YAML, and closed. */
