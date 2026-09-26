@@ -105,6 +105,23 @@ describe('regressions', () => {
     expect(roundTrip({ [A]: spaced }).back).toBe(spaced);
   });
 
+  it('takes away on reopening the front matter archival gave a brief that had none', () => {
+    // With no status field, the block holds only the hash, and nothing once it comes off.
+    const bare = '# A brief\n\n## Intent\n\nThe tree is better.\n\n## Negative Scope\n\n- Nothing.\n\n## Invariants\n\n- [x] the tests pass\n';
+    const cfg = config({ status: { field: null } });
+    const { archived, back } = roundTrip({ [A]: bare }, cfg);
+    expect(archived.startsWith('---\nintegrity: sha256-')).toBe(true);
+    expect(back).toBe(bare);
+    // A block the brief had empty reads the same once the hash is in it, and
+    // goes with it: the exception the README names.
+    expect(roundTrip({ [A]: `---\n---\n${bare}` }, cfg).back).toBe(bare);
+    // A block that holds anything else stays.
+    const commented = `---\n# kept\n---\n${bare}`;
+    expect(roundTrip({ [A]: commented }, cfg).back).toBe(commented);
+    const fielded = `---\nowner: x\n---\n${bare}`;
+    expect(roundTrip({ [A]: fielded }, config({ status: { field: null }, fields: ['owner'] })).back).toBe(fielded);
+  });
+
   it('writes the banner after the blank line that follows the front matter', () => {
     const { archived } = roundTrip({ [A]: goodBrief() });
     expect(archived).toContain(`---\n\n${BANNER_OPEN}\n`);

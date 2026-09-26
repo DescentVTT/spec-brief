@@ -103,6 +103,14 @@ also ticks, and a note written that way under an open box now refuses rather
 than closing it. A refusal names the box and the fix; an archival that
 passed over a wrapped task would have said nothing.
 
+**A front matter block archival created goes when the brief reopens.** A
+brief with no front matter, in a repository with no status field, is given a
+block to hold its integrity hash, and reopening took the hash out and left
+`---` over `---` behind. Reopening now removes a block it leaves empty. A
+block that was empty before archival reads the same once the hash is in it,
+so it goes too: a third spelling not restored, beside the status line and the
+shortest link, and far rarer than a brief with no front matter at all.
+
 **`archiving.rewriteLinks` governs both directions.** The links live briefs
 hold to the moving brief were rewritten whatever the switch said. Off, no other
 brief is written, and the links they are left holding are reported as

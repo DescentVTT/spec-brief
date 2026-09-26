@@ -640,6 +640,13 @@ export function planUnarchive(corpus: Corpus, brief: Brief, request: UnarchiveRe
   if (writable(brief, field !== null, blocking) && field !== null) {
     lines = setEntry(lines, readFrontMatter(lines), field, renderScalar(config.status.active));
   }
+  // Archival gives a brief with no front matter a block to hold its hash.
+  // A block this reopening emptied goes too, and the brief is the one that
+  // was archived. One that was empty before it was archived reads the same
+  // once the hash is in it, and goes with it; one empty in the archive stays.
+  const left = readFrontMatter(lines);
+  const emptied = left !== null && left.kind === 'yaml' && left.close === 1 && (brief.frontMatter?.close ?? 0) > 1;
+  if (emptied) lines = lines.slice(2);
 
   const incoming = inbound(corpus, brief, to);
   staleLinks(corpus, brief, incoming.stale, request.strict === true, blocking, warnings);
