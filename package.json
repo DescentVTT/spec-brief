@@ -73,5 +73,8 @@
   "bugs": {
     "url": "https://github.com/DescentVTT/spec-brief/issues"
   },
-  "homepage": "https://github.com/DescentVTT/spec-brief#readme"
+  "homepage": "https://github.com/DescentVTT/spec-brief#readme",
+  "overrides": {
+    "qs": "^6.16.0"
+  }
 }
