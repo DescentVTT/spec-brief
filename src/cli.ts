@@ -97,7 +97,7 @@ new:
   --date <YYYY-MM-DD>   the date in its front matter; default today
 
 list:
-  --ready               only live briefs whose dependencies are archived
+  --ready               only briefs that can run now: dependencies archived, not drafts or deferred
   --archived            include archived briefs
 
 matrix:
@@ -393,12 +393,9 @@ async function runSchedule(run: Run): Promise<number> {
   }
   const sorted = sortFindings(reported);
   if (run.format === 'pretty') {
-    run.out(`${prettySchedule(computed, written, run.style)}
-`);
+    run.out(`${prettySchedule(computed, written, run.style)}\n`);
     const rest = sorted.filter((f) => f.rule !== 'wave-schedule' && f.rule !== 'dependency-cycle');
-    if (rest.length > 0) run.out(`
-${prettyFindings(rest, run.style)}
-`);
+    if (rest.length > 0) run.out(`\n${prettyFindings(rest, run.style)}\n`);
     return failing(sorted, run.strict) ? EXIT_FAILED : EXIT_OK;
   }
   return emitFindings(run, 'schedule', sorted, engine.corpus.live.length, { ...scheduleJson(computed), written });
