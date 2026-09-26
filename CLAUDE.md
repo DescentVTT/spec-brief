@@ -33,7 +33,8 @@ These are not preferences. Breaking one is a decision that needs an ADR.
 - **LF line endings, no control characters.** Held by a test. Write escapes
   for anything invisible; the files are read by people and by diff tools.
 - **Releases come from a tag, through CI.** Never `npm publish` from a
-  workstation; the release workflow publishes with provenance
+  workstation; the release workflow stages it with provenance, and a
+  maintainer approves it with a second factor
   ([ADR-0010](docs/adr/0010-releases-are-published-by-ci.md)).
 
 ## Verification

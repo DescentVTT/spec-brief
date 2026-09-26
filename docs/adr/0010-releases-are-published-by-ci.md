@@ -50,6 +50,17 @@ version it already has, so a rehearsal of a published version stops before
 the upload and says so. The OIDC exchange is the one step a rehearsal cannot
 try.
 
+*Amended 2026-09-26.* `publish` stages the version rather than publishing
+it. 0.2.0, the first tag, passed every job and was refused at the upload,
+`OIDC permission denied`: a trusted publisher configured after 2026-09-03
+permits `npm stage publish` by default, and a direct publish only where the
+package opts in. Staging is the better of the two answers. The version waits on
+npmjs.com, installable by nobody, until a maintainer runs `npm stage approve`
+with a second factor, so a person decides that each version goes out, and a
+run that is not the maintainer's can at most queue one. The job installs an npm
+new enough to stage, 11.15 or later inside 11.x. spec-guard releases the same
+way.
+
 ## Consequences
 
 - A maintainer sets up npmjs.com once. In the package's settings, add a
@@ -57,6 +68,10 @@ try.
   workflow `release.yml`, environment `npm`. Then set publishing access to
   require two-factor authentication and disallow tokens, which leaves this
   workflow and a person with a second factor as the only ways to publish.
+- **A maintainer approves each release.** The tag's run ends with the version
+  staged, and its summary names the commands: `npm stage list
+  @descent-vtt/spec-brief`, `npm stage view <id>`, then `npm stage approve <id>`
+  with a second factor, or the Staged Packages tab on npmjs.com.
 - The `npm` environment in the repository's settings is where a required
   reviewer goes, if a release should wait for one.
 - The changelog check also runs in the unit suite, so the pull request that

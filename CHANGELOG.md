@@ -215,8 +215,9 @@ CommonMark scanner, and the review of 0.1.0 is fixed throughout.
   `waitingOnDeferred` are new. `intersectTokens` is gone.
 - A `shared-directory` finding has a hint, and a `glob` finding says what a
   scope pattern looks like.
-- Versions are published by CI through npm's trusted publishing, with
-  provenance that names the commit and the run (ADR-0010).
+- Versions are staged by CI through npm's trusted publishing, with
+  provenance that names the commit and the run, and a maintainer releases
+  each with a second factor (ADR-0010).
 - `archive` no longer passes a scope it never measured. With no `--commit`,
   `--base` or `archiving.base`, without git, or with a commit already in the
   base branch - where the diff from the merge base is empty - a brief that
