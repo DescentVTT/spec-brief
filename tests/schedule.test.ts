@@ -540,6 +540,13 @@ describe('writing the waves', () => {
     expect(second?.content).toBe(goodBrief({ affectedFiles: '[a]' }).replace('affectedFiles: [a]\n', 'affectedFiles: [a]\nwave: 2\n'));
   });
 
+  it('keeps a comment after the wave it rewrites', () => {
+    const byHand = goodBrief({ wave: '1  # set by hand after the review', affectedFiles: '[a]' });
+    const corpus = corpusOf({ [B(1)]: goodBrief({ wave: '1', affectedFiles: '[a]' }), [B(2)]: byHand });
+    const [op] = planWaves(schedule(corpus)).ops;
+    expect(op?.kind === 'write' ? op.content : '').toBe(byHand.replace('wave: 1  #', 'wave: 2  #'));
+  });
+
   it('keeps a byte-order mark, CRLF and a missing final newline, and gives a brief with no front matter one', () => {
     const cfg = config({ status: { field: null } });
     const crlf = `\uFEFF${goodBrief({ affectedFiles: '[a]' }).replace(/\n/g, '\r\n').trimEnd()}`;

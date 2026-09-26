@@ -20,7 +20,7 @@ import type { FileOp } from './archive.js';
 import { type Brief, lineOfField } from './brief.js';
 import { undecidedFinding, unscopedFinding } from './collisions.js';
 import { byId, type Corpus, dependencyCycles, liveDependencies, waitingOnDeferred } from './corpus.js';
-import { editable, setEntry } from './frontmatter.js';
+import { editable, setEntryKeepingComment } from './frontmatter.js';
 import { readingIn, WITNESS_BUDGET } from './glob.js';
 import { configuredSeverity } from './lint.js';
 import { meet, type Overlap, type Scope, scopeOf } from './scope.js';
@@ -324,7 +324,7 @@ export function planWaves(s: Schedule): WavePlan {
       });
       continue;
     }
-    const lines = setEntry(brief.lines, brief.frontMatter, 'wave', String(p.proposed));
+    const lines = setEntryKeepingComment(brief.lines, brief.frontMatter, 'wave', String(p.proposed));
     ops.push({ kind: 'write', path: brief.file, content: encodeLike(brief.source, lines), before: brief.source });
   }
   return { ops, refused };
