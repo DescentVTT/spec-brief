@@ -10,6 +10,15 @@ Notable changes, newest first. Versions follow [semver](https://semver.org).
   version cannot reach npm from a workstation by mistake, without provenance;
   spec-harness 0.1.0 did. The release never runs it: it stages a tarball it
   packed.
+- spec-core at 8840d36. Its Markdown scanner reads an image inside a link's
+  text, as CommonMark renders it, and lists it after the link it lies in:
+  `[![build](badge.svg)](actions)` gives both. spec-brief read the link's
+  text itself, and still does for what the scanner leaves there - a link in
+  a link's text, which CommonMark takes as the link - so a destination found
+  both ways is kept once, and archival rewrites the badge inside a link once,
+  as before, and restores it on reopening.
+- The scanner makes a document's links, list items and directives mask the
+  first time they are read, and keeps them. The answers are the same.
 
 ## 0.2.0
 
