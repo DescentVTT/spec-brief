@@ -421,6 +421,26 @@ describe('plugins', () => {
     expect(exportsTarget({ './*': './*.js' }, './../x')).toBeNull();
     expect(exportsTarget({ './*': './*' }, './node_modules/x')).toBeNull();
     expect(exportsTarget({ './*': './*' }, './a/./b')).toBeNull();
+    // A backslash separates segments too: Windows' join climbs through it.
+    expect(exportsTarget({ './*': './lib/*.js' }, './..\\..\\..\\outside\\evil')).toBeNull();
+    expect(exportsTarget({ './*': './*' }, './a\\.\\b')).toBeNull();
+    expect(exportsTarget({ './*': './*' }, './a\\node_modules\\b')).toBeNull();
+    expect(exportsTarget({ './*': './*' }, './NODE_MODULES/x')).toBeNull();
+    expect(exportsTarget({ '.': './lib\\..\\..\\x.js' }, '.')).toBeNull();
+    expect(exportsTarget({ './*': './lib/*.js' }, './ok')).toBe('./lib/ok.js');
+    expect(exportsTarget({ './*': './lib/*.js' }, './..x/y')).toBe('./lib/..x/y.js');
+  });
+
+  it('refuses a package subpath that climbs out of node_modules with backslashes, before loading anything', async () => {
+    const root = dir('plugins-backslash');
+    writeTree(root, {
+      'node_modules/pkg/package.json': JSON.stringify({ name: 'pkg', type: 'module', exports: { './*': './lib/*.js' } }),
+      'node_modules/pkg/lib/ok.js': "export default { name: 'inside', rules: [] };",
+      'outside/evil.js': "export default { name: 'outside', rules: [] };",
+    });
+    const climbing = 'pkg/..\\..\\..\\outside\\evil';
+    await expect(loadPlugins([{ module: climbing, options: undefined }], root)).rejects.toThrow(`pkg exports no "./..\\..\\..\\outside\\evil" for import`);
+    expect((await loadPlugins([{ module: 'pkg/ok', options: undefined }], root)).map((p) => p.name)).toEqual(['inside']);
   });
 
   it('refuses a module that does not load, that exports no plugin, or that repeats a name', async () => {
