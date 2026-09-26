@@ -165,13 +165,18 @@ export function asPlugin(value: unknown, module: string, options: unknown): Plug
   return waive === undefined ? plugin : { ...plugin, waive: waive as NonNullable<Plugin['waive']> };
 }
 
-/** Checks what a `waive` hook returned: a list of `{ rule, path, reason }`, each a string. */
+/**
+ * Checks what a `waive` hook returned: a list of `{ rule, path, reason }`,
+ * each a string. A hook that returns nothing waives nothing: a function that
+ * found no ruling and fell off its end has answered, not failed.
+ */
 export function asWaivers(value: unknown, plugin: string): Waiver[] {
   const isWaiver = (item: unknown): item is Waiver => {
     if (typeof item !== 'object' || item === null) return false;
     const w = item as Record<string, unknown>;
     return typeof w['rule'] === 'string' && typeof w['path'] === 'string' && typeof w['reason'] === 'string';
   };
+  if (value === undefined) return [];
   if (!Array.isArray(value) || !value.every(isWaiver)) {
     throw new ConfigError(`plugin "${plugin}"`, ['"waive" must return a list of { rule, path, reason }, each a string']);
   }

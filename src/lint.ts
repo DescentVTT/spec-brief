@@ -16,9 +16,10 @@ export interface WaiveContext {
   readonly root: string;
   readonly brief: { readonly id: string | null; readonly file: string; readonly text: string };
   /**
-   * Every finding that refuses the archival. A `protected-file` finding names
-   * its `path`; an `out-of-scope` one lists its `paths`. Only those two can be
-   * waived.
+   * Every finding that refuses the archival, as a frozen copy: writing to it
+   * throws, and the waivers are matched against the plan's own. A
+   * `protected-file` finding names its `path`; an `out-of-scope` one lists its
+   * `paths`. Only those two can be waived.
    */
   readonly findings: readonly Finding[];
   /** The base the round is measured from, as it was given; `null` when none was. */
@@ -36,9 +37,10 @@ export interface Plugin {
   /**
    * Lifts refusals of an archival that the plugin's own check allows - a
    * protected file a verified ruling covers - by rule and path. Asked only
-   * when the plan has a refusal it could lift.
+   * when the plan has a refusal it could lift. Returning nothing waives
+   * nothing.
    */
-  readonly waive?: ((context: WaiveContext) => readonly Waiver[] | Promise<readonly Waiver[]>) | undefined;
+  readonly waive?: ((context: WaiveContext) => readonly Waiver[] | void | Promise<readonly Waiver[] | void>) | undefined;
 }
 
 export interface LintOptions {

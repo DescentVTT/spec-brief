@@ -113,6 +113,22 @@ export function today(env: Readonly<Record<string, string | undefined>> = proces
   return when.toISOString().slice(0, 10);
 }
 
+/**
+ * A deep copy of a value in which every object and array is frozen. Plain
+ * data only, as `structuredClone` takes it; the recursion ends at the data's
+ * own depth.
+ */
+function frozenCopy<T>(value: T): T {
+  const freeze = (item: unknown): void => {
+    if (typeof item !== 'object' || item === null) return;
+    for (const child of Object.values(item)) freeze(child);
+    Object.freeze(item);
+  };
+  const copy = structuredClone(value);
+  freeze(copy);
+  return copy;
+}
+
 export function isDate(text: string): boolean {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(text)) return false;
   const parsed = new Date(`${text}T00:00:00Z`);
@@ -348,21 +364,28 @@ export class BriefEngine {
    * answers in the wrong shape, stops the run as a plugin that fails to load
    * does: an archival decided without the check it asked for is not one to
    * trust.
+   *
+   * A hook is handed a frozen copy of the refusals, and its waivers are
+   * matched against the plan's own. Handed the plan's list, a hook could drop
+   * a refusal from it, or relabel an open task as a protected file and waive
+   * that, and so lift what only spec-brief may; writing to the copy throws,
+   * which stops the run like any failing hook.
    */
   private async waive(plan: Plan, base: string | null, commit: string | null, strict: boolean): Promise<Plan> {
     if (!plan.blocking.some((f) => WAIVABLE.includes(f.rule))) return plan;
+    const context = frozenCopy({
+      root: this.root,
+      brief: { id: plan.brief.id, file: plan.brief.file, text: plan.brief.text },
+      findings: plan.blocking,
+      base,
+      commit,
+    });
     const waivers: { plugin: string; waiver: Waiver }[] = [];
     for (const plugin of await this.loadedPlugins()) {
       if (plugin.waive === undefined) continue;
       let answer: unknown;
       try {
-        answer = await plugin.waive({
-          root: this.root,
-          brief: { id: plan.brief.id, file: plan.brief.file, text: plan.brief.text },
-          findings: plan.blocking,
-          base,
-          commit,
-        });
+        answer = await plugin.waive(context);
       } catch (error) {
         throw new ConfigError(`plugin "${plugin.name}"`, [`"waive" failed: ${error instanceof Error ? error.message : String(error)}`]);
       }

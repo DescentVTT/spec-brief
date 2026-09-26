@@ -319,7 +319,7 @@ export default () => ({
 });
 ```
 
-`findings` are the archive's refusals. A `protected-file` refusal is one per file and names its `path`; an `out-of-scope` refusal, which refuses only under `--strict`, lists its `paths`. Those two are the only ones a plugin can waive: a waiver matches a refusal by rule and path and turns it into a `waived` note naming the plugin, the rule, the path and the reason; a waiver for any other rule is ignored with a `waiver-ignored` warning. The hook is asked only when the plan has a refusal it could lift. A hook that throws or answers in another shape stops the run with exit 2, as a plugin that fails to load does.
+`findings` are the archive's refusals, as a frozen copy: a hook reads them and cannot change them, and a write to them throws. A `protected-file` refusal is one per file and names its `path`; an `out-of-scope` refusal, which refuses only under `--strict`, lists its `paths`. Those two are the only ones a plugin can waive: a waiver matches one of the plan's own refusals by rule and path and turns it into a `waived` note naming the plugin, the rule, the path and the reason; a waiver for any other rule is ignored with a `waiver-ignored` warning. The hook is asked only when the plan has a refusal it could lift. A hook that returns nothing waives nothing. One that throws - a write to `findings` included - or answers in another shape stops the run with exit 2, as a plugin that fails to load does.
 
 ## What it does not do
 

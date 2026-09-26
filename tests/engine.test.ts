@@ -3,12 +3,14 @@ import { join } from 'node:path';
 
 import { afterAll, describe, expect, it } from 'vitest';
 
+import type { Plan, Waiver } from '../src/archive.js';
 import { ConfigError, DEFAULT_CONFIG, resolveConfig } from '../src/config.js';
 import { BriefEngine, EngineError, isDate, today } from '../src/engine.js';
 import { MemoryFileSystem } from '../src/fs.js';
 import type { Git } from '../src/git.js';
 import type { Plugin, WaiveContext } from '../src/lint.js';
 import { asPlugin, asWaivers, exportsTarget, loadPlugins } from '../src/plugins.js';
+import type { Finding } from '../src/types.js';
 import { commitAll, goodBrief, initRepo, tempDir, writeTree } from './helpers.js';
 
 const made: string[] = [];
@@ -455,8 +457,10 @@ describe('plugins', () => {
   it('checks the shape of what a waive hook answers', () => {
     expect(asWaivers([{ rule: 'protected-file', path: 'a', reason: 'r', extra: 1 }], 'p')).toEqual([{ rule: 'protected-file', path: 'a', reason: 'r' }]);
     expect(asWaivers([], 'p')).toEqual([]);
+    // A hook that falls off its end has found nothing to waive.
+    expect(asWaivers(undefined, 'p')).toEqual([]);
     const refusal = new ConfigError('plugin "p"', ['"waive" must return a list of { rule, path, reason }, each a string']);
-    for (const answer of [undefined, {}, [null], ['x'], [{ rule: 'r', path: 'a' }], [{ rule: 'r', path: 1, reason: 'x' }], [{ rule: 1, path: 'a', reason: 'x' }]]) {
+    for (const answer of [null, {}, [null], ['x'], [{ rule: 'r', path: 'a' }], [{ rule: 'r', path: 1, reason: 'x' }], [{ rule: 1, path: 'a', reason: 'x' }]]) {
       expect(() => asWaivers(answer, 'p'), JSON.stringify(answer)).toThrow(refusal);
     }
   });
@@ -531,6 +535,76 @@ describe('plugins', () => {
     await expect(rejecting.planArchive('1', { commit: 'HEAD', date: '2026-09-26' })).rejects.toThrow('"waive" failed: down');
     const odd = await engineWith(() => [{ rule: 'protected-file' }] as never);
     await expect(odd.planArchive('1', { commit: 'HEAD', date: '2026-09-26' })).rejects.toThrow('"waive" must return a list');
+  });
+
+  describe('a waive hook that writes to what it is handed', () => {
+    const git: Git = {
+      commit: () => Promise.resolve({ sha: '1234567890ab', author: 'A', date: '' }),
+      mergeBase: () => Promise.resolve(null),
+      changes: () => Promise.resolve([{ path: 'src/a.ts', insertions: 1, deletions: 0 }]),
+      dirty: () => Promise.resolve([]),
+      files: () => Promise.resolve([]),
+      remoteUrl: () => Promise.resolve(null),
+    };
+    // An open box and a changed protected file: two refusals, one a plugin may lift.
+    const brief = goodBrief({ protectedFiles: '[src/a.ts]' }, ['', '- [ ] an open task nobody did', ''].join('\n'));
+    const planWith = async (waive: NonNullable<Plugin['waive']>): Promise<Plan> => {
+      const fs = new MemoryFileSystem({ 'briefs/001_a.md': brief });
+      const engine = new BriefEngine({ root: '/v', config: DEFAULT_CONFIG, configFile: null, fs, git, plugins: [{ name: 'p', rules: [], waive }] });
+      await engine.load();
+      return engine.planArchive('1', { commit: 'HEAD', date: '2026-09-26' });
+    };
+
+    it('is handed a copy in which every finding is frozen', async () => {
+      let seen: WaiveContext | undefined;
+      const plan = await planWith((context) => {
+        seen = context;
+        return [];
+      });
+      expect(seen?.findings).not.toBe(plan.blocking);
+      expect(seen?.findings).toEqual(plan.blocking);
+      expect(Object.isFrozen(seen)).toBe(true);
+      expect(Object.isFrozen(seen?.findings)).toBe(true);
+      expect(seen?.findings.every((f) => Object.isFrozen(f))).toBe(true);
+    });
+
+    it('cannot drop a refusal: splicing the list stops the run, and the plan never saw it', async () => {
+      const splice = (context: WaiveContext): [] => {
+        (context.findings as Finding[]).splice(0, context.findings.length);
+        return [];
+      };
+      await expect(planWith(splice)).rejects.toThrow(ConfigError);
+      await expect(planWith(splice)).rejects.toThrow(/^plugin "p": "waive" failed: /);
+    });
+
+    it('cannot relabel a refusal it may not lift into one it may', async () => {
+      // A strict hook, as every ES module is, throws on the write.
+      const relabel = (context: WaiveContext): Waiver[] => {
+        const task = context.findings.find((f) => f.rule === 'open-task') as { rule: string; path?: string };
+        task.rule = 'protected-file';
+        task.path = 'x';
+        return [{ rule: 'protected-file', path: 'x', reason: 'r' }];
+      };
+      await expect(planWith(relabel)).rejects.toThrow(/^plugin "p": "waive" failed: /);
+      // A sloppy one, as a CommonJS plugin may be, writes nothing, and its
+      // waiver for the relabelled finding matches no refusal of the plan's.
+      const sloppy = new Function(
+        'context',
+        "const task = context.findings.find((f) => f.rule === 'open-task'); task.rule = 'protected-file'; task.path = 'x'; return [{ rule: 'protected-file', path: 'x', reason: 'r' }];",
+      ) as NonNullable<Plugin['waive']>;
+      const plan = await planWith(sloppy);
+      expect(plan.blocking.map((f) => [f.rule, f.path])).toEqual([
+        ['open-task', undefined],
+        ['protected-file', 'src/a.ts'],
+      ]);
+      expect(plan.warnings).toEqual([]);
+    });
+
+    it('that returns nothing waives nothing, and the run goes on', async () => {
+      const plan = await planWith(() => undefined);
+      expect(plan.blocking.map((f) => f.rule)).toEqual(['open-task', 'protected-file']);
+      expect(plan.warnings).toEqual([]);
+    });
   });
 
   it('loads a waiving plugin from a subpath of a scoped package, and the archive takes what it waives and refuses what it does not', async () => {
