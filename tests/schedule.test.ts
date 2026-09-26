@@ -542,7 +542,7 @@ describe('writing the waves', () => {
 
   it('keeps a byte-order mark, CRLF and a missing final newline, and gives a brief with no front matter one', () => {
     const cfg = config({ status: { field: null } });
-    const crlf = `﻿${goodBrief({ affectedFiles: '[a]' }).replace(/\n/g, '\r\n').trimEnd()}`;
+    const crlf = `\uFEFF${goodBrief({ affectedFiles: '[a]' }).replace(/\n/g, '\r\n').trimEnd()}`;
     const bare = '# T\n\n## Intent\n\nx\n';
     const corpus = corpusOf({ [B(1)]: crlf, [B(2)]: bare }, cfg);
     const plan = planWaves(schedule(corpus));

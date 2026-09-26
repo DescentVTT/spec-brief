@@ -36,7 +36,7 @@ export function joinLines(lines: readonly string[], eol: '\n' | '\r\n'): string 
 
 /** Lines written back with the source's byte-order mark, line ending and final newline, or lack of one. */
 export function encodeLike(source: string, lines: readonly string[]): string {
-  const bom = source.charCodeAt(0) === 0xfeff ? '﻿' : '';
+  const bom = source.charCodeAt(0) === 0xfeff ? '\uFEFF' : '';
   const eol = lineEnding(source);
   const text = joinLines(lines, eol);
   const finalNewline = source === '' || source.endsWith('\n');

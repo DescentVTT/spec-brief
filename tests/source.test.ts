@@ -35,7 +35,7 @@ const everything = execFileSync('git', ['ls-files', '-z', '--cached', '--others'
   .filter((path) => path !== '' && existsSync(path));
 
 describe('the tree', () => {
-  it('has LF line endings and no control characters but tabs', () => {
+  it('has LF line endings, no control characters but tabs, and nothing invisible', () => {
     for (const file of ['briefs/002_a-mutation-gate-on-pull-requests.md', 'tsconfig.json', 'vitest.core.config.ts', '.gitattributes', 'LICENSE']) {
       expect(everything, file).toContain(file);
     }
@@ -44,6 +44,9 @@ describe('the tree', () => {
       for (let i = 0; i < text.length; i += 1) {
         const code = text.charCodeAt(i);
         if ((code < 32 && code !== 9 && code !== 10) || code === 127) return true;
+        // A byte-order mark or a zero-width character reads as nothing; one a
+        // test or a rewrite needs is written as an escape.
+        if (code === 0xfeff || (code >= 0x200b && code <= 0x200d) || code === 0x2060) return true;
       }
       return false;
     });
