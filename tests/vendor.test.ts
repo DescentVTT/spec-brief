@@ -34,8 +34,8 @@ describe('the vendored spec-core', () => {
     expect(record.commit).toMatch(/^[0-9a-f]{40}$/);
   });
 
-  it('holds the modules spec-brief uses, and the one they import', () => {
-    expect(Object.keys(record.modules).sort()).toEqual(['path', 'pattern']);
+  it('holds the modules spec-brief uses, and the ones they import', () => {
+    expect(Object.keys(record.modules).sort()).toEqual(['markdown', 'path', 'pattern', 'text']);
   });
 
   for (const [module, { files }] of Object.entries(record.modules)) {
