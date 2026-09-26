@@ -8,7 +8,7 @@ import { BriefEngine } from '../src/engine.js';
 import { MemoryFileSystem } from '../src/fs.js';
 import type { Git } from '../src/git.js';
 import { checkRuleIds, lint, ruleIds } from '../src/lint.js';
-import { linksOf, scan } from '../src/markdown.js';
+import { scan } from '../src/markdown.js';
 import { matrixJson, prettyMatrix } from '../src/report.js';
 import { inWords } from '../src/text.js';
 import type { Finding } from '../src/types.js';
@@ -61,7 +61,7 @@ describe('regressions', () => {
 
   it('does not read a footnote, or prose shaped like a definition, as a link', () => {
     const s = scan(['[^1]: Measured on the build server.', '[Note]: this is important', '[ok]: ../x.md "a title"', "[ok2]: <y z.md> 'title'", '[ok3]: w.md (title)']);
-    expect(linksOf(s).map((l) => l.target)).toEqual(['../x.md', 'y z.md', 'w.md']);
+    expect(s.links.map((l) => l.target)).toEqual(['../x.md', 'y z.md', 'w.md']);
     const corpus = corpusOf({ [A]: goodBrief({}, '\n[^1]: Measured on the build server.\n[Note]: this is important\n') });
     const out = written(planArchive(corpus, the(corpus, '001'), { date: '2026-09-24' }), 'briefs/archive/001_a.md');
     expect(out).toContain('[^1]: Measured on the build server.\n[Note]: this is important\n');

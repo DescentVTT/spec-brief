@@ -10,6 +10,18 @@ export function splitLines(text: string): string[] {
 }
 
 /**
+ * A brief's lines as one text, for spec-core's readers.
+ *
+ * A brief's lines end at LF or CRLF, and a sealed brief's hash is taken over
+ * them. spec-core ends a line at a lone CR as well, as CommonMark does, so a
+ * lone CR is handed to it as a space: every line and column it reports is
+ * then one of the brief's own.
+ */
+export function textOfLines(lines: readonly string[]): string {
+  return lines.join('\n').replace(/\r/g, ' ');
+}
+
+/**
  * The line ending a file already uses, so a rewrite does not flip it. Decided by
  * the first terminator; a file with none is written with LF.
  */

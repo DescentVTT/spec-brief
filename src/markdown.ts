@@ -1,21 +1,33 @@
 /**
- * A structural Markdown scanner: code, comments, headings, task items and link
- * destinations, each with its line.
+ * A brief's Markdown: spec-core's scanner, copied into `src/vendor/spec-core/`,
+ * read in spec-brief's dialect.
  *
- * Not a CommonMark parser, and it does not need to be. Nothing here renders.
- * What must be exactly right is knowing what is code or a comment, because a
- * heading inside a fenced block is not a section and a template hint inside
- * `<!-- -->` is not content. Everything else is deliberately simple: ATX
- * headings only (a setext underline and a front-matter delimiter are the same
- * three characters), fences at any indentation, and no indented code blocks,
- * because inside a list four spaces of indentation is a continuation far more
- * often than code.
+ * The scanner is exact about what is code and what is a comment, as CommonMark
+ * has it, and reports every heading, list item and link it finds. What of that
+ * is a brief's structure is decided here (ADR-0001, amended 2026-09-26):
+ *
+ * - A heading is an ATX heading outside a block quote. Prose over a `---` is a
+ *   setext heading to a renderer, and a brief that separates its parts that way
+ *   must not grow a section from it; a heading in a block quote is quoted.
+ * - A task is a list item outside a block quote with a box GFM renders: a
+ *   space, `x` or `X`. The scanner reads `[~]`, `[?]` and others as well,
+ *   which a brief does not write.
+ * - A link destination is one written in the link or in a definition: the
+ *   inline form and the definition, images included, an image inside a link's
+ *   text too. A reference is rewritten through its definition, once.
+ *
+ * Everything here is in 0-based lines of the brief's `lines`, and columns
+ * within them.
  */
+
+import { type Link, linesOf, type MarkdownScan, scanMarkdown, type ScannedLine } from './vendor/spec-core/markdown/index.js';
+import { textOfLines } from './text.js';
 
 export interface Heading {
   /** 0-based line. */
   readonly line: number;
   readonly level: number;
+  /** As a reader sees it: without a closing sequence or a comment. */
   readonly text: string;
 }
 
@@ -28,7 +40,7 @@ export interface Section {
 export interface TaskItem {
   /** 0-based line of the box. */
   readonly line: number;
-  /** 0-based line after the item's last continuation line. */
+  /** 0-based line after the item's last line: its continuations and what is nested under it. */
   readonly end: number;
   readonly checked: boolean;
   readonly text: string;
@@ -45,193 +57,61 @@ export interface LinkDestination {
 
 export interface Scan {
   readonly lines: readonly string[];
-  /** Lines with comments blanked and code kept: what counts as content. */
+  /** Lines with front matter and comments blanked, and code kept: what counts as content. */
   readonly prose: readonly string[];
-  /** Lines with comments, code spans and fenced blocks blanked: what counts as structure. */
+  /** Lines with front matter, code, raw-text HTML and comments blanked: what counts as structure. */
   readonly masked: readonly string[];
   readonly headings: readonly Heading[];
   readonly tasks: readonly TaskItem[];
+  /** Destinations outside code and comments, in the order of their lines and columns. */
+  readonly links: readonly LinkDestination[];
 }
 
-// Any indentation: a fence inside a nested list item is indented with the item.
-const FENCE = /^[ \t]*(`{3,}|~{3,})(.*)$/;
-const HEADING = /^ {0,3}(#{1,6})(?:[ \t]+|$)/;
-const TASK = /^([ \t]*)(?:[-*+]|\d{1,9}[.)])[ \t]+\[([ xX])\](?:[ \t]+(.*))?$/;
-const LIST_ITEM = /^[ \t]*(?:[-*+]|\d{1,9}[.)])(?:[ \t]|$)/;
-
-function blank(length: number): string {
-  return ' '.repeat(length);
+/** Whether a checkbox is one a task is written with. */
+function isBox(checkbox: string | null): boolean {
+  return checkbox === ' ' || checkbox === 'x' || checkbox === 'X';
 }
 
 /**
- * Scans `lines` from line `from`; earlier lines (front matter) are blanked in
- * both masks and contribute nothing.
+ * The links that write their destination - inline links and images, and
+ * definitions - with offsets into the text scanned `at` that offset.
+ *
+ * A link's text may hold an image, `[![diagram](d.png)](d.md)`, whose
+ * destination moves with the brief as the link's does. spec-core reads the
+ * link and resumes after it, so its text is read again here. Each text is
+ * shorter than the one it came from, so the reading ends.
  */
-export function scan(lines: readonly string[], from = 0): Scan {
-  const prose: string[] = [];
-  const masked: string[] = [];
-  let fence: { readonly char: string; readonly length: number } | null = null;
-  let inComment = false;
-
-  for (let i = 0; i < lines.length; i += 1) {
-    const line = lines[i] as string;
-    if (i < from) {
-      prose.push(blank(line.length));
-      masked.push(blank(line.length));
-      continue;
-    }
-    if (fence !== null) {
-      prose.push(line);
-      masked.push(blank(line.length));
-      const close = FENCE.exec(line);
-      if (close !== null) {
-        const [, run = '', rest = ''] = close;
-        if (run.charAt(0) === fence.char && run.length >= fence.length && rest.trim() === '') fence = null;
-      }
-      continue;
-    }
-    if (!inComment) {
-      const open = FENCE.exec(line);
-      const [, run = '', info = ''] = open ?? [];
-      if (open !== null && !(run.charAt(0) === '`' && info.includes('`'))) {
-        fence = { char: run.charAt(0), length: run.length };
-        prose.push(line);
-        masked.push(blank(line.length));
-        continue;
-      }
-    }
-
-    let proseLine = '';
-    let maskedLine = '';
-    let j = 0;
-    while (j < line.length) {
-      if (inComment) {
-        const close = line.indexOf('-->', j);
-        const stop = close < 0 ? line.length : close + 3;
-        proseLine += blank(stop - j);
-        maskedLine += blank(stop - j);
-        inComment = close < 0;
-        j = stop;
-        continue;
-      }
-      if (line.startsWith('<!--', j)) {
-        inComment = true;
-        proseLine += blank(4);
-        maskedLine += blank(4);
-        j += 4;
-        continue;
-      }
-      if (line.charAt(j) === '`') {
-        const run = backtickRun(line, j);
-        const close = closingRun(line, j + run, run);
-        if (close >= 0) {
-          const span = line.slice(j, close + run);
-          proseLine += span;
-          maskedLine += blank(span.length);
-          j = close + run;
-          continue;
-        }
-        proseLine += line.slice(j, j + run);
-        maskedLine += line.slice(j, j + run);
-        j += run;
-        continue;
-      }
-      proseLine += line.charAt(j);
-      maskedLine += line.charAt(j);
-      j += 1;
-    }
-    prose.push(proseLine);
-    masked.push(maskedLine);
-  }
-
-  const headings = findHeadings(lines, masked);
-  return { lines, prose, masked, headings, tasks: findTasks(lines, masked, headings) };
+function written(core: MarkdownScan, at: number): Link[] {
+  return core.links.flatMap((link) => {
+    const inner = written(scanMarkdown(link.text), at + core.text.indexOf(link.text, link.start));
+    if (link.form !== 'inline' && link.form !== 'definition') return inner;
+    return [{ ...link, targetStart: at + link.targetStart, targetEnd: at + link.targetEnd }, ...inner];
+  });
 }
 
-function backtickRun(line: string, at: number): number {
-  let end = at;
-  while (line.charAt(end) === '`') end += 1;
-  return end - at;
-}
-
-/** The index of a run of exactly `length` backticks at or after `from`, or -1. */
-function closingRun(line: string, from: number, length: number): number {
-  let i = from;
-  while (i < line.length) {
-    if (line.charAt(i) !== '`') {
-      i += 1;
-      continue;
-    }
-    const run = backtickRun(line, i);
-    if (run === length) return i;
-    i += run;
-  }
-  return -1;
-}
-
-function findHeadings(lines: readonly string[], masked: readonly string[]): Heading[] {
-  const headings: Heading[] = [];
-  for (let i = 0; i < masked.length; i += 1) {
-    const match = HEADING.exec(masked[i] as string);
-    if (!match) continue;
-    const level = (match[1] as string).length;
-    const original = lines[i] as string;
-    const text = original
-      .replace(/^ {0,3}#{1,6}/, '')
-      .replace(/[ \t]+#+[ \t]*$/, '')
-      .trim();
-    headings.push({ line: i, level, text });
-  }
-  return headings;
-}
-
-function indentOf(line: string): number {
-  return line.length - line.trimStart().length;
-}
-
-function findTasks(lines: readonly string[], masked: readonly string[], headings: readonly Heading[]): TaskItem[] {
-  const headingLines = new Set(headings.map((h) => h.line));
-  const tasks: TaskItem[] = [];
-  for (let i = 0; i < masked.length; i += 1) {
-    const match = TASK.exec(masked[i] as string);
-    if (!match) continue;
-    const indent = (match[1] as string).length;
-    const original = TASK.exec(lines[i] as string);
-    const text = (original?.[3] ?? '').trim();
-    tasks.push({ line: i, end: itemEnd(lines, masked, headingLines, i, indent), checked: match[2] !== ' ', text });
-  }
-  return tasks;
-}
-
-/**
- * Where the list item starting at `start` ends: after its last line indented
- * past the marker, or its last lazy continuation line - text directly under
- * the item with no blank line between, which CommonMark folds into the item's
- * paragraph.
- */
-function itemEnd(
-  lines: readonly string[],
-  masked: readonly string[],
-  headingLines: ReadonlySet<number>,
-  start: number,
-  indent: number,
-): number {
-  let last = start;
-  let previousBlank = false;
-  for (let k = start + 1; k < lines.length; k += 1) {
-    const line = lines[k] as string;
-    if (headingLines.has(k)) break;
-    if (line.trim() === '') {
-      previousBlank = true;
-      continue;
-    }
-    const nested = indentOf(line) > indent;
-    const lazy = !previousBlank && !LIST_ITEM.test(masked[k] as string) && !FENCE.test(line) && !/^\s*>/.test(line);
-    if (!nested && !lazy) break;
-    last = k;
-    previousBlank = false;
-  }
-  return last + 1;
+/** Scans a brief's lines, which carry no byte-order mark. */
+export function scan(lines: readonly string[]): Scan {
+  const core = scanMarkdown(textOfLines(lines));
+  const unquoted = (line: number): boolean => (core.lines[line - 1] as ScannedLine).quoteDepth === 0;
+  return {
+    lines,
+    prose: linesOf(core, 'prose'),
+    masked: linesOf(core, 'structure'),
+    headings: core.headings
+      .filter((h) => h.form === 'atx' && unquoted(h.line))
+      .map((h) => ({ line: h.line - 1, level: h.level, text: h.text })),
+    tasks: core.listItems
+      .filter((item) => isBox(item.checkbox) && item.quoteDepth === 0)
+      .map((item) => ({ line: item.line - 1, end: item.endLine, checked: item.checkbox !== ' ', text: item.firstLine })),
+    links: written(core, 0)
+      .map((link) => {
+        // A link's text may run over lines; its destination is on the last.
+        const at = core.index.positionAt(link.targetStart);
+        const start = at.column - 1;
+        return { line: at.line - 1, start, end: start + link.targetEnd - link.targetStart, target: link.target };
+      })
+      .sort((a, b) => a.line - b.line || a.start - b.start),
+  };
 }
 
 /** Sections: every heading below the title, running to the next heading at its level or above. */
@@ -257,67 +137,6 @@ export function sectionsOf(result: Scan): Section[] {
 /** The first level-one heading, which is what a reader takes as the title. */
 export function titleOf(result: Scan): Heading | undefined {
   return result.headings.find((h) => h.level === 1);
-}
-
-const DEFINITION = /^ {0,3}\[(?!\^)[^\]]+\]:[ \t]*/;
-/** What may follow a definition's destination: nothing, or a title. */
-const TITLE = /^(?:"[^"]*"|'[^']*'|\([^)]*\))?$/;
-
-/**
- * Link and image destinations outside code and comments: `[text](dest)`,
- * `![alt](dest)`, and reference definitions `[label]: dest`.
- */
-export function linksOf(result: Scan): LinkDestination[] {
-  const links: LinkDestination[] = [];
-  result.masked.forEach((masked, line) => {
-    const original = result.lines[line] as string;
-    const definition = DEFINITION.exec(masked);
-    if (definition) {
-      // `[Note]: this matters` is prose that looks like a definition; a real one
-      // has nothing after its destination but an optional title.
-      const found = readDestination(masked, original, definition[0].length);
-      if (found && TITLE.test(masked.slice(found.end + (masked.charAt(found.end) === '>' ? 1 : 0)).trim())) {
-        links.push({ line, ...found });
-      }
-    }
-    let from = 0;
-    for (;;) {
-      const at = masked.indexOf('](', from);
-      if (at < 0) break;
-      let start = at + 2;
-      while (masked.charAt(start) === ' ' || masked.charAt(start) === '\t') start += 1;
-      const found = readDestination(masked, original, start);
-      if (found) links.push({ line, ...found });
-      from = at + 2;
-    }
-  });
-  return links;
-}
-
-function readDestination(
-  masked: string,
-  original: string,
-  start: number,
-): { start: number; end: number; target: string } | undefined {
-  if (masked.charAt(start) === '<') {
-    const close = masked.indexOf('>', start + 1);
-    if (close < 0) return undefined;
-    return { start: start + 1, end: close, target: original.slice(start + 1, close) };
-  }
-  let depth = 0;
-  let end = start;
-  while (end < masked.length) {
-    const ch = masked.charAt(end);
-    if (ch === ' ' || ch === '\t') break;
-    if (ch === '(') depth += 1;
-    if (ch === ')') {
-      if (depth === 0) break;
-      depth -= 1;
-    }
-    end += 1;
-  }
-  if (end === start) return undefined;
-  return { start, end, target: original.slice(start, end) };
 }
 
 /** Whether a line carries anything once comments are removed. */

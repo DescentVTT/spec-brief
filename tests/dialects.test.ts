@@ -12,7 +12,7 @@ import { globBase, intersectGlobs, matchGlob, parseGlob } from '../src/glob.js';
 import { integrityOf } from '../src/integrity.js';
 import { isRelativeTarget, relativePath, rewriteLinks, splitTarget } from '../src/links.js';
 import { lint, sortFindings } from '../src/lint.js';
-import { linksOf, scan } from '../src/markdown.js';
+import { scan } from '../src/markdown.js';
 import { matrixJson, prettyMatrix } from '../src/report.js';
 import { renderNewBrief, nextId } from '../src/scaffold.js';
 import { toJsonSchema, validate } from '../src/schema.js';
@@ -140,25 +140,34 @@ describe('Markdown', () => {
     ]);
   });
 
-  it('masks an unclosed comment to the end, and a comment closed at the start of a line', () => {
-    const s = scan(lines('<!--\n--> after\n<!-- a --> b <!-- c'));
-    expect(s.prose.map((l) => l.trim())).toEqual(['', 'after', 'b']);
+  it('masks a comment closed at the start of a line, and one that opens a line and never closes to the end', () => {
+    const s = scan(lines('<!--\n--> after\n<!-- a --> b\n<!-- never closed\n## hidden'));
+    expect(s.prose.map((l) => l.trim())).toEqual(['', 'after', 'b', '', '']);
+    expect(s.headings).toEqual([]);
+  });
+
+  it('reads a <!-- in the middle of a line with no --> after it as text, and what follows as Markdown', () => {
+    // 0.1 masked from there to the end of the document, hiding every section below.
+    const s = scan(lines('<!-- a --> b <!-- c\n## Tasks\n- [ ] d'));
+    expect(s.prose.map((l) => l.trim())).toEqual(['b <!-- c', '## Tasks', '- [ ] d']);
+    expect(s.headings.map((h) => h.text)).toEqual(['Tasks']);
+    expect(s.tasks.map((t) => t.text)).toEqual(['d']);
   });
 
   it('keeps text after a code span, and an unmatched run as the start of text', () => {
     const s = scan(lines('``a`b`` and [x](y.md)\n` open [z](w.md)'));
-    expect(linksOf(s).map((l) => l.target)).toEqual(['y.md', 'w.md']);
+    expect(s.links.map((l) => l.target)).toEqual(['y.md', 'w.md']);
     expect(s.prose[1]).toBe('` open [z](w.md)');
   });
 
   it('reads a definition only at the start of a line, and a title only in its forms', () => {
     const s = scan(lines('x [a]: b.md\n[b]: c.md\n[c]: d.md "t" extra\n[d]: e.md (t)\n[e]: <f g.md> "t"'));
-    expect(linksOf(s).map((l) => l.target)).toEqual(['c.md', 'e.md', 'f g.md']);
+    expect(s.links.map((l) => l.target)).toEqual(['c.md', 'e.md', 'f g.md']);
   });
 
   it('reads a link after an earlier one on the same line, and the second of two definitions', () => {
     const s = scan(lines('[a](b.md) [c](d.md) [e](f.md)'));
-    expect(linksOf(s).map((l) => [l.start, l.target])).toEqual([
+    expect(s.links.map((l) => [l.start, l.target])).toEqual([
       [4, 'b.md'],
       [14, 'd.md'],
       [24, 'f.md'],

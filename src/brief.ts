@@ -106,7 +106,7 @@ export function parseBrief(file: string, text: string, config: Config, phase: Ph
   const lines = splitLines(content);
   const frontMatter = readFrontMatter(lines);
   const bodyStart = frontMatter === null || frontMatter.close < 0 ? 0 : frontMatter.close + 1;
-  const scanned = scan(lines, bodyStart);
+  const scanned = scan(lines);
   const problems: FieldProblem[] = [];
   const name = file.slice(file.lastIndexOf('/') + 1);
 

@@ -20,7 +20,7 @@ import type { FileOp } from './archive.js';
 import { type Brief, lineOfField } from './brief.js';
 import { undecidedFinding, unscopedFinding } from './collisions.js';
 import { type Corpus, dependencyCycles, resolveDependency } from './corpus.js';
-import { setEntry } from './frontmatter.js';
+import { editable, setEntry } from './frontmatter.js';
 import { readingIn, WITNESS_BUDGET } from './glob.js';
 import { configuredSeverity } from './lint.js';
 import { meet, type Overlap, type Scope, scopeOf } from './scope.js';
@@ -248,15 +248,16 @@ export function planWaves(s: Schedule): WavePlan {
   const refused: Finding[] = [];
   for (const p of moves(s)) {
     const { brief } = p;
-    if (brief.frontMatter !== null && brief.frontMatter.close < 0) {
+    if (brief.frontMatter !== null && !editable(brief.frontMatter)) {
+      const open = brief.frontMatter.close < 0;
       refused.push({
         rule: 'front-matter',
         severity: 'error',
-        message: `the front matter is never closed, so wave ${p.proposed} cannot be written into it`,
+        message: `the front matter is ${open ? 'never closed' : 'TOML'}, so wave ${p.proposed} cannot be written into it`,
         file: brief.file,
         line: 1,
         brief: brief.id ?? undefined,
-        hint: 'close the front matter with a "---" line, and schedule again',
+        hint: open ? 'close the front matter with a "---" line, and schedule again' : 'write the front matter as YAML between "---" lines, and schedule again',
       });
       continue;
     }

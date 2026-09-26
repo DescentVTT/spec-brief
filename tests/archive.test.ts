@@ -130,21 +130,26 @@ describe('refusals', () => {
   });
 
   it('refuses front matter it would have to write into and cannot, once, and leaves it as written', async () => {
-    const open = '---\nstatus: active\n\n# T\n';
-    const cfg = config({ archiving: { banner: [] } });
-    const corpus = corpusOf({ [A]: open }, cfg);
+    const toml = goodBrief().replace('---\nstatus: active\n---', '+++\nstatus = "active"\n+++');
+    const cfg = config({ status: { field: null } });
+    const corpus = corpusOf({ [A]: toml }, cfg);
     const plan = planArchive(corpus, the(corpus, '001'), { date: '2026-09-24' });
     expect(plan.blocking.map((f) => [f.rule, f.line, f.message, f.hint])).toEqual([
-      ['front-matter', 1, 'the front matter is never closed, so it cannot be written into', 'close the front matter with a "---" line'],
+      ['front-matter', 1, 'the front matter is TOML, which spec-brief does not write', 'write the front matter as YAML between "---" lines'],
     ]);
-    expect(write(plan, 'briefs/archive/001_a.md')).toBe(open);
+    expect(write(plan, 'briefs/archive/001_a.md').startsWith('+++\nstatus = "active"\n+++\n\n<!-- spec-brief:banner -->')).toBe(true);
     // Lint reports it already where it is an error; the refusal is not said twice.
     const findings = await lint(corpus);
-    const refused = planArchive(corpus, the(corpus, '001'), { date: '2026-09-24', findings }).blocking;
-    expect(refused.filter((f) => f.rule === 'front-matter').map((f) => f.message)).toEqual(['the front matter opened on line 1 is never closed']);
+    expect(planArchive(corpus, the(corpus, '001'), { date: '2026-09-24', findings }).blocking.map((f) => [f.rule, f.message])).toEqual([
+      ['front-matter', 'TOML front matter is not read; write YAML between "---" lines'],
+    ]);
     // A plan that writes nothing into the front matter has nothing to refuse.
-    const untouched = corpusOf({ [A]: open }, config({ status: { field: null }, archiving: { banner: [], freeze: false } }));
+    const untouched = corpusOf({ [A]: toml }, config({ status: { field: null }, archiving: { freeze: false } }));
     expect(planArchive(untouched, the(untouched, '001'), { date: '2026-09-24' }).blocking).toEqual([]);
+    const open = corpusOf({ [A]: '---\nstatus: active\n\n# T\n' }, config({ archiving: { banner: [] } }));
+    expect(planArchive(open, the(open, '001'), { date: '2026-09-24' }).blocking.map((f) => [f.rule, f.message, f.hint])).toEqual([
+      ['front-matter', 'the front matter is never closed, so it cannot be written into', 'close the front matter with a "---" line'],
+    ]);
   });
 });
 
@@ -330,14 +335,51 @@ describe('reopening', () => {
     expect(write(planUnarchive(corpus, corpus.briefs[0]!), A)).toBe('# T\n');
   });
 
+  it('rewrites every destination a link or a definition writes, and restores each on reopening', () => {
+    const body = [
+      '',
+      'An image ![d](../docs/d.png "t"), a linked one [![b](../img/b.svg)](../docs/b.md), and one over',
+      'two lines [the ADR',
+      'text](<../docs/adr/0001 x.md>).',
+      '',
+      'Read through [a reference][ref] and [ref], defined once.',
+      '',
+      '> A quote [q](../docs/q.md), and [a quoted definition]:',
+      '>',
+      '> [qref]: ../docs/qref.md',
+      '',
+      'Not links: a](../docs/no.md), [b](../docs/no.md c), `[c](../docs/no.md)`.',
+      '',
+      '    [indented](../docs/no.md)',
+      '',
+      '[ref]: ../docs/ref.md#part',
+      '',
+    ].join('\n');
+    const text = goodBrief({}, body);
+    const corpus = corpusOf({ [A]: text });
+    const plan = planArchive(corpus, the(corpus, '001'), { date: '2026-09-24' });
+    expect(plan.blocking).toEqual([]);
+    const archived = write(plan, 'briefs/archive/001_a.md');
+    expect(plan.linksRewritten).toBe(7);
+    for (const target of ['../../docs/d.png', '../../img/b.svg', '../../docs/b.md', '<../../docs/adr/0001 x.md>', '../../docs/q.md', '../../docs/qref.md', '../../docs/ref.md#part']) {
+      expect(archived, target).toContain(target);
+    }
+    expect(archived).not.toContain('../../docs/no.md');
+    const after = corpusOf({ 'briefs/archive/001_a.md': archived });
+    expect(write(planUnarchive(after, the(after, '001')), A)).toBe(text);
+  });
+
   it('refuses to reopen a brief whose front matter it cannot write into', () => {
-    const open = '---\nstatus: archived\n\n# T\n';
-    const corpus = corpusOf({ 'briefs/archive/001_a.md': open });
-    expect(planUnarchive(corpus, corpus.briefs[0]!).blocking.map((f) => f.message)).toEqual(['the front matter is never closed, so it cannot be written into']);
-    const noField = corpusOf({ 'briefs/archive/001_a.md': open }, config({ status: { field: null } }));
+    const toml = '+++\nstatus = "archived"\n+++\n\n# T\n';
+    const corpus = corpusOf({ 'briefs/archive/001_a.md': toml, 'briefs/archive/002_b.md': '---\nstatus: archived\n\n# T\n' });
+    expect(corpus.briefs.map((b) => planUnarchive(corpus, b).blocking.map((f) => f.message))).toEqual([
+      ['the front matter is TOML, which spec-brief does not write'],
+      ['the front matter is never closed, so it cannot be written into'],
+    ]);
+    const noField = corpusOf({ 'briefs/archive/001_a.md': toml }, config({ status: { field: null } }));
     const reopened = planUnarchive(noField, noField.briefs[0]!);
     expect(reopened.blocking).toEqual([]);
-    expect(write(reopened, A)).toBe(open);
+    expect(write(reopened, A)).toBe(toml);
   });
 });
 

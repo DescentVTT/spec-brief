@@ -23,11 +23,11 @@ files -> brief.ts -> corpus.ts -> rules.ts / collisions.ts / schedule.ts / archi
 | Module | Responsibility |
 | --- | --- |
 | `text.ts` | Lines, line endings, section-name normalisation, slugs, templates. |
-| `frontmatter.ts` | The flat YAML subset: read with lines, edit one key without touching the rest. |
-| `markdown.ts` | What is code or a comment; headings, sections, task items and their continuations, link destinations. |
+| `frontmatter.ts` | spec-core's front-matter reader over a brief's lines: the flat YAML subset, one key edited without touching the rest, and which blocks can be written into. |
+| `markdown.ts` | spec-core's scanner in spec-brief's dialect: ATX headings and sections outside block quotes, GFM task boxes, the link destinations archival rewrites. |
 | `glob.ts` | Scope patterns over spec-core's `path` dialect: spec-brief's refusals, reading a literal from the tree, the 0.1 library functions. |
 | `scope.ts` | A brief's writable scope, affected less protected; where two scopes meet; patterns the protections cover. |
-| `vendor/spec-core/` | spec-core's `pattern` and `path` modules, copied by its `scripts/vendor.mjs` and verified by hash. Never edited here. |
+| `vendor/spec-core/` | spec-core's `pattern` and `markdown` modules, with the `path` and `text` modules they import, copied by its `scripts/vendor.mjs` and verified by hash. Never edited here. |
 | `links.ts` | Relative paths, and rewriting links when a file moves. |
 | `schema.ts` | A small schema language that validates and renders JSON Schema. |
 | `config.ts` | What configuration may say, the defaults, and loading. |

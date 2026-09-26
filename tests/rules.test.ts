@@ -36,6 +36,17 @@ describe('front matter and fields', () => {
     expect(hit).toContain('status@1');
   });
 
+  it('reports TOML front matter as a block it does not read, and reads the body after it', async () => {
+    const toml = goodBrief().replace('---\nstatus: active\n---', '+++\nstatus = "active"\n+++');
+    const found = await findings({ [A]: toml });
+    expect(found.map((f) => `${f.rule}@${f.line}: ${f.message}`)).toEqual([
+      'front-matter@1: TOML front matter is not read; write YAML between "---" lines',
+      'status@1: declares no "status"',
+    ]);
+    expect(brief(toml).bodyStart).toBe(3);
+    expect(brief(toml).title).toBe('A brief');
+  });
+
   it('reports fields of the wrong shape', async () => {
     const text = goodBrief({ wave: 'two', dependsOn: '{a: 1}', type: '[feature]', affectedFiles: '[a, ""]' });
     const found = await findings({ [A]: text });
@@ -272,6 +283,31 @@ describe('sections', () => {
     expect((await findings({ [A]: text })).map((f) => [f.rule, f.line])).toEqual([['title', 4]]);
     expect(await findings({ [A]: goodBrief({ title: 'From the field' }).replace('# A brief\n', '') })).toEqual([]);
     expect((await findings({ [A]: goodBrief().replace('# A brief', '#') })).map((f) => f.rule)).toEqual(['title']);
+  });
+
+  it('grows no section from prose over a rule, and counts that prose as content', async () => {
+    // A renderer reads "Intent" over "---" as a setext heading; a brief's sections are ATX headings.
+    const text = goodBrief().replace('## Intent\n\nThe tree is better.\n', '## Intent\n\nThe tree is better.\n---\n\nAnd lighter.\n');
+    expect(await findings({ [A]: text })).toEqual([]);
+    expect(brief(text).sections.map((s) => s.heading.text)).toEqual(['Intent', 'Negative Scope', 'Invariants']);
+    const underlinedOnly = goodBrief().replace('The tree is better.', 'The tree is better.\n---');
+    expect(await findings({ [A]: underlinedOnly })).toEqual([]);
+    // A setext title is not a title, as a setext section is not a section.
+    const setextTitle = goodBrief().replace('# A brief', 'A brief\n=======');
+    expect((await findings({ [A]: setextTitle })).map((f) => f.rule)).toEqual(['title']);
+  });
+
+  it('leaves a heading quoted from another document out of the sections', async () => {
+    const quoted = goodBrief().replace('The tree is better.', 'The tree is better.\n\n> ## Negative Scope\n> quoted from 012');
+    expect(await findings({ [A]: quoted })).toEqual([]);
+  });
+
+  it('reads a heading without the comment on its line', async () => {
+    expect(await findings({ [A]: goodBrief().replace('## Intent', '## Intent <!-- required -->') })).toEqual([]);
+  });
+
+  it('reads the sections after a <!-- in the middle of a line that never closes', async () => {
+    expect(await findings({ [A]: goodBrief().replace('The tree is better.', 'The tree is better; `<!--` opens a comment, as <!-- does.') })).toEqual([]);
   });
 });
 

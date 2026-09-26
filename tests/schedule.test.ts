@@ -519,6 +519,13 @@ describe('writing the waves', () => {
     });
   });
 
+  it('refuses TOML front matter, which it does not write', () => {
+    const corpus = corpusOf({ [B(1)]: '+++\nwave = 3\n+++\n\n# T\n' }, config({ status: { field: null } }));
+    expect(planWaves(schedule(corpus)).refused.map((f) => [f.message, f.hint])).toEqual([
+      ['the front matter is TOML, so wave 1 cannot be written into it', 'write the front matter as YAML between "---" lines, and schedule again'],
+    ]);
+  });
+
   /**
    * Checked against the matrix and lint rather than against itself: every
    * schedule of a generated corpus, once written, has no collision and no
