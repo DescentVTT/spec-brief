@@ -48,7 +48,7 @@ describe('refusals', () => {
   });
 
   it('refuses open task items, unless a note under one disposes of it', () => {
-    const body = '\n## Deliverables\n\n- [ ] open\n- [ ] delegated\n  **Delegated to** brief 9.\n- [ ] rejected\n**Rejected** by the rule.\n- [ ] in code `**Rejected**`\n- [ ]\n';
+    const body = '\n## Deliverables\n\n- [ ] open\n- [ ] delegated\n  - **Delegated to** brief 9.\n- [ ] rejected\n\n  **Rejected** by the rule.\n- [ ] in code `**Rejected**`\n- [ ]\n';
     const corpus = corpusOf({ [A]: goodBrief({}, body) });
     const plan = planArchive(corpus, the(corpus, '001'), { date: '2026-09-24' });
     expect(plan.blocking.map((f) => f.message)).toEqual([
@@ -56,7 +56,7 @@ describe('refusals', () => {
       '"in code `**Rejected**`" is neither ticked nor dispositioned',
       '"(empty)" is neither ticked nor dispositioned',
     ]);
-    expect(plan.blocking[0]?.hint).toBe('tick it, or say why under it with a note starting "**Delegated", "**Accepted debt", "**Rejected"');
+    expect(plan.blocking[0]?.hint).toBe('tick it, or say why under it, as a bullet or as a paragraph after a blank line, starting "**Delegated", "**Accepted debt", "**Rejected"');
   });
 
   it('checks only the configured sections\' tasks when told to', () => {

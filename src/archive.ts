@@ -182,19 +182,24 @@ function globs(patterns: readonly string[]): Glob[] {
   });
 }
 
+/** A list marker opening a line, after its indentation. */
+const ITEM_START = /^[ \t]*(?:[-*+]|\d{1,9}[.)])[ \t]+/;
+
 /** Where a note's text starts: after its indentation and a list marker, if it has one. */
 const NOTE_START = /^[ \t]*(?:(?:[-*+]|\d{1,9}[.)])[ \t]+)?/;
 
 /**
- * Whether an open box carries a note that closes it: a line under the box,
- * within its item, that starts with a disposition marker - "**Rejected** by
- * ...", "- **Delegated to** 012". The box's own line is the task, not a note
- * on it, and a marker in the middle of a sentence is a word in it: "Explain
- * why the **Rejected** designs failed" is an open task. The note belongs to
- * the box above it, so the search stops at the first nested box: a child's
- * note does not close its parent.
+ * Whether an open box carries a note that closes it: a block of its own under
+ * the box, within its item, that starts with a disposition marker - a bullet,
+ * "- **Delegated to** 012", or a paragraph after a blank line, "**Rejected**
+ * by ...". A line that continues a paragraph, indented or lazily, is not one:
+ * under the box it is the box's own sentence wrapping, and "- [ ] Explain why
+ * the" over "**Rejected** designs failed" is an open task, as a marker in the
+ * middle of the box's line is a word in it. The note belongs to the box above
+ * it, so the search stops at the first nested box: a child's note does not
+ * close its parent.
  *
- * Where the note starts is read from the line as written, and the marker from
+ * Where the note starts is read from the lines as written, and the marker from
  * the masked line, so a marker in code or a comment, or one after a code span,
  * closes nothing.
  */
@@ -202,7 +207,10 @@ function dispositioned(scanned: Scan, line: number, end: number, markers: readon
   const boxes = new Set(scanned.tasks.map((t) => t.line));
   for (let i = line + 1; i < end; i += 1) {
     if (boxes.has(i)) return false;
-    const start = (NOTE_START.exec(scanned.lines[i] as string) as RegExpExecArray)[0].length;
+    const written = scanned.lines[i] as string;
+    const opensBlock = ITEM_START.test(written) || (scanned.lines[i - 1] as string).trim() === '';
+    if (!opensBlock) continue;
+    const start = (NOTE_START.exec(written) as RegExpExecArray)[0].length;
     const text = scanned.masked[i] as string;
     if (markers.some((marker) => text.startsWith(marker, start))) return true;
   }
@@ -446,7 +454,7 @@ export function planArchive(corpus: Corpus, brief: Brief, request: ArchiveReques
         'error',
         task.line + 1,
         `"${task.text === '' ? '(empty)' : task.text}" is neither ticked nor dispositioned`,
-        `tick it, or say why under it with a note starting ${config.archiving.dispositions.map((d) => `"${d}"`).join(', ')}`,
+        `tick it, or say why under it, as a bullet or as a paragraph after a blank line, starting ${config.archiving.dispositions.map((d) => `"${d}"`).join(', ')}`,
       ),
     );
   }

@@ -242,7 +242,7 @@ describe('what archive says when it refuses', () => {
     });
     expect(table(plan.blocking)).toEqual([
       'briefs/001_a.md:2 error archive-draft: is a draft, and a draft has not been executed | set "status: active" once the round runs',
-      'briefs/001_a.md:24 error open-task: "open" is neither ticked nor dispositioned | tick it, or say why under it with a note starting "**Delegated", "**Accepted debt", "**Rejected"',
+      'briefs/001_a.md:24 error open-task: "open" is neither ticked nor dispositioned | tick it, or say why under it, as a bullet or as a paragraph after a blank line, starting "**Delegated", "**Accepted debt", "**Rejected"',
       'briefs/001_a.md:3 error dependency-open: depends on 002, which is not archived yet | archive 002 first, or drop the dependency if it was never real',
       'briefs/001_a.md:1 error dirty-tree: the working tree has uncommitted changes outside the briefs: src/wip.ts | commit them so the recorded commit holds the round, or pass --allow-dirty',
       'briefs/001_a.md:5 error protected-file: the round changed src/locked.ts, which this brief protects | revert the change, or record the departure in the brief before archiving it',

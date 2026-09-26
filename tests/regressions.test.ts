@@ -85,7 +85,7 @@ describe('regressions', () => {
   });
 
   it('does not let a note under a nested box close its parent', () => {
-    const body = '\n- [ ] Migrate the database\n  - [ ] Also migrate the cache\n    **Rejected**: out of scope\n';
+    const body = '\n- [ ] Migrate the database\n  - [ ] Also migrate the cache\n\n    **Rejected**: out of scope\n';
     const corpus = corpusOf({ [A]: goodBrief({}, body) });
     const plan = planArchive(corpus, the(corpus, '001'), { date: '2026-09-24' });
     expect(plan.blocking.map((f) => f.message)).toEqual(['"Migrate the database" is neither ticked nor dispositioned']);
@@ -250,31 +250,49 @@ describe('dispositions, after 0.1.0', () => {
 
   it('closes a box only with a note that starts with a marker', () => {
     const words = [
-      '  see the **Rejected** list',
-      '  `x` **Rejected** after a code span',
-      '  <!-- aside --> **Rejected** after a comment',
-      '  > **Rejected** in a quote',
-      '  ```\n  **Rejected** in a fence\n  ```',
-      '  -**Rejected** with no space after the marker',
+      '\n  see the **Rejected** list',
+      '\n  `x` **Rejected** after a code span',
+      '\n  <!-- aside --> **Rejected** after a comment',
+      '\n  > **Rejected** in a quote',
+      '\n  ```\n  **Rejected** in a fence\n  ```',
+      '\n  -**Rejected** with no space after the marker',
       // A sibling item is not a note under the box.
       '- **Rejected** as a sibling item',
     ];
     for (const note of words) expect(open(note), note).toEqual(OPEN);
   });
 
-  it('closes a box with a note under it, indented, as a bullet or a numbered item, or folded into it', () => {
-    const notes = [
+  it("does not take the box's own sentence, wrapped onto the next line, for a note", () => {
+    // The inputs the review archived with: the marker starts the box's second line.
+    for (const wrapped of ['- [ ] Explain why the\n  **Rejected** designs failed', '- [ ] Explain why the\n**Rejected** designs failed']) {
+      const corpus = corpusOf({ [A]: goodBrief({}, `\n${wrapped}\n`) });
+      expect(planArchive(corpus, the(corpus, '001'), { date: DATE }).blocking.map((f) => [f.rule, f.message]), wrapped).toEqual([
+        ['open-task', '"Explain why the" is neither ticked nor dispositioned'],
+      ]);
+    }
+    // Any line that continues a paragraph continues it, whatever it says.
+    const continuing = [
       '  **Rejected** by the rule.',
       '\t**Rejected** by the rule.',
+      '**Rejected** because it folds into the item',
+      '\n  First the context.\n  **Rejected** on the second line',
+      '  - First the context.\n  **Rejected** under a bullet, lazily',
+    ];
+    for (const note of continuing) expect(open(note), note).toEqual(OPEN);
+  });
+
+  it('closes a box with a note of its own under it: a bullet or a numbered item, or a paragraph after a blank line', () => {
+    const notes = [
       '  - **Delegated to** 012',
       '  -   **Delegated to** 012, after several spaces',
       '  * **Accepted debt**: after the release',
       '  + **Rejected**',
       '  1. **Rejected**',
       '  12) **Rejected**',
-      '**Rejected** because it folds into the item',
-      '  First the context.\n  **Rejected** on the second line',
       '\n  **Rejected** after a blank line',
+      '\n\t**Rejected** after a blank line, indented by a tab',
+      '\n  First the context.\n\n  **Rejected** in a paragraph of its own',
+      '  - First the context.\n  - **Rejected** in a bullet of its own',
     ];
     for (const note of notes) expect(open(note), note).toEqual([]);
   });
