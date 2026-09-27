@@ -2,7 +2,7 @@
 
 Notable changes, newest first. Versions follow [semver](https://semver.org).
 
-## Unreleased
+## 0.2.4
 
 spec-core at 65ef842. Archival rewrites a link reference definition only
 where CommonMark reads one, so text shaped like a definition - under a
