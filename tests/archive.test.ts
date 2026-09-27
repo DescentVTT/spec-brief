@@ -411,6 +411,24 @@ describe('reopening', () => {
     expect(write(back, B)).toBe(inbound);
   });
 
+  it('rewrites the definitions CommonMark reads, and leaves text shaped like one as written', () => {
+    // Under a paragraph's text the shape of a definition is that text, which a
+    // renderer shows as written. A label holds no unescaped bracket, so the
+    // next paragraph is a link whose text is shaped like a definition, and the
+    // last a definition whose label holds an escaped one.
+    const text = goodBrief({}, '\nSome text\n[r]: ../docs/r.md\n\n[[s]: ../docs/s.md](../docs/z.md)\n\n[a\\]b]: ../docs/x.md\n');
+    const corpus = corpusOf({ [A]: text });
+    const plan = planArchive(corpus, the(corpus, '001'), { date: '2026-09-24' });
+    expect(plan.blocking).toEqual([]);
+    expect(plan.linksRewritten).toBe(2);
+    const archived = write(plan, 'briefs/archive/001_a.md');
+    expect(archived).toContain('\nSome text\n[r]: ../docs/r.md\n\n[[s]: ../docs/s.md](../../docs/z.md)\n\n[a\\]b]: ../../docs/x.md\n');
+    const after = corpusOf({ 'briefs/archive/001_a.md': archived });
+    const back = planUnarchive(after, the(after, '001'));
+    expect(back.linksRewritten).toBe(2);
+    expect(write(back, A)).toBe(text);
+  });
+
   it('refuses to reopen a brief whose front matter it cannot write into', () => {
     const toml = '+++\nstatus = "archived"\n+++\n\n# T\n';
     const corpus = corpusOf({ 'briefs/archive/001_a.md': toml, 'briefs/archive/002_b.md': '---\nstatus: archived\n\n# T\n' });

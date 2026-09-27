@@ -52,11 +52,12 @@ describe('rewriting', () => {
   const lines = (text: string) => text.split('\n');
 
   it('rewrites every relative link for the new directory, and leaves the rest', () => {
-    const s = scan(lines('[a](../docs/a.md#s) [b](b.md) ![i](img.png)\n[c](https://x) [d](#top) [e](/abs)\n[ref]: ./sib.md\n`[f](code.md)`'));
+    const s = scan(lines('[a](../docs/a.md#s) [b](b.md) ![i](img.png)\n[c](https://x) [d](#top) [e](/abs)\n\n[ref]: ./sib.md\n`[f](code.md)`'));
     const result = rewriteLinks(s, 'briefs', 'briefs/archive', (p) => p);
     expect(result.lines).toEqual([
       '[a](../../docs/a.md#s) [b](../b.md) ![i](../img.png)',
       '[c](https://x) [d](#top) [e](/abs)',
+      '',
       '[ref]: ../sib.md',
       '`[f](code.md)`',
     ]);
