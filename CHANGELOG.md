@@ -2,6 +2,37 @@
 
 Notable changes, newest first. Versions follow [semver](https://semver.org).
 
+## Unreleased
+
+spec-core at 119345e. A link inside a link now counts only the inner one, as
+CommonMark and a renderer read it, so archival leaves the outer destination
+as written. The refusal of `**` inside a name suggests patterns built from
+the one written.
+
+### Changed
+
+- spec-core at 119345e. Its Markdown scanner reads a link inside a link's
+  text as CommonMark does: in `[a [b](inner.md) c](outer.md)` the inner pair
+  is the link, and the outer brackets and `(outer.md)` are text. `archive`
+  and `unarchive` rewrite `inner.md` and leave `(outer.md)` as written,
+  where they rewrote both; a renderer links nothing to `outer.md`, so it
+  does not move with the brief. spec-brief no longer reads a link's text
+  again to find the inner link. It still reads an image's alt text and a
+  wiki link's text, which the scanner leaves unread, and keeps each
+  destination once.
+- The `glob` error for `**` inside a name suggests the pattern written,
+  spelled both ways it may have meant: `docs/**.md` is told `docs/**/*.md`
+  for any depth or `docs/*.md` for one level, and `src/a**` `src/a*/**` or
+  `src/a*`, where every such pattern was told `docs/**/*.md` or `*.md`. The
+  message's first clause is as it was.
+
+### Fixed
+
+- Text shaped like a reference definition at the start of a link's text,
+  `see [[r]: r.md](z.md)`, is no longer rewritten by `archive`. spec-brief
+  read the link's text on its own, where that text starts a line and reads
+  as a definition.
+
 ## 0.2.2
 
 A packaging fix: the tarball no longer carries spec-core's internal README.
