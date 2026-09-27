@@ -90,11 +90,19 @@ runs 0.1's scanner and reader beside it and names every difference.
   `(c.md)`, which a renderer shows as text. An image inside a link's text,
   `[![d](d.png)](d.md)`, is a destination too, and spec-core lists it after
   the link. spec-core reads nothing in an image's alt text or a wiki link's
-  text, so the adapter reads those two again, and keeps each destination
-  once. The round trip - archive, then unarchive, gives the bytes back -
+  text, so the adapter reads those two again for their links and images,
+  and finds each destination once. A definition is one CommonMark reads: it
+  opens a paragraph or follows another, and its label holds no unescaped
+  bracket. The shape of one under a paragraph's text is that text, and so is
+  the shape of one in alt text or a wiki link's text, which the adapter,
+  reading that text on its own, would take for a definition opening a
+  document. The round trip - archive, then unarchive, gives the bytes back -
   stays the oracle. *Amended 2026-09-27*: spec-core took the outer pair of a
   link inside a link as the link, and the adapter read every link's text
   again to find the inner one, so archival rewrote both destinations.
+  *Amended 2026-09-28*: spec-core read a definition at the start of any line
+  and under any label, and the adapter kept one it found in alt text read
+  again, so archival rewrote text a renderer shows as written.
 - **A brief's lines end at LF and CRLF only.** The freeze hash is taken over
   them, and a sealed brief must keep its hash. spec-core also ends a line at a
   lone CR, so the adapters hand it one as a space, and every line and column
@@ -138,3 +146,23 @@ is told `docs/**/*.md` or `docs/*.md`, where every such pattern was told
 `docs/**/*.md` or `*.md`. The scan's new `unclosedFrontMatter` and
 `Block.tag` are not read: the front-matter reader already reports a block
 never closed, which is what `front-matter` refuses to write into.
+
+## Amended 2026-09-28: copied again at 65ef842
+
+The copy was taken again at spec-core 65ef842, which reads a link reference
+definition where CommonMark does (the note on links above). A definition
+cannot interrupt a paragraph: `[r]: r.md` on the line under a paragraph's
+text is that text, and archival leaves it as written. A label holds no
+unescaped bracket and at most 999 characters: `[[r]: r.md](z.md)` is a link,
+and archival rewrites `z.md`, where it rewrote `r.md](z.md)` as the
+destination of a definition; `[a\]b]: x.md` is a definition now, and `x.md`
+moves with the brief. References follow the definitions, so the brackets
+around them read as a renderer shows them.
+
+The adapter drops a definition it finds in alt text or a wiki link's text
+read again, and with it the map that kept a destination found twice. The
+one such destination was a definition spec-core listed inside alt text
+written over lines, and spec-core lists none there now, since no bracket
+pairs across a definition's line. Side by side over 600,000 random
+documents, the destinations archival rewrites differ from 0.2.3's by these
+readings and the brackets around them alone, and none is found twice.
