@@ -2,7 +2,7 @@
 
 Notable changes, newest first. Versions follow [semver](https://semver.org).
 
-## Unreleased
+## 0.2.3
 
 spec-core at 119345e. A link inside a link now counts only the inner one, as
 CommonMark and a renderer read it, so archival leaves the outer destination
