@@ -2,6 +2,37 @@
 
 Notable changes, newest first. Versions follow [semver](https://semver.org).
 
+## Unreleased
+
+spec-core at 65ef842. Archival rewrites a link reference definition only
+where CommonMark reads one, so text shaped like a definition - under a
+paragraph's text, in alt text, in a wiki link's text - stays as written.
+
+### Changed
+
+- spec-core at 65ef842. Its Markdown scanner reads a link reference
+  definition as CommonMark does. A definition cannot interrupt a paragraph:
+  `[r]: r.md` on the line under a paragraph's text, a lazy line in a block
+  quote or a list item included, is that text, and `archive` and
+  `unarchive` leave it as written, where they rewrote `r.md`. A label holds
+  no unescaped bracket and at most 999 characters: `[[r]: r.md](z.md)` is a
+  link to `z.md`, which they rewrite, where they rewrote `r.md](z.md)` as
+  the destination of a definition, and `[a\]b]: x.md` is a definition,
+  whose `x.md` they now rewrite.
+- References follow the definitions. With `[r]: r.md` written under text,
+  `[x][r](y.md)` is a link to `y.md`, which archival now rewrites. A second
+  bracket holding a bracket is no label, so with `[r]` defined,
+  `[x [r][a[b]c] y](o.md)` holds the reference `[r]`, and `(o.md)` is text
+  and stays as written, as around any link inside a link.
+
+### Fixed
+
+- Text shaped like a definition at the start of an image's alt text or a
+  wiki link's text, `![[r]: r.md](z.png)` or `[[[r]: r.md]]`, is no longer
+  rewritten by `archive`. spec-brief reads those texts again on their own,
+  where such text opens a document and reads as a definition; CommonMark
+  reads none there. `z.png` is rewritten as before.
+
 ## 0.2.3
 
 spec-core at 119345e. A link inside a link now counts only the inner one, as
