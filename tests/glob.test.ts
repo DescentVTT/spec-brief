@@ -47,10 +47,16 @@ describe('parsing', () => {
       'extended globs such as "+(a|b)" are not supported: write alternatives as "{a,b}", and a literal parenthesis as "[(]"',
     );
     // Two stars inside a name were read as one, which dropped every nested
-    // file from a scope written "docs/**.md".
-    for (const pattern of ['docs/**.md', '**.ts', 'a**b']) {
+    // file from a scope written "docs/**.md". The advice is the pattern
+    // written, spelled both ways it may have meant.
+    for (const [pattern, deep, flat] of [
+      ['docs/**.md', 'docs/**/*.md', 'docs/*.md'],
+      ['**.ts', '**/*.ts', '*.ts'],
+      ['a**b', 'a*/**/*b', 'a*b'],
+      ['src/a**', 'src/a*/**', 'src/a*'],
+    ] as const) {
       expect(error(pattern), pattern).toBe(
-        '"**" means any number of directories only as a whole segment: write "docs/**/*.md" for any depth, or "*.md" for one level',
+        `"**" means any number of directories only as a whole segment: write "${deep}" for any depth, or "${flat}" for one level`,
       );
     }
     expect(error('../x')).toBe('a pattern cannot climb out of its root with ".."');
