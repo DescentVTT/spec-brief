@@ -30,8 +30,8 @@ which measured between 0.3 and 1.5 seconds a process on that host.
   killed by the tests written for the module it is in, which is the stronger
   claim. It runs in about ten minutes on the workstation above.
 - **The full sweep** (`npm run test:mutation:full`) mutates everything
-  against the whole suite. It runs weekly in CI and on request, and gates
-  nothing until it has been measured on the hosted runner (`briefs/002`).
+  against the whole suite. It runs weekly in CI and on request, and its gate
+  was set from its first hosted run (amended 2026-09-27, below).
 
 **The core gate is `break: 93`**, below the measurement, and moves up with it,
 never down to let a change pass.
@@ -161,3 +161,19 @@ the 5,670 mutants are static, most of them the rule and configuration tables,
 and they are four fifths of the time.
 
 The gate stays at 93.
+
+## Amended 2026-09-27
+
+**The full sweep has a gate: `break: 93`.** Its first hosted run, dispatched
+on main (run 36312377428), failed before any mutant: `disableTypeChecks` in
+`stryker.config.mjs` reached `src/vendor/`, and the sandbox copies of
+spec-core, each with `// @ts-nocheck` prepended, no longer had the hashes
+`tests/vendor.test.ts` checks. With the glob narrowed to `src/*.ts`, the run
+on that branch (run 36313440054) measured **94.99% over 6,791 mutants** in 26
+minutes on `ubuntu-latest`: 6,418 killed, 33 timed out, 316 survived, 24
+without coverage. Losing every timeout kill would leave 94.51%. The core sweep
+of the same commit read 96.93%, where main's had read 97.01%: that is the
+noise between two runs of one source. The full gate sits at the core's 93,
+under both, and moves up with the measurement. Twenty-six minutes is cheap
+enough that the full sweep could run on every push to main as the core sweep
+does; it stays weekly until a push shows the need.

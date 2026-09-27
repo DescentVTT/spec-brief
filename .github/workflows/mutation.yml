@@ -7,8 +7,8 @@ name: Mutation
 #
 # The full sweep mutates everything, the CLI and the engine included, against
 # the whole suite. Its tests spawn git and write to disk, so it is slower by an
-# order of magnitude; it runs weekly and on request, and is not a gate until a
-# hosted run has been measured (briefs/002).
+# order of magnitude; it runs weekly and on request, and its `break` in
+# stryker.config.mjs is set from the first hosted run (ADR-0009).
 on:
   push:
     branches: [main]

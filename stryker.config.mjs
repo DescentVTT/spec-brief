@@ -50,7 +50,8 @@ export default {
   // git dozens of times, which is seconds on a host that scans every process.
   dryRunTimeoutMinutes: 30,
 
-  // The full sweep has not been measured on the hosted runner, so it gates
-  // nothing yet (briefs/002). The core sweep's gate is in its own file.
-  thresholds: { high: 95, low: 90, break: null },
+  // The first hosted full sweep read 94.99% over 6,791 mutants in 26 minutes
+  // (ADR-0009); losing its 33 timeout kills would leave 94.51%. The break sits
+  // under both, at the core sweep's 93, and moves up with the measurement.
+  thresholds: { high: 95, low: 90, break: 93 },
 };
