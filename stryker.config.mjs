@@ -30,7 +30,10 @@ export default {
   tsconfigFile: 'tsconfig.stryker-noop.json',
 
   // Only the mutated sources get "// @ts-nocheck"; the tests stay as written.
-  disableTypeChecks: 'src/**/*.ts',
+  // Nor does the vendored spec-core: a file that gets it no longer has the hash
+  // tests/vendor.test.ts checks, and the first hosted full sweep (run
+  // 36312377428) failed its initial test run on exactly that.
+  disableTypeChecks: 'src/*.ts',
 
   reporters: ['html', 'json', 'clear-text', 'progress'],
   htmlReporter: { fileName: 'reports/mutation/index.html' },
