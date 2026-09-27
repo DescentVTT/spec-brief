@@ -289,6 +289,12 @@ describe('the dialect read from spec-core', () => {
     // A definition cannot interrupt a paragraph, so the shape of one on a line
     // of alt text is text, as CommonMark reads it.
     expect(scan(lines('![a\n[r]: r.md\nb](z.png)')).links).toEqual([{ line: 2, start: 3, end: 8, target: 'z.png' }]);
+    // Read on its own, alt text or a wiki link's text may open with the shape
+    // of a definition, but CommonMark reads none inside a paragraph's text.
+    expect(scan(lines('![[r]: r.md](z.png)\n\n[[[w]: w.md]]\n\n![\n[s]: s.md\n](y.png)')).links).toEqual([
+      { line: 0, start: 13, end: 18, target: 'z.png' },
+      { line: 6, start: 2, end: 7, target: 'y.png' },
+    ]);
   });
 
   it('reads a definition in a block quote', () => {

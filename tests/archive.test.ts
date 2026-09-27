@@ -429,6 +429,22 @@ describe('reopening', () => {
     expect(write(back, A)).toBe(text);
   });
 
+  it("leaves the shape of a definition in alt text or a wiki link's text as written", () => {
+    // Read on its own, such a text opens with a definition, but CommonMark
+    // reads none inside a paragraph's text, and a renderer shows it as written.
+    const text = goodBrief({}, '\n![[r]: ../docs/r.md](../img/z.png)\n\n[[[w]: ../docs/w.md]]\n');
+    const corpus = corpusOf({ [A]: text });
+    const plan = planArchive(corpus, the(corpus, '001'), { date: '2026-09-24' });
+    expect(plan.blocking).toEqual([]);
+    expect(plan.linksRewritten).toBe(1);
+    const archived = write(plan, 'briefs/archive/001_a.md');
+    expect(archived).toContain('\n![[r]: ../docs/r.md](../../img/z.png)\n\n[[[w]: ../docs/w.md]]\n');
+    const after = corpusOf({ 'briefs/archive/001_a.md': archived });
+    const back = planUnarchive(after, the(after, '001'));
+    expect(back.linksRewritten).toBe(1);
+    expect(write(back, A)).toBe(text);
+  });
+
   it('refuses to reopen a brief whose front matter it cannot write into', () => {
     const toml = '+++\nstatus = "archived"\n+++\n\n# T\n';
     const corpus = corpusOf({ 'briefs/archive/001_a.md': toml, 'briefs/archive/002_b.md': '---\nstatus: archived\n\n# T\n' });
