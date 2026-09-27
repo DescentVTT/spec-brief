@@ -274,11 +274,9 @@ describe('the dialect read from spec-core', () => {
   });
 
   it('reads what spec-core leaves in a link\'s text, and every destination once', () => {
-    // CommonMark takes the inner link; spec-core lists the outer pair only.
-    expect(scan(lines('[a [b](c.md)](d.md)')).links).toEqual([
-      { line: 0, start: 7, end: 11, target: 'c.md' },
-      { line: 0, start: 14, end: 18, target: 'd.md' },
-    ]);
+    // CommonMark takes the inner link, and so does spec-core: a renderer
+    // links "a" and "(d.md)" to nothing.
+    expect(scan(lines('[a [b](c.md)](d.md)')).links).toEqual([{ line: 0, start: 7, end: 11, target: 'c.md' }]);
     expect(scan(lines('[x ![i ![k](k.png)](a.png)](c.md)')).links.map((l) => l.target)).toEqual(['k.png', 'a.png', 'c.md']);
     expect(scan(lines('[[w|![i](a.png)]] [![j](b.png)][r]\n\n[r]: r.md')).links.map((l) => l.target)).toEqual(['a.png', 'b.png', 'r.md']);
   });

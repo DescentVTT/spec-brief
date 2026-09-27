@@ -390,6 +390,27 @@ describe('reopening', () => {
     expect(write(back, B)).toBe(inbound);
   });
 
+  it('rewrites a link inside a link and leaves the outer destination, which is text, as written', () => {
+    // CommonMark takes the inner pair as the link; a renderer shows the outer
+    // brackets and "(../docs/b.md)" as text, so they do not move with the brief.
+    const text = goodBrief({}, '\n[see [a](../docs/a.md) too](../docs/b.md)\n');
+    const inbound = goodBrief({}, '\n[see [a](001_a.md) too](001_a.md)\n');
+    const corpus = corpusOf({ [A]: text, [B]: inbound });
+    const plan = planArchive(corpus, the(corpus, '001'), { date: '2026-09-24' });
+    expect(plan.blocking).toEqual([]);
+    expect(plan.linksRewritten).toBe(1);
+    expect(plan.inboundRewritten).toEqual([B]);
+    const archived = write(plan, 'briefs/archive/001_a.md');
+    expect(archived).toContain('\n[see [a](../../docs/a.md) too](../docs/b.md)\n');
+    const other = write(plan, B);
+    expect(other).toContain('\n[see [a](archive/001_a.md) too](001_a.md)\n');
+    const after = corpusOf({ 'briefs/archive/001_a.md': archived, [B]: other });
+    const back = planUnarchive(after, the(after, '001'));
+    expect(back.linksRewritten).toBe(1);
+    expect(write(back, A)).toBe(text);
+    expect(write(back, B)).toBe(inbound);
+  });
+
   it('refuses to reopen a brief whose front matter it cannot write into', () => {
     const toml = '+++\nstatus = "archived"\n+++\n\n# T\n';
     const corpus = corpusOf({ 'briefs/archive/001_a.md': toml, 'briefs/archive/002_b.md': '---\nstatus: archived\n\n# T\n' });
