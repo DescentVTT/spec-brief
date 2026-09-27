@@ -15,9 +15,10 @@
  * - A link destination is one written in the link or in a definition: the
  *   inline form and the definition, images included, an image inside a link's
  *   text, and a link or an image in an image's alt text or a wiki link's text
- *   too, each once. A link inside a link's text is the link, as CommonMark
- *   reads it, and the brackets around it are text. A reference is rewritten
- *   through its definition, once.
+ *   too, each once, but no definition there, where CommonMark reads none. A
+ *   link inside a link's text is the link, as CommonMark reads it, and the
+ *   brackets around it are text. A reference is rewritten through its
+ *   definition, once.
  *
  * Everything here is in 0-based lines of the brief's `lines`, and columns
  * within them.
@@ -78,26 +79,28 @@ function isBox(checkbox: string | null): boolean {
 /**
  * The links that write their destination - inline links and images, and
  * definitions - with offsets into the text scanned `at` that offset, added to
- * `found` by the offset of the destination.
+ * `found`.
  *
  * spec-core reads a link's text as CommonMark does: a link inside it is the
  * link, so `[a [b](b.md)](c.md)` gives `b.md` alone, and an image inside it,
  * `[![diagram](d.png)](d.md)`, is listed after the link. It reads nothing in
  * an image's alt text or a wiki link's text, where a destination still moves
- * with the brief, so those two are read again here. Each is shorter than the
- * text it came from, so the reading ends.
+ * with the brief, so those two are read again here, as `inText`. Each is
+ * shorter than the text it came from, so the reading ends. Nor does spec-core
+ * list a definition inside one, since a bracket pairs across no definition's
+ * line, so each destination is found once, and no two rewrites meet on the
+ * same columns.
  *
- * spec-core also reads a definition at the start of any line, where
- * CommonMark lets none interrupt a paragraph, and so lists one that lies in
- * an image's alt text written over lines. Read again, the alt text gives it a
- * second time. It is one destination, kept once, because two rewrites of the
- * same columns would write the second over the first.
+ * Read on its own, such a text is a document, where `[r]: r.md` at its start
+ * is a definition. CommonMark reads none inside a paragraph's text, and a
+ * renderer shows `![[r]: r.md](z.png)` with that alt text as written, so a
+ * definition found there writes no destination.
  */
-function written(core: MarkdownScan, at: number, found: Map<number, Link>): Map<number, Link> {
+function written(core: MarkdownScan, at: number, inText: boolean, found: Link[]): Link[] {
   for (const link of core.links) {
-    if (link.image || link.form === 'wiki') written(scanMarkdown(link.text), at + core.text.indexOf(link.text, link.start), found);
-    if (link.form === 'inline' || link.form === 'definition') {
-      found.set(at + link.targetStart, { ...link, targetStart: at + link.targetStart, targetEnd: at + link.targetEnd });
+    if (link.image || link.form === 'wiki') written(scanMarkdown(link.text), at + core.text.indexOf(link.text, link.start), true, found);
+    if (link.form === 'inline' || (link.form === 'definition' && !inText)) {
+      found.push({ ...link, targetStart: at + link.targetStart, targetEnd: at + link.targetEnd });
     }
   }
   return found;
@@ -117,7 +120,7 @@ export function scan(lines: readonly string[]): Scan {
     tasks: core.listItems
       .filter((item) => isBox(item.checkbox) && item.quoteDepth === 0)
       .map((item) => ({ line: item.line - 1, end: item.endLine, checked: item.checkbox !== ' ', text: item.firstLine })),
-    links: [...written(core, 0, new Map()).values()]
+    links: written(core, 0, false, [])
       .map((link) => {
         // A link's text may run over lines; its destination is on the last.
         const at = core.index.positionAt(link.targetStart);
