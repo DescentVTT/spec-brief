@@ -273,12 +273,25 @@ describe('the dialect read from spec-core', () => {
     expect(scan(lines('[`![i](a.png)`](b.md)')).links.map((l) => l.target)).toEqual(['b.md']);
   });
 
-  it('reads what spec-core leaves in a link\'s text, and every destination once', () => {
-    // CommonMark takes the inner link, and so does spec-core: a renderer
-    // links "a" and "(d.md)" to nothing.
+  it('reads a link inside a link as the link, and the brackets around it as text', () => {
+    // As CommonMark reads it: a renderer links "a" and "(d.md)" to nothing.
     expect(scan(lines('[a [b](c.md)](d.md)')).links).toEqual([{ line: 0, start: 7, end: 11, target: 'c.md' }]);
+    // A link's text is not read again on its own, where a definition's shape
+    // at its start would read as one.
+    expect(scan(lines('see [[r]: r.md](z.md)')).links.map((l) => l.target)).toEqual(['z.md']);
+  });
+
+  it("reads what spec-core leaves in alt text and a wiki link's text, and every destination once", () => {
     expect(scan(lines('[x ![i ![k](k.png)](a.png)](c.md)')).links.map((l) => l.target)).toEqual(['k.png', 'a.png', 'c.md']);
     expect(scan(lines('[[w|![i](a.png)]] [![j](b.png)][r]\n\n[r]: r.md')).links.map((l) => l.target)).toEqual(['a.png', 'b.png', 'r.md']);
+    // Alt text written earlier as a link is read where the image is.
+    expect(scan(lines('[b](c.md) ![[b](c.md)](y.png)')).links.map((l) => l.start)).toEqual([4, 16, 23]);
+    // spec-core reads a definition that starts a line inside alt text, and so
+    // does reading the alt text again: one destination.
+    expect(scan(lines('![a\n[r]: r.md\nb](z.png)')).links).toEqual([
+      { line: 1, start: 5, end: 9, target: 'r.md' },
+      { line: 2, start: 3, end: 8, target: 'z.png' },
+    ]);
   });
 
   it('reads a definition in a block quote', () => {
