@@ -160,12 +160,12 @@ describe('task items', () => {
 
 describe('links', () => {
   it('finds inline links, images and reference definitions with their columns', () => {
-    const s = scan(lines('[a](x.md) and ![i](img/p.png "title")\n[ref]: ../y.md\n  [r2]:   <z w.md>'));
+    const s = scan(lines('[a](x.md) and ![i](img/p.png "title")\n\n[ref]: ../y.md\n  [r2]:   <z w.md>'));
     expect(s.links).toEqual([
       { line: 0, start: 4, end: 8, target: 'x.md' },
       { line: 0, start: 19, end: 28, target: 'img/p.png' },
-      { line: 1, start: 7, end: 14, target: '../y.md' },
-      { line: 2, start: 11, end: 17, target: 'z w.md' },
+      { line: 2, start: 7, end: 14, target: '../y.md' },
+      { line: 3, start: 11, end: 17, target: 'z w.md' },
     ]);
   });
 
@@ -286,16 +286,22 @@ describe('the dialect read from spec-core', () => {
     expect(scan(lines('[[w|![i](a.png)]] [![j](b.png)][r]\n\n[r]: r.md')).links.map((l) => l.target)).toEqual(['a.png', 'b.png', 'r.md']);
     // Alt text written earlier as a link is read where the image is.
     expect(scan(lines('[b](c.md) ![[b](c.md)](y.png)')).links.map((l) => l.start)).toEqual([4, 16, 23]);
-    // spec-core reads a definition that starts a line inside alt text, and so
-    // does reading the alt text again: one destination.
-    expect(scan(lines('![a\n[r]: r.md\nb](z.png)')).links).toEqual([
-      { line: 1, start: 5, end: 9, target: 'r.md' },
-      { line: 2, start: 3, end: 8, target: 'z.png' },
-    ]);
+    // A definition cannot interrupt a paragraph, so the shape of one on a line
+    // of alt text is text, as CommonMark reads it.
+    expect(scan(lines('![a\n[r]: r.md\nb](z.png)')).links).toEqual([{ line: 2, start: 3, end: 8, target: 'z.png' }]);
   });
 
   it('reads a definition in a block quote', () => {
     expect(scan(lines('> [ref]: ../q.md')).links).toEqual([{ line: 0, start: 9, end: 16, target: '../q.md' }]);
+  });
+
+  it('reads a definition only where CommonMark does: opening a paragraph, with a label free of brackets', () => {
+    // On the line under a paragraph's text, a lazy line in a quote included, it is that text.
+    expect(scan(lines('Some text\n[r]: r.md\n\n> quoted\n[q]: q.md')).links).toEqual([]);
+    // A label holds no unescaped bracket, so this is a link whose text is shaped like a definition.
+    expect(scan(lines('[[r]: r.md](z.md)')).links).toEqual([{ line: 0, start: 12, end: 16, target: 'z.md' }]);
+    // An escaped bracket is the label's.
+    expect(scan(lines('[a\\]b]: x.md')).links).toEqual([{ line: 0, start: 8, end: 12, target: 'x.md' }]);
   });
 
   it('keeps the lines of a brief whose line holds a carriage return that ends nothing', () => {

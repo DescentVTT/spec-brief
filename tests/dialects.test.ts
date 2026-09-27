@@ -162,7 +162,8 @@ describe('Markdown', () => {
   });
 
   it('reads a definition only at the start of a line, and a title only in its forms', () => {
-    const s = scan(lines('x [a]: b.md\n[b]: c.md\n[c]: d.md "t" extra\n[d]: e.md (t)\n[e]: <f g.md> "t"'));
+    // A definition opens a paragraph or follows another; on the line under text it is text.
+    const s = scan(lines('x [a]: b.md\n\n[b]: c.md\n[c]: d.md "t" extra\n\n[d]: e.md (t)\n[e]: <f g.md> "t"'));
     expect(s.links.map((l) => l.target)).toEqual(['c.md', 'e.md', 'f g.md']);
   });
 
