@@ -85,10 +85,16 @@ runs 0.1's scanner and reader beside it and names every difference.
 - **The links archival rewrites are the ones that write a destination**:
   inline links and images, and definitions, rewritten between their
   `targetStart` and `targetEnd`. A reference is rewritten through its
-  definition, once. An image inside a link's text, `[![d](d.png)](d.md)`, is
-  a destination too; spec-core reads the link and resumes after it, so the
-  adapter reads the link's text again until spec-core reports it. The round
-  trip - archive, then unarchive, gives the bytes back - stays the oracle.
+  definition, once. A link inside a link's text is the link, as CommonMark
+  reads it: in `[a [b](b.md)](c.md)` archival rewrites `b.md` and leaves
+  `(c.md)`, which a renderer shows as text. An image inside a link's text,
+  `[![d](d.png)](d.md)`, is a destination too, and spec-core lists it after
+  the link. spec-core reads nothing in an image's alt text or a wiki link's
+  text, so the adapter reads those two again, and keeps each destination
+  once. The round trip - archive, then unarchive, gives the bytes back -
+  stays the oracle. *Amended 2026-09-27*: spec-core took the outer pair of a
+  link inside a link as the link, and the adapter read every link's text
+  again to find the inner one, so archival rewrote both destinations.
 - **A brief's lines end at LF and CRLF only.** The freeze hash is taken over
   them, and a sealed brief must keep its hash. spec-core also ends a line at a
   lone CR, so the adapters hand it one as a space, and every line and column
@@ -119,3 +125,16 @@ column, and indented code inside an item starts four columns past it, where
 four columns anywhere in a list used to be the item's text. A fence line that
 deep is code, or paragraph text, and opens no fence that would hide the rest
 of the brief.
+
+## Amended 2026-09-27: copied again at 119345e
+
+The copy was taken again at spec-core 119345e. Two of its changes reach a
+user. A link inside a link's text is read as CommonMark reads it, the inner
+pair the link and the brackets around it text, so archival rewrites the
+inner destination and leaves the outer one as written, and the adapter no
+longer reads a link's text again (the note on links above). The refusal of
+`**` inside a name writes its advice from the pattern written: `docs/**.md`
+is told `docs/**/*.md` or `docs/*.md`, where every such pattern was told
+`docs/**/*.md` or `*.md`. The scan's new `unclosedFrontMatter` and
+`Block.tag` are not read: the front-matter reader already reports a block
+never closed, which is what `front-matter` refuses to write into.
