@@ -17,7 +17,9 @@
  *   The tree, not the spelling, knows that `Dockerfile` is a file and
  *   `docs/v1.2` a directory (ADR-0005, amended 2026-09-26).
  * - A trailing `/**` is at least one segment, so `docs/**` is the directory's
- *   contents and a collision witness is always a file.
+ *   contents and a collision witness is always a file. A trailing `/` means
+ *   the same on a brace alternative as on the whole pattern: `{src/,lib}` is
+ *   `src/` or `lib`, and the tree is asked about `lib` alone.
  *
  * Nothing here compiles to a `RegExp`. Matching costs at most the pattern's
  * size times the path's length, and a question about two scopes that cannot be
@@ -49,7 +51,10 @@ export interface Glob {
   readonly source: string;
   /** The compiled pattern: spec-core's `path` dialect, case-sensitive. */
   readonly compiled: CoreGlob;
-  /** Each path the pattern names with no glob syntax, one per brace alternative; empty when it has none. */
+  /**
+   * Each path the pattern names with no glob syntax and no trailing `/`, one
+   * per brace alternative; empty when it has none.
+   */
   readonly literals: readonly Literal[];
 }
 

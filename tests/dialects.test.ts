@@ -395,6 +395,23 @@ describe('collisions', () => {
     expect(tree.waves[0]?.collisions.flatMap((c) => c.overlaps.map((o) => o.witness))).toEqual(['build/x']);
   });
 
+  it('reads a trailing slash inside braces as a directory, whatever the tree holds', () => {
+    // `src/newmod` was a literal the tree was asked about, and a directory it
+    // did not hold yet was read as a file, so the collision went unseen.
+    const corpus = corpusOf({
+      'briefs/001_a.md': goodBrief({ wave: '1', affectedFiles: '["{src/newmod/,README.md}"]' }),
+      'briefs/002_b.md': goodBrief({ wave: '1', affectedFiles: '[src/newmod/index.ts]' }),
+    });
+    for (const repoFiles of [null, ['README.md'], ['README.md', 'src/newmod/index.ts']]) {
+      const report = collisions(corpus, { repoFiles });
+      expect(report.waves[0]?.collisions.flatMap((c) => c.overlaps.map((o) => o.witness)), JSON.stringify(repoFiles)).toEqual(['src/newmod/index.ts']);
+      expect(schedule(corpus, { repoFiles }).placements.map((p) => [p.brief.id, p.proposed])).toEqual([
+        ['001', 1],
+        ['002', 2],
+      ]);
+    }
+  });
+
   it('leaves deferred briefs out of every wave, and lists them', () => {
     const corpus = corpusOf({
       'briefs/001_a.md': goodBrief({ wave: '1', affectedFiles: '[src/**]' }),
