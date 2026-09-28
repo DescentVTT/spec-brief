@@ -123,6 +123,18 @@ describe('refusals', () => {
     expect(plan.blocking.map((f) => f.rule)).toEqual(['protected-file']);
   });
 
+  it('reads a trailing slash inside braces as a directory, as it reads one written alone', () => {
+    // Read as either, the literal `build` in `{build/,Makefile}` protected a
+    // file of that name; `build/` protects only what is beneath it.
+    for (const scope of ['[build/]', '["{build/,Makefile}"]']) {
+      const corpus = corpusOf({ [A]: goodBrief({ protectedFiles: scope }) });
+      const refused = (path: string): string[] =>
+        planArchive(corpus, the(corpus, '001'), { date: '2026-09-24', commit: COMMIT, changes: [{ path, insertions: 1, deletions: 0 }] }).blocking.map((f) => f.rule);
+      expect(refused('build/out.js'), scope).toEqual(['protected-file']);
+      expect(refused('build'), scope).toEqual([]);
+    }
+  });
+
   it('refuses to overwrite an archived brief of the same name', () => {
     const corpus = corpusOf({ [A]: goodBrief(), 'briefs/archive/001_a.md': goodBrief({ status: 'archived' }) });
     const live = corpus.live[0]!;

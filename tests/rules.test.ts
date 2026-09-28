@@ -402,8 +402,12 @@ describe('scopes', () => {
     expect(await noted('lib/{a,b}')).toEqual([
       '"lib/{a,b}" in affectedFiles names lib/a and lib/b, which are not in the tree and are read as files | write a directory with a trailing "/", in an entry of its own',
     ]);
+    // A trailing "/" inside braces says directory as it does alone, so the note names only the bare name.
+    expect(await noted('{src/newmod/,lib/new}')).toEqual([
+      '"{src/newmod/,lib/new}" in affectedFiles names lib/new, which is not in the tree and is read as a file | write a directory with a trailing "/", in an entry of its own',
+    ]);
     // Held, spelt as a file, written as a directory, or a glob: nothing to ask.
-    for (const pattern of ['src/auth', 'Makefile', 'src/new.ts', 'docs/v1.2', 'src/newmod/', 'src/new*', 'lib/{x,y.ts}']) {
+    for (const pattern of ['src/auth', 'Makefile', 'src/new.ts', 'docs/v1.2', 'src/newmod/', 'src/new*', 'lib/{x,y.ts}', '{src/newmod/,Makefile}']) {
       expect(await noted(pattern), pattern).toEqual([]);
     }
     // Without a tree nothing is known to be missing from it.
@@ -417,6 +421,9 @@ describe('scopes', () => {
       'literal-read-as-file: "src/newmod" in affectedFiles is not in the tree and is read as a file',
       'literal-read-as-file: "gone" in protectedFiles is not in the tree and is read as a file',
     ]);
+    // With no bare name left to place, a pattern of new directories and files matches nothing yet, as "src/newmod/" alone does.
+    const braced = await findings({ [A]: goodBrief({ affectedFiles: '["{src/newmod/,docs/new.md}"]' }) }, config(), tree);
+    expect(braced.map((f) => `${f.rule}: ${f.message}`)).toEqual(['glob-matches-nothing: "{src/newmod/,docs/new.md}" in affectedFiles matches no file in the tree']);
   });
 
   it('notes a pattern that matches no file in the tree, only when files are known', async () => {

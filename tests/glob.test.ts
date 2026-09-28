@@ -143,6 +143,22 @@ describe('a literal path', () => {
     expect(matchGlob(g, 'src/newmod/index.ts')).toBe(true);
     expect(matchGlob(g, 'src/newmod')).toBe(false);
   });
+
+  it('written with a trailing slash inside braces means what is beneath it, as written alone', () => {
+    // The slash said nothing inside braces: `src/newmod` was a literal, read
+    // as a file unless the tree held the directory.
+    const asked: string[] = [];
+    const g = glob('{src/newmod/,lib}', (path) => {
+      asked.push(path);
+      return 'file';
+    });
+    expect(asked).toEqual(['lib']);
+    expect(g.literals).toEqual([{ path: 'lib', reading: 'file' }]);
+    expect(matchGlob(g, 'src/newmod/index.ts')).toBe(true);
+    expect(matchGlob(g, 'src/newmod')).toBe(false);
+    expect(matchGlob(g, 'lib')).toBe(true);
+    expect(globBases(g)).toEqual(['src/newmod', '']);
+  });
 });
 
 describe('the tree', () => {
