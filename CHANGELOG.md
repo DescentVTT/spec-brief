@@ -6,6 +6,20 @@ Notable changes, newest first. Versions follow [semver](https://semver.org).
 
 ### Changed
 
+- spec-core at 56c7e54. A brace alternative that names no path is refused,
+  as the same text written alone is. `{./,src}` in `affectedFiles` or
+  `protectedFiles` read its `./` as every path, where `./` alone is
+  refused: protecting it protected the whole tree, so `scope-contradiction`
+  reported every affected pattern, and in `affectedFiles` it overlapped
+  every other brief's scope. It is now a `glob` error, `the braces expand
+  to "./", which names no path`, and so are `{src,./}`, `{.,src}/` and
+  `.{/,src}`. A `files` or `exclude` pattern spelt so matched every name in
+  the briefs directory; it is now a configuration problem, and the run
+  exits 2. `src/{./,a}`, `{./a,b}` and `a{,.ts}` read as they did.
+- `glob` names the alternative in refusals it already made: `{.,src}` is
+  `the braces expand to ".", which names no path`, and `{/,src}` the same
+  with `"/"`, where both were `the pattern names no path`; `{,src}`,
+  `{src,}` and `{}` are `the braces expand to an empty pattern`.
 - `literal-read-as-file` advises the pattern as written with a `/` ending
   each alternative it names, where it said to write a directory with a
   trailing `/`, in an entry of its own. Since 0.2.5 a trailing `/` on a

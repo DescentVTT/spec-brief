@@ -178,3 +178,15 @@ compiles to more than 65,536 states is a refusal spec-core returns, where it
 threw `AutomatonTooLarge` and `src/glob.ts` caught it; the catch went, and
 the `glob` finding reads as it did, since the reason is the message the
 exception carried. Every other change in the copy is a comment.
+
+## Amended 2026-09-29: copied again at 56c7e54
+
+The copy was taken again at spec-core 56c7e54, whose one change is to the
+glob. A brace alternative that names no path is refused, as the same text
+written alone is: `{./,src}` read its `./` as every path, and is now the
+`glob` error `the braces expand to "./", which names no path`
+([ADR-0005](0005-scopes-collide-by-intersection.md), amended). A refusal the
+glob already made names the alternative, `{.,src}` as `"."` and `{,src}` as
+an empty pattern, where each was `the pattern names no path`. spec-core also
+refuses `/./` as it refuses `/.`; spec-brief refuses a leading `/` before
+spec-core reads a pattern, so that reaches no scope.

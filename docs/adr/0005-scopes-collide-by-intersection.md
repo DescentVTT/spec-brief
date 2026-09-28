@@ -159,3 +159,26 @@ them ends one alternative alone, and the advice is an entry of its own,
 `a/new/`. A pattern with a class is advised the same way: a class may hold a
 brace or a comma, and spec-brief does not read classes to place a `/`. What
 the note fires on is unchanged.
+
+## Amended 2026-09-29: an alternative that names no path
+
+spec-core 56c7e54 refuses a brace alternative that names no path, as it
+refuses the same text written alone, and the copy took it
+([ADR-0001](0001-no-runtime-dependencies.md), amended). Since the amendment
+above, a trailing `/` on an alternative is the directory's contents, and
+`{./,src}` read its `./` as the contents of `.`: every path, where `./`
+alone is refused as naming the root. A scope that is every path collides with
+everything; in `protectedFiles` it made each affected pattern entirely
+protected, so `scope-contradiction` said nothing of the brief was writable
+and pointed at the affected patterns, not at the protection. It is now `glob`'s error, `the braces expand to "./",
+which names no path`, with `{src,./}`, `{.,src}/` and `.{/,src}`, which the
+braces expand the same way. A refusal the glob already made names the
+alternative: `{.,src}` is `"."`, and `{,src}` an empty pattern. An
+alternative with a name in it reads as it did: `src/{./,a}` is `src/` or
+`src/a`, and `{./a,b}` is `a` or `b`.
+
+`writtenAlternatives`, which places the `/` of the note's advice, is checked
+against spec-core again over a corpus with `.` and `./` among its atoms. At
+f9ce375 it met patterns such as `{./a/,./}`, whose alternatives written alone
+did not read as the pattern, since `./` alone was refused; spec-core refuses
+them now, and on each pattern of the corpus it accepts the two agree.
