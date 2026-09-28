@@ -63,6 +63,9 @@ describe('parsing', () => {
     expect(error('../x')).toBe('a pattern cannot climb out of its root with ".."');
     expect(error('.')).toBe('the pattern names no path');
     expect(error('./')).toBe('the pattern names the root itself, not a path under it');
+    // Inside braces "./" was the contents of ".", every path.
+    expect(error('{./,src}')).toBe('the braces expand to "./", which names no path');
+    expect(error('{,src}')).toBe('the braces expand to an empty pattern');
     expect(error('a{b')).toBe('a "{" is never closed');
     expect(error('a[b')).toBe('a "[" is never closed');
     expect(error('[z-a]')).toBe('the range "z-a" runs backwards');
@@ -191,14 +194,17 @@ describe('an alternative as written', () => {
     }
   });
 
-  it('agrees with the core over a generated corpus: a "/" where one ends changes that alternative alone', () => {
-    let seed = 20260929;
+  /**
+   * Checks each alternative as written against the core, over 50 patterns
+   * built from `atoms` that parse: taken together they read as the pattern,
+   * and a `/` where one ends changes that alternative alone.
+   */
+  const agreesOver = (atoms: readonly string[], start: number): void => {
+    let seed = start;
     const random = (n: number): number => {
       seed = (seed * 48271) % 2147483647;
       return seed % n;
     };
-    // No atom starts with "/": the core drops one that opens an option, and spec-brief refuses it opening a pattern.
-    const atoms = ['a', 'b', 'x.ts', '?', 'a/', 'b/', '', '\\{', '\\,', '\\}', '}'];
     const group = (depth: number): string => `{${Array.from({ length: 2 + random(2) }, () => text(depth + 1)).join(',')}}`;
     const text = (depth: number): string =>
       Array.from({ length: 1 + random(3) }, () => (depth < 2 && random(4) === 0 ? group(depth) : (atoms[random(atoms.length)] as string))).join('');
@@ -224,6 +230,22 @@ describe('an alternative as written', () => {
       });
     }
     expect(checked).toBe(50);
+  };
+
+  // No atom starts with "/": the core drops one that opens an option, and spec-brief refuses it opening a pattern.
+  const atoms = ['a', 'b', 'x.ts', '?', 'a/', 'b/', '', '\\{', '\\,', '\\}', '}'];
+
+  it('agrees with the core over a generated corpus: a "/" where one ends changes that alternative alone', () => {
+    agreesOver(atoms, 20260929);
+  });
+
+  it('agrees with the core where an alternative holds "." segments, which the core refuses when they name no path', () => {
+    // "{./,a}" parsed, and its "./" read as every path where "./" written
+    // alone is refused, so the alternatives as written did not read as the
+    // pattern: this corpus met two such, "{?,./,./}" and "{./a/,./}". Refused
+    // now, they are left out as every pattern that does not parse is. "./" is
+    // weighted twice so that an option made of it alone comes up at all.
+    agreesOver([...atoms, '.', './', './'], 20260929);
   });
 });
 
