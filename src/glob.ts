@@ -27,7 +27,6 @@
  */
 
 import {
-  AutomatonTooLarge,
   globCovers as coreCovers,
   globWitness as coreWitness,
   isGlobSyntax,
@@ -82,14 +81,10 @@ export function parseGlob(source: string, options: ParseOptions = {}): GlobParse
     literals.push({ path, reading });
     return reading;
   };
-  try {
-    const parsed = coreParse(pattern, { dialect: 'path', caseSensitive: true, literal });
-    return parsed.ok ? { ok: true, glob: { source, compiled: parsed.glob, literals } } : parsed;
-  } catch (error) {
-    // Too many states is a pattern nobody meant; anything else is a defect to surface.
-    if (error instanceof AutomatonTooLarge) return { ok: false, error: error.message };
-    throw error;
-  }
+  // A pattern too large to compile is refused by the core, with its reason,
+  // as a malformed one is; what the reading throws is a defect, and passes on.
+  const parsed = coreParse(pattern, { dialect: 'path', caseSensitive: true, literal });
+  return parsed.ok ? { ok: true, glob: { source, compiled: parsed.glob, literals } } : parsed;
 }
 
 /**
