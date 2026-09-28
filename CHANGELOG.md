@@ -2,7 +2,7 @@
 
 Notable changes, newest first. Versions follow [semver](https://semver.org).
 
-## Unreleased
+## 0.2.5
 
 spec-core at f9ce375. A trailing `/` on a brace alternative means that
 directory's contents, as one written alone does: `{src/newmod/,lib}` scopes
