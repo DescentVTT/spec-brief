@@ -14,6 +14,7 @@ import {
   parseGlob,
   readingIn,
   treeOf,
+  writtenAlternatives,
 } from '../src/glob.js';
 
 function glob(source: string, literal?: LiteralReading | ((path: string) => LiteralReading)): Glob {
@@ -158,6 +159,71 @@ describe('a literal path', () => {
     expect(matchGlob(g, 'src/newmod')).toBe(false);
     expect(matchGlob(g, 'lib')).toBe(true);
     expect(globBases(g)).toEqual(['src/newmod', '']);
+  });
+});
+
+describe('an alternative as written', () => {
+  it('is the pattern itself when it has no braces, escaped ones and a lone "}" included', () => {
+    expect(writtenAlternatives('src/newmod')).toEqual([{ written: 'src/newmod', end: 10 }]);
+    expect(writtenAlternatives('lib/\\{a,b\\}')).toEqual([{ written: 'lib/\\{a,b\\}', end: 11 }]);
+    expect(writtenAlternatives('a}b')).toEqual([{ written: 'a}b', end: 3 }]);
+  });
+
+  it('is each alternative of braces that end the pattern, nested ones too, in the order the core expands them', () => {
+    expect(writtenAlternatives('lib/{util,new}')).toEqual([
+      { written: 'lib/util', end: 9 },
+      { written: 'lib/new', end: 13 },
+    ]);
+    expect(writtenAlternatives('{a,b/{c,d}}')).toEqual([
+      { written: 'a', end: 2 },
+      { written: 'b/c', end: 7 },
+      { written: 'b/d', end: 9 },
+    ]);
+    expect(writtenAlternatives('a}/{b,c\\,d}')).toEqual([
+      { written: 'a}/b', end: 5 },
+      { written: 'a}/c\\,d', end: 10 },
+    ]);
+  });
+
+  it('is not given where more of the pattern follows braces, or where a class may hold a brace or a comma', () => {
+    for (const pattern of ['{a,b}/new', '{a,b}{c,d}', 'lib/{a,b{c,d}e}', '{a,b}}', 'lib/{[,],new}', '[a]/{b,c}']) {
+      expect(writtenAlternatives(pattern), pattern).toBeNull();
+    }
+  });
+
+  it('agrees with the core over a generated corpus: a "/" where one ends changes that alternative alone', () => {
+    let seed = 20260929;
+    const random = (n: number): number => {
+      seed = (seed * 48271) % 2147483647;
+      return seed % n;
+    };
+    // No atom starts with "/": the core drops one that opens an option, and spec-brief refuses it opening a pattern.
+    const atoms = ['a', 'b', 'x.ts', '?', 'a/', 'b/', '', '\\{', '\\,', '\\}', '}'];
+    const group = (depth: number): string => `{${Array.from({ length: 2 + random(2) }, () => text(depth + 1)).join(',')}}`;
+    const text = (depth: number): string =>
+      Array.from({ length: 1 + random(3) }, () => (depth < 2 && random(4) === 0 ? group(depth) : (atoms[random(atoms.length)] as string))).join('');
+    // Whether a pattern reads as the alternatives given, taken together.
+    const readsAs = (pattern: string, alternatives: readonly string[]): boolean => {
+      const whole = glob(pattern);
+      const each = alternatives.map((a) => glob(a));
+      return globCovers(each, whole) === true && each.every((a) => globCovers([whole], a) === true);
+    };
+    let checked = 0;
+    for (let n = 0; n < 1000 && checked < 50; n += 1) {
+      const pattern = text(1) + group(0);
+      if (!parseGlob(pattern).ok) continue;
+      const alternatives = writtenAlternatives(pattern);
+      if (alternatives === null) continue;
+      checked += 1;
+      const ends = alternatives.map((a) => a.end);
+      expect(ends, pattern).toEqual([...ends].sort((x, y) => x - y));
+      expect(readsAs(pattern, alternatives.map((a) => a.written)), pattern).toBe(true);
+      alternatives.forEach(({ end }, k) => {
+        const slashed = `${pattern.slice(0, end)}/${pattern.slice(end)}`;
+        expect(readsAs(slashed, alternatives.map((a, j) => (j === k ? `${a.written}/` : a.written))), slashed).toBe(true);
+      });
+    }
+    expect(checked).toBe(50);
   });
 });
 

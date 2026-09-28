@@ -399,12 +399,33 @@ describe('scopes', () => {
     expect(await noted('src/newmod')).toEqual(['"src/newmod" in affectedFiles is not in the tree and is read as a file | write "src/newmod/" for a directory']);
     expect(await noted('Dockerfile')).toEqual(['"Dockerfile" in affectedFiles is not in the tree and is read as a file | write "Dockerfile/" for a directory']);
     expect(await noted('.github')).toHaveLength(1);
+    // The advice is the pattern written, with a "/" ending each alternative
+    // the note names, inside braces as alone; or each in an entry of its own.
     expect(await noted('lib/{a,b}')).toEqual([
-      '"lib/{a,b}" in affectedFiles names lib/a and lib/b, which are not in the tree and are read as files | write a directory with a trailing "/", in an entry of its own',
+      '"lib/{a,b}" in affectedFiles names lib/a and lib/b, which are not in the tree and are read as files | write "lib/{a/,b/}" for directories, or "lib/a/" and "lib/b/" in entries of their own',
     ]);
     // A trailing "/" inside braces says directory as it does alone, so the note names only the bare name.
     expect(await noted('{src/newmod/,lib/new}')).toEqual([
-      '"{src/newmod/,lib/new}" in affectedFiles names lib/new, which is not in the tree and is read as a file | write a directory with a trailing "/", in an entry of its own',
+      '"{src/newmod/,lib/new}" in affectedFiles names lib/new, which is not in the tree and is read as a file | write "{src/newmod/,lib/new/}" for a directory, or "lib/new/" in an entry of its own',
+    ]);
+    // A glob and a directory the tree holds keep what they say, nested braces take the "/" where they end, and escapes stay as written.
+    expect(await noted('lib/{*.ts,x,new}')).toEqual([
+      '"lib/{*.ts,x,new}" in affectedFiles names lib/new, which is not in the tree and is read as a file | write "lib/{*.ts,x,new/}" for a directory, or "lib/new/" in an entry of its own',
+    ]);
+    expect(await noted('lib/{new,y/{z,a.ts}}')).toEqual([
+      '"lib/{new,y/{z,a.ts}}" in affectedFiles names lib/new and lib/y/z, which are not in the tree and are read as files | write "lib/{new/,y/{z/,a.ts}}" for directories, or "lib/new/" and "lib/y/z/" in entries of their own',
+    ]);
+    expect(await noted('lib/\\{new\\}')).toEqual(['"lib/\\{new\\}" in affectedFiles names lib/{new}, which is not in the tree and is read as a file | write "lib/\\{new\\}/" for a directory']);
+    // An alternative the reader refuses as an entry of its own, a negation, is left as written, and the advice is for the rest.
+    expect(await noted('{!x,new}')).toEqual([
+      '"{!x,new}" in affectedFiles names !x and new, which are not in the tree and are read as files | write "{!x,new/}" for a directory, or "new/" in an entry of its own',
+    ]);
+    // Where more of the pattern follows braces, a "/" inside them would change every alternative that takes it.
+    expect(await noted('{lib,src}/x')).toEqual([
+      '"{lib,src}/x" in affectedFiles names src/x, which is not in the tree and is read as a file | write "src/x/" for a directory, in an entry of its own',
+    ]);
+    expect(await noted('{a,b}/new')).toEqual([
+      '"{a,b}/new" in affectedFiles names a/new and b/new, which are not in the tree and are read as files | write "a/new/" and "b/new/" for directories, in entries of their own',
     ]);
     // Held, spelt as a file, written as a directory, or a glob: nothing to ask.
     for (const pattern of ['src/auth', 'Makefile', 'src/new.ts', 'docs/v1.2', 'src/newmod/', 'src/new*', 'lib/{x,y.ts}', '{src/newmod/,Makefile}']) {

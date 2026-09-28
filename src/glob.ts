@@ -146,6 +146,65 @@ export function globBase(glob: Glob): string {
   return glob.compiled.bases[0] as string;
 }
 
+/** A brace alternative as its pattern writes it, and the index in the pattern where it ends. */
+export interface WrittenAlternative {
+  readonly written: string;
+  readonly end: number;
+}
+
+/**
+ * Each alternative of a pattern as written, in the order the core expands
+ * them, and where each ends, when a `/` written there ends that alternative
+ * and no other: the pattern itself when it has no braces, or the alternatives
+ * of braces that end the pattern and whose own braces end theirs -
+ * `lib/{util,new}`, `{a,b/{c,d}}`. `null` when more of the pattern follows
+ * braces, `{a,b}/new`, since every alternative they give ends where the
+ * pattern does; and for a pattern with a class, which may hold a brace or a
+ * comma of its own and which this does not read.
+ *
+ * spec-core expands braces and keeps nothing of where an alternative was
+ * written, and a note's advice is built from what was written, as the core
+ * builds its own. So this reads braces as the expansion does, for a pattern
+ * that parses: a `\` escapes the next character, and a `}` with no `{` open
+ * is a literal.
+ */
+export function writtenAlternatives(pattern: string): WrittenAlternative[] | null {
+  let depth = 0;
+  let open = 0;
+  const stops: number[] = [];
+  for (let i = 0; i < pattern.length; i += 1) {
+    const ch = pattern.charAt(i);
+    if (ch === '\\') {
+      i += 1;
+    } else if (ch === '[') {
+      return null;
+    } else if (ch === '{') {
+      if (depth === 0) open = i;
+      depth += 1;
+    } else if (ch === ',' && depth === 1) {
+      stops.push(i);
+    } else if (ch === '}' && depth > 0) {
+      depth -= 1;
+      if (depth === 0) return i === pattern.length - 1 ? optionsOf(pattern, open, [...stops, i]) : null;
+    }
+  }
+  return [{ written: pattern, end: pattern.length }];
+}
+
+/** The alternatives of the braces opened at `open`, each option ending at one of `stops`. */
+function optionsOf(pattern: string, open: number, stops: readonly number[]): WrittenAlternative[] | null {
+  const prefix = pattern.slice(0, open);
+  const alternatives: WrittenAlternative[] = [];
+  let start = open + 1;
+  for (const stop of stops) {
+    const inner = writtenAlternatives(pattern.slice(start, stop));
+    if (inner === null) return null;
+    for (const { written, end } of inner) alternatives.push({ written: prefix + written, end: start + end });
+    start = stop + 1;
+  }
+  return alternatives;
+}
+
 /** A name with an extension, `login.ts` or `.eslintrc.json`, and not a dot-name such as `.github`. */
 export function hasExtension(name: string): boolean {
   return /.\.[^.]+$/.test(name);
