@@ -146,6 +146,9 @@ describe('resolving a configuration', () => {
     expect(problems({ status: { draft: 'x', active: 'X', archived: 'x' } })).toEqual(['the status words must differ: "x" is the word for draft, active and archived; give all but one another word']);
     expect(problems({ files: '[' })).toEqual(['"files" pattern "[": a "[" is never closed']);
     expect(problems({ exclude: ['ok.md', '{'] })).toEqual(['"exclude" pattern "{": a "{" is never closed']);
+    // "./" inside braces read as every name, so every file in the directory was a brief, or none was.
+    expect(problems({ files: '{./,*.md}' })).toEqual(['"files" pattern "{./,*.md}": the braces expand to "./", which names no path']);
+    expect(problems({ exclude: ['{./,draft-*.md}'] })).toEqual(['"exclude" pattern "{./,draft-*.md}": the braces expand to "./", which names no path']);
     expect(problems({ archiving: { banner: ['{date} {sumary}'] } })).toEqual([
       expect.stringContaining('"archiving.banner" uses {sumary}; the placeholders are {date}'),
     ]);

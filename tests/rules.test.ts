@@ -352,6 +352,32 @@ describe('scopes', () => {
     ]);
   });
 
+  it('refuses a brace alternative that names no path, as the same text written alone is, naming the alternative', async () => {
+    // "{./,docs}" read "./" as the contents of ".", every path, where "./"
+    // alone is refused: it protected everything, so every affected pattern
+    // was entirely protected, and in affectedFiles it claimed the whole tree.
+    const found = await findings({ [A]: goodBrief({ affectedFiles: '[src/**, "{./,src}"]', protectedFiles: '["{./,docs}"]' }) });
+    expect(found.map((f) => [f.rule, f.line, f.message])).toEqual([
+      ['glob', 3, '"{./,src}" in affectedFiles: the braces expand to "./", which names no path'],
+      ['glob', 4, '"{./,docs}" in protectedFiles: the braces expand to "./", which names no path'],
+    ]);
+    // Refused wherever the alternative is written, in the words of the text the braces give.
+    for (const [pattern, text] of [
+      ['{src,./}', './'],
+      ['{.//,src}', './/'],
+      ['{.,src}/', './'],
+      ['.{/,src}', './'],
+      ['{.,src}', '.'],
+    ] as const) {
+      const refused = await findings({ [A]: goodBrief({ affectedFiles: JSON.stringify([pattern]) }) });
+      expect(refused.map((f) => [f.rule, f.message]), pattern).toEqual([['glob', `"${pattern}" in affectedFiles: the braces expand to "${text}", which names no path`]]);
+    }
+    // One that names a path under the root reads as it did.
+    for (const pattern of ['src/{./,a}', '{./a,b}', '{.github/,a}', 'a{,.ts}']) {
+      expect(await findings({ [A]: goodBrief({ affectedFiles: JSON.stringify([pattern]) }) }), pattern).toEqual([]);
+    }
+  });
+
   it('lets protection carve a file out of a scope: what is writable is affected less protected', async () => {
     const found = await findings({ [A]: goodBrief({ affectedFiles: '[src/**]', protectedFiles: '[src/db/schema.ts, docs/**]' }) });
     expect(found).toEqual([]);
@@ -416,6 +442,10 @@ describe('scopes', () => {
       '"lib/{new,y/{z,a.ts}}" in affectedFiles names lib/new and lib/y/z, which are not in the tree and are read as files | write "lib/{new/,y/{z/,a.ts}}" for directories, or "lib/new/" and "lib/y/z/" in entries of their own',
     ]);
     expect(await noted('lib/\\{new\\}')).toEqual(['"lib/\\{new\\}" in affectedFiles names lib/{new}, which is not in the tree and is read as a file | write "lib/\\{new\\}/" for a directory']);
+    // A "." segment is kept as written: the alternative still names a path, with the "/" as without it.
+    expect(await noted('src/{./newmod,auth}')).toEqual([
+      '"src/{./newmod,auth}" in affectedFiles names src/newmod, which is not in the tree and is read as a file | write "src/{./newmod/,auth}" for a directory, or "src/./newmod/" in an entry of its own',
+    ]);
     // An alternative the reader refuses as an entry of its own, a negation, is left as written, and the advice is for the rest.
     expect(await noted('{!x,new}')).toEqual([
       '"{!x,new}" in affectedFiles names !x and new, which are not in the tree and are read as files | write "{!x,new/}" for a directory, or "new/" in an entry of its own',
