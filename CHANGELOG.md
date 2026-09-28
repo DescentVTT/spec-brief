@@ -2,7 +2,12 @@
 
 Notable changes, newest first. Versions follow [semver](https://semver.org).
 
-## Unreleased
+## 0.2.6
+
+spec-core at 56c7e54: a brace alternative that names no path, such as
+`{./,src}`, is refused as the same text alone is, where it read as every
+path. `literal-read-as-file` advises the `/` on the brace alternative it
+names, built from the pattern written.
 
 ### Changed
 
