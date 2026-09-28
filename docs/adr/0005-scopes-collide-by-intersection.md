@@ -116,3 +116,27 @@ spellings it could have meant.
 as before, with `{a,b}` as the way to write it; `C++(notes).md` and
 `report(2017).md` are names with parentheses in them, as ripgrep and
 `.gitignore` read them, where they used to be refused.
+
+## Amended 2026-09-28: a trailing slash inside braces
+
+spec-core f9ce375 reads a trailing `/` on a brace alternative as it reads one
+on the whole pattern, and the copy took it
+([ADR-0001](0001-no-runtime-dependencies.md), amended). `{src/newmod/,lib}`
+was the literals `src/newmod` and `lib`, each read from the tree, so a
+directory the tree did not hold yet was a file: the scope matched a
+`src/newmod` nobody will create, a collision with a brief writing
+`src/newmod/index.ts` was missed, and `literal-read-as-file` told the author
+to write the trailing `/` they had written. Now the alternative is
+`src/newmod/`, the directory's contents whatever the tree holds, never the
+directory itself and never asked about - the decision above, that a trailing
+`/` always means a directory, held inside braces too. A directory the tree
+holds reads as it did, everything beneath it.
+
+`literal-read-as-file` names the bare names alone, `lib` here, and a pattern
+left with none the tree cannot place is `glob-matches-nothing`'s when it
+matches nothing, as `src/newmod/` alone is. Archival, which reads a literal as
+either, no longer takes a changed file at `src/newmod` itself as inside
+`{src/newmod/,lib}`, as it never took one inside `src/newmod/`. The
+alternative's base, which `shared-directory` compares, is `src/newmod`
+whatever the tree holds, where it was `src` while the tree did not hold the
+directory.
