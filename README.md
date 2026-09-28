@@ -229,7 +229,7 @@ A brief is read as CommonMark reads it wherever that decides what is code or a c
 | `glob` | error | A scope pattern spec-brief cannot read. |
 | `scope-contradiction` | error | Patterns in `affectedFiles` that `protectedFiles` cover entirely, so nothing of them is writable - one finding per brief, naming each. A pattern the search cannot decide is a warning. |
 | `glob-matches-nothing` | note | A scope pattern that matches no file git sees, tracked or untracked - expected when the round creates it. |
-| `literal-read-as-file` | note | A path with no glob syntax that the tree does not hold and whose name has no extension, such as `src/newmod`: read as a file, and `src/newmod/` if a directory was meant. |
+| `literal-read-as-file` | note | A path with no glob syntax that the tree does not hold and whose name has no extension, such as `src/newmod`: read as a file, and `src/newmod/` if a directory was meant. Inside braces the advice is the pattern written with the `/` added, `lib/{util,new/}`, or the alternative in an entry of its own, `lib/new/`. |
 | `archive-freeze` | error | An archived brief that changed after it was archived. |
 | `collision` | error | Two briefs in one wave whose scopes can name the same file (`matrix`). |
 | `collision-undecided` | warning | Two briefs in one wave whose collision the search could not decide within its budget (`matrix`), or a wave `schedule` passed over for it. |

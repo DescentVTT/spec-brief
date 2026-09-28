@@ -140,3 +140,22 @@ either, no longer takes a changed file at `src/newmod` itself as inside
 alternative's base, which `shared-directory` compares, is `src/newmod`
 whatever the tree holds, where it was `src` while the tree did not hold the
 directory.
+
+## Amended 2026-09-29: the note's advice inside braces
+
+`literal-read-as-file` told the author of a bare name inside braces to write
+a directory with a trailing `/`, in an entry of its own: the only way to say
+one until the amendment above. Now its advice is the pattern as written with a `/`
+ending each alternative it names, or each such alternative in an entry of
+its own: for `lib/{util,new}` in a tree holding `lib/util` and not
+`lib/new`, `lib/{util,new/}` for a directory, or `lib/new/`. It is built
+from what was written, escapes and nested braces included, as spec-core
+builds its advice for `**` inside a name, and the places a `/` goes are
+checked against spec-core over a generated corpus: written where an
+alternative ends, it changes that alternative alone.
+
+Where more of the pattern follows braces, `{a,b}/new`, no `/` written inside
+them ends one alternative alone, and the advice is an entry of its own,
+`a/new/`. A pattern with a class is advised the same way: a class may hold a
+brace or a comma, and spec-brief does not read classes to place a `/`. What
+the note fires on is unchanged.
