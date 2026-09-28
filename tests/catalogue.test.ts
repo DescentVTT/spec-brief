@@ -176,7 +176,7 @@ describe('what lint says', () => {
     const tree = ['src/db/a.ts', 'src/auth/x.ts', 'lib/util/a.ts', 'README.md'];
     expect(table(await lint(corpus, { repoFiles: tree }))).toEqual([
       'briefs/001_a.md:3 error glob: "/x" in affectedFiles: a pattern is relative to the repository root and cannot start with "/" | a scope is a glob relative to the repository root: "src/auth/", "src/**/*.ts", "docs/{a,b}.md"',
-      'briefs/001_a.md:3 note literal-read-as-file: "lib/{util,new}" in affectedFiles names lib/new, which is not in the tree and is read as a file | write a directory with a trailing "/", in an entry of its own',
+      'briefs/001_a.md:3 note literal-read-as-file: "lib/{util,new}" in affectedFiles names lib/new, which is not in the tree and is read as a file | write "lib/{util,new/}" for a directory, or "lib/new/" in an entry of its own',
       'briefs/001_a.md:3 note literal-read-as-file: "newmod" in affectedFiles is not in the tree and is read as a file | write "newmod/" for a directory',
       'briefs/001_a.md:4 note glob-matches-nothing: "new/**" in protectedFiles matches no file in the tree | expected when the round creates it; otherwise check the spelling',
       'briefs/001_a.md:4 error scope-contradiction: "src/db/**" and "src/db/a.ts" in affectedFiles are entirely protected, so nothing of them is writable | drop them from affectedFiles, or narrow protectedFiles so that some of each is writable',

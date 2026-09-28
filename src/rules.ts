@@ -13,7 +13,7 @@ import { type Config, type SectionRule, statusWords } from './config.js';
 import { type Corpus, dependencyCycles, duplicateIds, idKey, resolveDependency } from './corpus.js';
 import { findEntry } from './frontmatter.js';
 import { integrityOf } from './integrity.js';
-import { type Glob, hasExtension, held, isGlobSyntax, matchGlob, parseGlob, readingIn, treeOf, WITNESS_BUDGET } from './glob.js';
+import { type Glob, hasExtension, held, isGlobSyntax, matchGlob, parseGlob, readingIn, treeOf, WITNESS_BUDGET, writtenAlternatives } from './glob.js';
 import { hasContent, type Section } from './markdown.js';
 import { closest } from './schema.js';
 import { contradictions, patternsOf, scopeOf, type ScopePattern } from './scope.js';
@@ -123,6 +123,38 @@ export function unheldLiterals(glob: Glob, files: readonly string[]): string[] {
   return glob.literals
     .map((literal) => literal.path)
     .filter((path) => held(tree, path) === null && !hasExtension(path.slice(path.lastIndexOf('/') + 1)));
+}
+
+/**
+ * What to write for a directory where a pattern names paths the tree reads as
+ * files, built from the pattern as written, as spec-core builds its own
+ * advice: the pattern with a `/` ending each alternative that names one, since
+ * a trailing `/` inside braces says directory as it does alone, or each such
+ * alternative in an entry of its own (ADR-0005, amended 2026-09-29). Where
+ * more of the pattern follows braces, `{a,b}/new`, no `/` written inside them
+ * ends one alternative alone, so an entry of its own is the advice; and an
+ * alternative the reader refuses as an entry, one opening with `!`, is left as
+ * written. The reader trims every list item, so the pattern is as meant.
+ */
+function directoryAdvice(pattern: string, paths: readonly string[]): string {
+  const alternatives = writtenAlternatives(pattern) ?? [];
+  const named = alternatives.filter(({ written }) => {
+    const parsed = parseGlob(written);
+    return parsed.ok && parsed.glob.literals.some((literal) => paths.includes(literal.path));
+  });
+  const entries = (named.length === 0 ? paths : named.map(({ written }) => written)).map((entry) => `${entry}/`);
+  const one = entries.length === 1;
+  const kind = one ? 'a directory' : 'directories';
+  const own = one ? 'an entry of its own' : 'entries of their own';
+  if (named.length === 0) return `write ${quoted(entries)} for ${kind}, in ${own}`;
+  if (alternatives.length === 1) return `write ${quoted(entries)} for ${kind}`;
+  let slashed = '';
+  let from = 0;
+  for (const { end } of named) {
+    slashed += `${pattern.slice(from, end)}/`;
+    from = end;
+  }
+  return `write "${slashed}${pattern.slice(from)}" for ${kind}, or ${quoted(entries)} in ${own}`;
 }
 
 /**
@@ -571,21 +603,15 @@ export const RULES: readonly Rule[] = [
           const paths = unheldLiterals(glob, repoFiles);
           if (paths.length === 0) return [];
           const line = at(lineOfField(brief, field));
+          const hint = directoryAdvice(pattern, paths);
           if (!isGlobSyntax(pattern)) {
-            return [
-              {
-                line,
-                message: `"${pattern}" in ${field} is not in the tree and is read as a file`,
-                // The reader trims every list item, so the pattern is as meant.
-                hint: `write "${pattern}/" for a directory`,
-              },
-            ];
+            return [{ line, message: `"${pattern}" in ${field} is not in the tree and is read as a file`, hint }];
           }
           return [
             {
               line,
               message: `"${pattern}" in ${field} names ${inWords(paths)}, which ${paths.length === 1 ? 'is' : 'are'} not in the tree and ${paths.length === 1 ? 'is' : 'are'} read as ${paths.length === 1 ? 'a file' : 'files'}`,
-              hint: 'write a directory with a trailing "/", in an entry of its own',
+              hint,
             },
           ];
         }),
