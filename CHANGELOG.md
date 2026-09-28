@@ -2,6 +2,38 @@
 
 Notable changes, newest first. Versions follow [semver](https://semver.org).
 
+## Unreleased
+
+spec-core at f9ce375. A trailing `/` on a brace alternative means that
+directory's contents, as one written alone does: `{src/newmod/,lib}` scopes
+what `src/newmod/` and `lib` scope, so a collision inside a directory the
+round creates is no longer missed.
+
+### Changed
+
+- spec-core at f9ce375. Its glob reads a trailing `/` on a brace
+  alternative as it reads one on the whole pattern. In a scope,
+  `{src/newmod/,lib}` covers `src/newmod/index.ts` and not `src/newmod`,
+  whatever the tree holds. `src/newmod` was a literal read from the tree,
+  and while the tree did not hold the directory, or with no tree, it
+  covered only a file of that name: `matrix` missed a collision with a
+  brief writing `src/newmod/index.ts`, which it now reports, and `schedule`
+  now keeps the two briefs apart. A directory the tree holds reads as
+  before.
+- `literal-read-as-file` no longer names what a trailing `/` says is a
+  directory: `{src/newmod/,lib}` in a tree holding neither names `lib`
+  alone, where it named `src/newmod` and `lib`. A pattern left with no
+  bare name to place, `{src/newmod/,docs/new.md}` in a tree holding
+  neither, is `glob-matches-nothing`'s, as `src/newmod/` alone is, where it
+  was noted for `src/newmod`.
+- `archive`, which reads a literal as either, no longer takes a changed file
+  at `build` itself as inside `{build/,Makefile}`, protected or in scope, as
+  it never took one inside `build/`.
+- In the library, `parseGlob(...).glob.literals` leaves out an alternative
+  written with a trailing `/`, and the base `globBases` gives for
+  `{src/newmod/,lib}` is `src/newmod` whatever the tree holds, where it was
+  `src` while the tree did not hold the directory.
+
 ## 0.2.4
 
 spec-core at 65ef842. Archival rewrites a link reference definition only

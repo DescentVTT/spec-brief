@@ -166,3 +166,15 @@ written over lines, and spec-core lists none there now, since no bracket
 pairs across a definition's line. Side by side over 600,000 random
 documents, the destinations archival rewrites differ from 0.2.3's by these
 readings and the brackets around them alone, and none is found twice.
+
+## Amended 2026-09-28: copied again at f9ce375
+
+The copy was taken again at spec-core f9ce375, and two of its changes are
+about globs. A trailing `/` on a brace alternative means that directory's
+contents, as one on the whole pattern does, so `{src/newmod/,lib}` reads as
+`src/newmod/` and `lib` each read alone
+([ADR-0005](0005-scopes-collide-by-intersection.md), amended). A pattern that
+compiles to more than 65,536 states is a refusal spec-core returns, where it
+threw `AutomatonTooLarge` and `src/glob.ts` caught it; the catch went, and
+the `glob` finding reads as it did, since the reason is the message the
+exception carried. Every other change in the copy is a comment.
