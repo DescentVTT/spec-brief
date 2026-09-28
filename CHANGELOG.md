@@ -2,6 +2,21 @@
 
 Notable changes, newest first. Versions follow [semver](https://semver.org).
 
+## Unreleased
+
+### Changed
+
+- `literal-read-as-file` advises the pattern as written with a `/` ending
+  each alternative it names, where it said to write a directory with a
+  trailing `/`, in an entry of its own. Since 0.2.5 a trailing `/` on a
+  brace alternative says directory, so for `lib/{util,new}` in a tree
+  without `lib/new` the hint is `write "lib/{util,new/}" for a directory,
+  or "lib/new/" in an entry of its own`. Where more of the pattern follows
+  the braces, `{a,b}/new`, a `/` inside them cannot end one alternative
+  alone, and the hint names the entries: `write "a/new/" and "b/new/" for
+  directories, in entries of their own`. What the note fires on is
+  unchanged.
+
 ## 0.2.5
 
 spec-core at f9ce375. A trailing `/` on a brace alternative means that

@@ -25,7 +25,7 @@ files -> brief.ts -> corpus.ts -> rules.ts / collisions.ts / schedule.ts / archi
 | `text.ts` | Lines, line endings, section-name normalisation, slugs, templates. |
 | `frontmatter.ts` | spec-core's front-matter reader over a brief's lines: the flat YAML subset, one key edited without touching the rest, and which blocks can be written into. |
 | `markdown.ts` | spec-core's scanner in spec-brief's dialect: ATX headings and sections outside block quotes, GFM task boxes, the link destinations archival rewrites. |
-| `glob.ts` | Scope patterns over spec-core's `path` dialect: spec-brief's refusals, reading a literal from the tree, the 0.1 library functions. |
+| `glob.ts` | Scope patterns over spec-core's `path` dialect: spec-brief's refusals, reading a literal from the tree, where each brace alternative is written, the 0.1 library functions. |
 | `scope.ts` | A brief's writable scope, affected less protected; where two scopes meet; patterns the protections cover. |
 | `vendor/spec-core/` | spec-core's `pattern` and `markdown` modules, with the `path` and `text` modules they import, copied by its `scripts/vendor.mjs` and verified by hash, with spec-core's `LICENSE`, which the package ships. Never edited here. |
 | `links.ts` | Relative paths, and rewriting links when a file moves. |
