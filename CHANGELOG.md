@@ -2,7 +2,7 @@
 
 Notable changes, newest first. Versions follow [semver](https://semver.org).
 
-## Unreleased
+## 0.2.7
 
 spec-core at 7e41240: a brace alternative that starts with `/`, such as
 `{/docs,src}`, is refused as a pattern that starts with one is, where the
