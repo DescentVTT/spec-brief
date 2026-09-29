@@ -190,3 +190,13 @@ glob already made names the alternative, `{.,src}` as `"."` and `{,src}` as
 an empty pattern, where each was `the pattern names no path`. spec-core also
 refuses `/./` as it refuses `/.`; spec-brief refuses a leading `/` before
 spec-core reads a pattern, so that reaches no scope.
+
+## Amended 2026-09-29: copied again at 7e41240
+
+The copy was taken again at spec-core 7e41240, whose one change is to the
+glob: a leading `/` on a brace alternative roots that alternative at the
+filesystem's root, as one on the whole pattern does, so `{/docs,src}` is
+`/docs` or `src`, where the slash was dropped and it read `docs` or `src`.
+spec-brief refuses such an alternative, as it refuses a pattern that starts
+with `/` ([ADR-0005](0005-scopes-collide-by-intersection.md), amended), so no
+scope reads one rooted. Only `pattern/glob.ts` changed.

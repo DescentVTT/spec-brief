@@ -182,3 +182,38 @@ against spec-core again over a corpus with `.` and `./` among its atoms. At
 f9ce375 it met patterns such as `{./a/,./}`, whose alternatives written alone
 did not read as the pattern, since `./` alone was refused; spec-core refuses
 them now, and on each pattern of the corpus it accepts the two agree.
+
+## Amended 2026-09-29: an alternative that starts with "/"
+
+spec-core 7e41240 reads a leading `/` on a brace alternative as it reads one
+on the whole pattern, and the copy took it
+([ADR-0001](0001-no-runtime-dependencies.md), amended). `{/docs,src}` was
+`docs` or `src`: the core read the pattern's own leading slash before it
+expanded the braces, and one an alternative gave after, as an empty segment,
+which names nothing. Now it is `/docs`, rooted at the filesystem's root,
+which no repository path is under, or `src`. Read so, `docs` would fall out
+of the scope with nothing said, and a collision with a brief writing
+`docs/a.md` would be missed. spec-brief refuses a pattern that starts with
+`/`, since a scope is the repository's, and it refuses such an alternative
+the same way, as `glob`'s error, naming the text the braces give:
+`a pattern is relative to the repository root, and the braces expand to
+"/docs", which starts with "/"`.
+
+A leading `./` is dropped first, from an alternative as from a whole
+pattern, so `{.//docs,src}` and `./{/docs,src}` are refused as naming
+`/docs`. `.//docs` alone is refused in the words `/docs` is: spec-core read
+it as `/docs` already, and spec-brief, which looked for a `/` at the start,
+passed it on to scope nothing. A `/` after anything else starts no text:
+`docs/{/a,b}` is `docs//a`, which is `docs/a`, or `docs/b`, as it read
+before.
+
+The bases spec-core gives would decide the refusal alone, since the base of
+every alternative it roots starts with `/`, but they do not say which
+alternative that was. spec-core keeps nothing of the texts its braces give,
+so `src/glob.ts` reads them as the core expands them, escapes, classes and
+lone braces included, once the core has parsed the pattern. A generated
+corpus holds the two together: a pattern is refused exactly where the core
+gives a base that starts with `/`, and the text named is rooted written
+alone. `writtenAlternatives` is checked against spec-core again over a
+corpus with `/` and `/a` among its atoms, and on each pattern of it that
+spec-brief accepts the two agree.

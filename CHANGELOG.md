@@ -2,6 +2,39 @@
 
 Notable changes, newest first. Versions follow [semver](https://semver.org).
 
+## Unreleased
+
+spec-core at 7e41240: a brace alternative that starts with `/`, such as
+`{/docs,src}`, is refused as a pattern that starts with one is, where the
+new copy roots it at the filesystem's root and `docs` would have left the
+scope unsaid. So is `.//docs`, which spec-core read as `/docs` already.
+
+### Changed
+
+- spec-core at 7e41240. It reads a leading `/` on a brace alternative as it
+  reads one on the whole pattern, so `{/docs,src}` is `/docs`, rooted at
+  the filesystem's root, or `src`, where the slash was dropped and it read
+  `docs` or `src`. spec-brief refuses it, as it refuses `/docs`: in
+  `affectedFiles` or `protectedFiles` it is a `glob` error, `a pattern is
+  relative to the repository root, and the braces expand to "/docs", which
+  starts with "/"`, and a `files` or `exclude` pattern spelt so is a
+  configuration problem, and the run exits 2. Read as the copy reads it,
+  `docs` would have fallen out of the scope, the protection or the briefs
+  a run reads, with nothing said. `{src,/docs}`, nested braces,
+  `{//docs,src}`, `{.//docs,src}`, `./{/docs,src}` and `{a,/b}c` are
+  refused the same way, each naming the text the braces give. A `/` after
+  a name starts no text, and reads as it did: `docs/{/a,b}` is `docs/a` or
+  `docs/b`, and `a{/b,c}` is `a/b` or `ac`.
+
+### Fixed
+
+- A pattern that starts with `./` and then `/`, such as `.//docs`, is
+  refused as `/docs` is, `a pattern is relative to the repository root and
+  cannot start with "/"`. spec-core drops the `./` and reads `/docs`,
+  rooted at the filesystem's root, so in a scope it matched nothing and no
+  finding said so, and as `files` it read no briefs. `./docs` reads as it
+  did.
+
 ## 0.2.6
 
 spec-core at 56c7e54: a brace alternative that names no path, such as
