@@ -363,6 +363,46 @@ describe('scopes', () => {
     expect(await findings({ [A]: goodBrief({ affectedFiles: '[./docs/**]', protectedFiles: '[./docs/a.md]' }) })).toEqual([]);
   });
 
+  it('refuses a brace alternative that starts with "/", as a pattern that starts with one is, naming the alternative', async () => {
+    // spec-core reads "{/docs,lib}" as "/docs", rooted at the filesystem's
+    // root, or "lib": "docs" fell out of the scope and nothing said so. It
+    // read "docs" or "lib" before, and a protection "{src/db,/src/db}"
+    // protected "src/db" twice.
+    const found = await findings({ [A]: goodBrief({ affectedFiles: '[src/**, "{/docs,lib}"]', protectedFiles: '["{src/db,/src/db}"]' }) });
+    expect(found.map((f) => [f.rule, f.line, f.message, f.hint])).toEqual([
+      [
+        'glob',
+        3,
+        '"{/docs,lib}" in affectedFiles: a pattern is relative to the repository root, and the braces expand to "/docs", which starts with "/"',
+        'a scope is a glob relative to the repository root: "src/auth/", "src/**/*.ts", "docs/{a,b}.md"',
+      ],
+      [
+        'glob',
+        4,
+        '"{src/db,/src/db}" in protectedFiles: a pattern is relative to the repository root, and the braces expand to "/src/db", which starts with "/"',
+        'a scope is a glob relative to the repository root: "src/auth/", "src/**/*.ts", "docs/{a,b}.md"',
+      ],
+    ]);
+    // Wherever the alternative is written, in the words of the text the braces give.
+    for (const [pattern, text] of [
+      ['{lib,/docs}', '/docs'],
+      ['{lib,{/docs,x}}', '/docs'],
+      ['{//docs,lib}', '//docs'],
+    ] as const) {
+      const refused = await findings({ [A]: goodBrief({ affectedFiles: JSON.stringify([pattern]) }) });
+      expect(refused.map((f) => [f.rule, f.message]), pattern).toEqual([
+        ['glob', `"${pattern}" in affectedFiles: a pattern is relative to the repository root, and the braces expand to "${text}", which starts with "/"`],
+      ]);
+    }
+    // A pattern that starts with "/" is refused in its own words, as it was.
+    const whole = await findings({ [A]: goodBrief({ affectedFiles: '["/docs"]' }) });
+    expect(whole.map((f) => f.message)).toEqual(['"/docs" in affectedFiles: a pattern is relative to the repository root and cannot start with "/"']);
+    // A "/" that starts no text reads as it did: "docs/{/a,b}" is "docs//a", which is "docs/a".
+    for (const pattern of ['{docs,lib}', 'docs/{/a,b}', 'docs{/a,.md}']) {
+      expect(await findings({ [A]: goodBrief({ affectedFiles: JSON.stringify([pattern]) }) }), pattern).toEqual([]);
+    }
+  });
+
   it('refuses a brace alternative that names no path, as the same text written alone is, naming the alternative', async () => {
     // "{./,docs}" read "./" as the contents of ".", every path, where "./"
     // alone is refused: it protected everything, so every affected pattern

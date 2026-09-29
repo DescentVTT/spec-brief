@@ -149,6 +149,17 @@ describe('resolving a configuration', () => {
     // "./" inside braces read as every name, so every file in the directory was a brief, or none was.
     expect(problems({ files: '{./,*.md}' })).toEqual(['"files" pattern "{./,*.md}": the braces expand to "./", which names no path']);
     expect(problems({ exclude: ['{./,draft-*.md}'] })).toEqual(['"exclude" pattern "{./,draft-*.md}": the braces expand to "./", which names no path']);
+    // "{/README.md,*.md}" read "/README.md" as "README.md"; spec-core roots it
+    // at the filesystem's root now, and "README.md" would have stopped
+    // matching with nothing said.
+    expect(problems({ files: '{/README.md,*.md}' })).toEqual([
+      '"files" pattern "{/README.md,*.md}": a pattern is relative to the repository root, and the braces expand to "/README.md", which starts with "/"',
+    ]);
+    expect(problems({ exclude: ['{draft-*.md,/x.md}'] })).toEqual([
+      '"exclude" pattern "{draft-*.md,/x.md}": a pattern is relative to the repository root, and the braces expand to "/x.md", which starts with "/"',
+    ]);
+    expect(problems({ files: '/*.md' })).toEqual(['"files" pattern "/*.md": a pattern is relative to the repository root and cannot start with "/"']);
+    expect(problems({ files: '{brief,x}{/,-}*.md' })).toEqual([]);
     expect(problems({ archiving: { banner: ['{date} {sumary}'] } })).toEqual([
       expect.stringContaining('"archiving.banner" uses {sumary}; the placeholders are {date}'),
     ]);
