@@ -260,7 +260,7 @@ spec-brief:
       codequality: gl-code-quality.json
 ```
 
-An error is `major`, a warning `minor` and a note `info`; GitLab's `critical` and `blocker` are for security holes and crashes, which no finding here is. The fingerprint is a SHA-256 of the rule, the file and the message, and not the line, so a finding that moves is the same issue. `json` is a versioned document for anything else: `schemaVersion` changes when a field changes meaning, and is 2 since a collision became a pair of briefs rather than a pair of patterns.
+An error is `major`, a warning `minor` and a note `info`; GitLab's `critical` and `blocker` are for security holes and crashes, which no finding here is. The `description` is the message and the next action. The fingerprint is a SHA-256 of what the finding is: its rule, its file, its brief, and what it is about there - a section, a pattern, a dependency, the other brief of a pair - never the message, the hint or the line. So a finding that moves, or is worded another way, or a collision that names another file both briefs write, is the same issue; two findings alike in all four, such as two problems in one front matter, are told apart by their order. `json` is a versioned document for anything else: `schemaVersion` changes when a field changes meaning, and is 2 since a collision became a pair of briefs rather than a pair of patterns.
 
 ## As a library
 
@@ -300,6 +300,8 @@ export default (options) => ({
 ```json
 { "plugins": [{ "module": "./tools/departures.mjs", "options": { "marker": "Signed-off-by" } }] }
 ```
+
+A result is `{ line, message }`, with an optional `hint`, the next action; `severity`, lower than the rule's for this one finding; and `subject`, what the finding is about where the rule can report several in one brief, which GitLab's fingerprint is built from.
 
 This is where integrations belong. A tool that defines a format - signed departures, recorded reproducers, a code graph's blast radius - is the one that can check it, and spec-brief carries no copy of formats it does not own. Loading a plugin runs its code, exactly as loading a linter configuration does.
 

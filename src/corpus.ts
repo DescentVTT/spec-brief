@@ -203,6 +203,14 @@ export function dependencyCycles(corpus: Corpus): Brief[][] {
   });
 }
 
+/**
+ * A cycle as a finding's subject: the briefs on it, each once, in order. `lint`
+ * and `schedule` word a cycle differently and report it as one problem.
+ */
+export function cycleSubject(cycle: readonly Brief[]): string {
+  return [...new Set(cycle.map((b) => b.id ?? b.name))].sort().join(', ');
+}
+
 /** A path from `start` back to itself inside one component, found breadth-first. */
 function cyclePath(start: Brief, members: ReadonlySet<Brief>, edges: ReadonlyMap<Brief, Brief[]>): Brief[] {
   const previous = new Map<Brief, Brief>();

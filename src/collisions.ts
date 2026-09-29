@@ -156,6 +156,7 @@ export function undecidedFinding(severity: Severity, a: Brief, b: Brief, pattern
     line: lineOfField(b, 'affectedFiles') + 1,
     brief: b.id ?? undefined,
     hint: 'narrow one of the patterns, or run the two in different waves',
+    subject: label(a),
   };
 }
 
@@ -180,6 +181,8 @@ export function collisionFindings(corpus: Corpus, report: CollisionReport): Find
           line: lineOfField(c.b, 'affectedFiles') + 1,
           brief: c.b.id ?? undefined,
           hint: `run them in different waves, make one depend on the other, or narrow a scope`,
+          // The pair is the problem, whichever patterns meet and whatever file is named.
+          subject: label(c.a),
         });
       }
     }
@@ -196,6 +199,7 @@ export function collisionFindings(corpus: Corpus, report: CollisionReport): Find
           line: lineOfField(s.b, 'affectedFiles') + 1,
           brief: s.b.id ?? undefined,
           hint: 'check that the two do not depend on one decision in that directory; if they do, order them',
+          subject: label(s.a),
         });
       }
     }

@@ -41,4 +41,13 @@ export interface Finding {
   readonly path?: string | undefined;
   /** The paths of a finding about several, such as the files a round changed outside its scope. */
   readonly paths?: readonly string[] | undefined;
+  /**
+   * What the finding is about within its brief, where a rule can report more
+   * than one thing there: a section, a pattern, a dependency, the other brief
+   * of a pair. With the rule, the file and the brief it is the finding's
+   * identity, which the GitLab fingerprint is built from, so it holds no
+   * count, no witness and nothing else a message says that can change while
+   * the problem stays.
+   */
+  readonly subject?: string | undefined;
 }

@@ -10,7 +10,7 @@
 
 import { BUILT_IN_FIELDS, type Brief, knownFields, lineOfField } from './brief.js';
 import { type Config, type SectionRule, statusWords } from './config.js';
-import { type Corpus, dependencyCycles, duplicateIds, idKey, resolveDependency } from './corpus.js';
+import { type Corpus, cycleSubject, dependencyCycles, duplicateIds, idKey, resolveDependency } from './corpus.js';
 import { findEntry } from './frontmatter.js';
 import { integrityOf } from './integrity.js';
 import { type Glob, hasExtension, held, isGlobSyntax, matchGlob, parseGlob, readingIn, treeOf, WITNESS_BUDGET, writtenAlternatives } from './glob.js';
@@ -28,6 +28,8 @@ export interface RuleResult {
   readonly hint?: string | undefined;
   /** Lower than the rule's severity for this one finding, as a draft's unwritten sections are. */
   readonly severity?: Severity | undefined;
+  /** What the finding is about, where the rule can report more than one thing in a brief: a finding's `subject`. */
+  readonly subject?: string | undefined;
 }
 
 export interface RuleContext {
@@ -171,6 +173,7 @@ export function scopeContradiction(brief: Brief, repoFiles: readonly string[] | 
       line,
       message: `${quoted(covered)} in affectedFiles ${one ? 'is' : 'are'} entirely protected, so nothing of ${one ? 'it' : 'them'} is writable`,
       hint: `drop ${one ? 'it' : 'them'} from affectedFiles, or narrow protectedFiles so that some of ${one ? 'it' : 'each'} is writable`,
+      subject: 'covered',
     });
   }
   if (undecided.length > 0) {
@@ -179,6 +182,7 @@ export function scopeContradiction(brief: Brief, repoFiles: readonly string[] | 
       message: `whether ${quoted(undecided)} in affectedFiles ${undecided.length === 1 ? 'is' : 'are'} entirely protected is undecided: the search met its budget`,
       hint: 'simplify the patterns until the question can be answered',
       severity: 'warning',
+      subject: 'undecided',
     });
   }
   return results;
@@ -200,7 +204,7 @@ export const RULES: readonly Rule[] = [
     id: 'field',
     severity: 'error',
     description: 'Fields spec-brief reads hold values of the right shape.',
-    check: ({ brief }) => brief.problems.map((p) => ({ line: at(p.line), message: p.message })),
+    check: ({ brief }) => brief.problems.map((p) => ({ line: at(p.line), message: p.message, subject: p.field })),
   },
   {
     id: 'unknown-field',
@@ -215,6 +219,7 @@ export const RULES: readonly Rule[] = [
           return {
             line: at(entry.line),
             message: `"${entry.key}" is not a key spec-brief knows`,
+            subject: entry.key,
             hint:
               guess === undefined
                 ? `if the repository uses it, list it under "fields" in the configuration`
@@ -346,6 +351,7 @@ export const RULES: readonly Rule[] = [
           return {
             line: at(brief.bodyStart),
             message: `has no "${rule.name}" section`,
+            subject: rule.name,
             hint: rule.hint === undefined ? heading : `${heading}. ${rule.hint}`,
           };
         }),
@@ -359,7 +365,7 @@ export const RULES: readonly Rule[] = [
       sectionRules(brief, config).flatMap((rule) =>
         sectionsFilling(brief, rule)
           .slice(1)
-          .map((s) => ({ line: at(s.heading.line), message: `a second "${rule.name}" section`, hint: 'merge the two' })),
+          .map((s) => ({ line: at(s.heading.line), message: `a second "${rule.name}" section`, hint: 'merge the two', subject: rule.name })),
       ),
     ),
   },
@@ -375,6 +381,7 @@ export const RULES: readonly Rule[] = [
           .map((s) => ({
             line: at(s.heading.line),
             message: `the "${rule.name}" section is empty`,
+            subject: rule.name,
             hint: rule.hint ?? 'write it; a comment alone is not content',
             severity: leniency(brief),
           })),
@@ -396,6 +403,7 @@ export const RULES: readonly Rule[] = [
           .map((s) => ({
             line: at(s.heading.line),
             message: `the "${rule.name}" section holds only a placeholder`,
+            subject: rule.name,
             hint: rule.hint ?? 'replace the placeholder with what the section must say',
             severity: leniency(brief),
           })),
@@ -416,6 +424,7 @@ export const RULES: readonly Rule[] = [
             .map((s) => ({
               line: at(s.heading.line),
               message: `the "${rule.name}" section has no "- [ ]" items`,
+              subject: rule.name,
               hint: 'write each check as a task item, so it has a state that can be closed',
               severity: leniency(brief),
             })),
@@ -433,7 +442,7 @@ export const RULES: readonly Rule[] = [
         const body = brief.scan.prose.slice(section.heading.line + 1, section.end).join('\n');
         return rule.mustContain
           .filter((text) => !body.includes(text))
-          .map((text) => ({ line: at(section.heading.line), message: `the "${rule.name}" section must contain "${text}"` }));
+          .map((text) => ({ line: at(section.heading.line), message: `the "${rule.name}" section must contain "${text}"`, subject: `${rule.name}: "${text}"` }));
       }),
     ),
   },
@@ -472,10 +481,10 @@ export const RULES: readonly Rule[] = [
       brief.dependsOn.flatMap((dependency) => {
         const line = at(lineOfField(brief, 'dependsOn'));
         if (brief.id !== null && idKey(dependency) === idKey(brief.id)) {
-          return [{ line, message: 'depends on itself' }];
+          return [{ line, message: 'depends on itself', subject: dependency }];
         }
         if (resolveDependency(corpus, dependency) === undefined) {
-          return [{ line, message: `depends on "${dependency}", which is not a brief here` }];
+          return [{ line, message: `depends on "${dependency}", which is not a brief here`, subject: dependency }];
         }
         return [];
       }),
@@ -491,6 +500,7 @@ export const RULES: readonly Rule[] = [
         .map((cycle) => ({
           line: at(lineOfField(brief, 'dependsOn')),
           message: `dependencies form a cycle: ${cycle.map((b) => b.id ?? b.name).join(' -> ')}`,
+          subject: cycleSubject(cycle),
           hint: 'a cycle can never become ready; remove the dependency that is not real',
         })),
     ),
@@ -510,6 +520,7 @@ export const RULES: readonly Rule[] = [
           {
             line: at(lineOfField(brief, 'dependsOn')),
             message: `depends on ${target.id ?? target.name}, which is in wave ${target.wave}, not before wave ${wave}`,
+            subject: target.id ?? target.name,
             hint: `move this brief to a wave after ${target.wave}, or ${target.id ?? target.name} to one before ${wave}`,
           },
         ];
@@ -559,6 +570,7 @@ export const RULES: readonly Rule[] = [
             {
               line: at(lineOfField(brief, field)),
               message: `"${pattern}" in ${field}: ${parsed.error}`,
+              subject: `${field}: ${pattern}`,
               hint: 'a scope is a glob relative to the repository root: "src/auth/", "src/**/*.ts", "docs/{a,b}.md"',
             },
           ];
@@ -586,6 +598,7 @@ export const RULES: readonly Rule[] = [
           .map((p) => ({
             line: at(lineOfField(brief, field)),
             message: `"${p.pattern}" in ${field} matches no file in the tree`,
+            subject: `${field}: ${p.pattern}`,
             hint: 'expected when the round creates it; otherwise check the spelling',
           })),
       );
@@ -604,14 +617,16 @@ export const RULES: readonly Rule[] = [
           if (paths.length === 0) return [];
           const line = at(lineOfField(brief, field));
           const hint = directoryAdvice(pattern, paths);
+          const subject = `${field}: ${pattern}`;
           if (!isGlobSyntax(pattern)) {
-            return [{ line, message: `"${pattern}" in ${field} is not in the tree and is read as a file`, hint }];
+            return [{ line, message: `"${pattern}" in ${field} is not in the tree and is read as a file`, hint, subject }];
           }
           return [
             {
               line,
               message: `"${pattern}" in ${field} names ${inWords(paths)}, which ${paths.length === 1 ? 'is' : 'are'} not in the tree and ${paths.length === 1 ? 'is' : 'are'} read as ${paths.length === 1 ? 'a file' : 'files'}`,
               hint,
+              subject,
             },
           ];
         }),
