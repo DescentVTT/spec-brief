@@ -8,8 +8,9 @@
  * spec-brief adds around it:
  *
  * - A pattern is relative to the repository root, so a leading `/` is refused
- *   rather than rooted at the filesystem; and a list entry's `!` has no list to
- *   belong to in a scope, so it is refused rather than read.
+ *   rather than rooted at the filesystem, one after a leading `./` too, as in
+ *   `.//docs`; and a list entry's `!` has no list to belong to in a scope, so
+ *   it is refused rather than read.
  * - Paths compare case-sensitively on every host, as git's do.
  * - A path with no glob syntax is read as the tree reads it: a file the tree
  *   holds is that file, a directory it holds is everything beneath it, and a
@@ -73,7 +74,7 @@ export interface ParseOptions {
 export function parseGlob(source: string, options: ParseOptions = {}): GlobParse {
   const pattern = source.trim();
   if (pattern.startsWith('!')) return { ok: false, error: 'negated patterns are not supported; narrow the positive pattern' };
-  if (pattern.startsWith('/')) return { ok: false, error: 'a pattern is relative to the repository root and cannot start with "/"' };
+  if (undotted(pattern).startsWith('/')) return { ok: false, error: 'a pattern is relative to the repository root and cannot start with "/"' };
   const given = options.literal ?? 'file';
   const literals: Literal[] = [];
   const literal = (path: string): LiteralReading => {
@@ -85,6 +86,17 @@ export function parseGlob(source: string, options: ParseOptions = {}): GlobParse
   // as a malformed one is; what the reading throws is a defect, and passes on.
   const parsed = coreParse(pattern, { dialect: 'path', caseSensitive: true, literal });
   return parsed.ok ? { ok: true, glob: { source, compiled: parsed.glob, literals } } : parsed;
+}
+
+/**
+ * A pattern less the `./` it starts with. spec-core drops it before it reads
+ * a leading `/`, since `.` names nothing: `.//docs` is `/docs`, rooted at the
+ * filesystem's root.
+ */
+function undotted(pattern: string): string {
+  let rest = pattern;
+  while (rest.startsWith('./')) rest = rest.slice(2);
+  return rest;
 }
 
 /**
