@@ -142,30 +142,46 @@ export function sarif(findings: readonly Finding[], version: string): string {
 }
 
 /**
- * GitLab's Code Quality severities. An error fails the run but is not a
- * security hole or a crash, which is what `critical` and `blocker` say in
+ * GitLab's Code Quality severities, as the family maps them: an error is
+ * `major`, a warning `minor`, a note `info`. An error fails the run but is not
+ * a security hole or a crash, which is what `critical` and `blocker` say in
  * GitLab's own reports, so the scale tops out at `major`.
  */
 const GITLAB_SEVERITY: Readonly<Record<Severity, string>> = { error: 'major', warning: 'minor', note: 'info' };
 
 /**
+ * What a finding is, whatever it says: its rule, its file, its brief, and what
+ * it is about there - a section, a pattern, the other brief of a pair, the one
+ * path a refusal names. Never the message, the hint or the line.
+ */
+function identity(f: Finding): readonly string[] {
+  return [f.rule, f.file, f.brief ?? '', f.subject ?? f.path ?? ''];
+}
+
+/**
  * GitLab Code Quality: a JSON array of issues, which a merge request shows
  * beside the lines they are on. The fingerprint is how GitLab tells a new
- * issue from one it has seen, so it hashes the rule, the file and the message
- * and not the line: a finding that moves down a page is the same finding. Two
- * findings with the same three - a section duplicated twice - are told apart
- * by their order.
+ * issue from one it has seen, so it hashes the finding's identity and nothing
+ * that changes while the problem stays: not the line, so a finding that moves
+ * down a page is the same finding, and not the message, so rewording one, or
+ * naming another file two colliding briefs both write, does not show as one
+ * problem fixed and another found. Findings that share an identity - a front
+ * matter with two problems - are told apart by their order, the second hashed
+ * with a `2`, as spec-graph hashes them. The description carries the next
+ * action as well as the message.
  */
 export function gitlabCodeQuality(findings: readonly Finding[]): string {
   const seen = new Map<string, number>();
   const issues = findings.map((f) => {
-    const key = `${f.rule}\u0000${f.file}\u0000${f.message}`;
-    const repeat = seen.get(key) ?? 0;
-    seen.set(key, repeat + 1);
+    const key = JSON.stringify(identity(f));
+    const occurrence = (seen.get(key) ?? 0) + 1;
+    seen.set(key, occurrence);
     return {
       description: f.hint === undefined ? f.message : `${f.message}. ${f.hint}`,
       check_name: f.rule,
-      fingerprint: createHash('sha256').update(repeat === 0 ? key : `${key}\u0000${repeat}`).digest('hex'),
+      fingerprint: createHash('sha256')
+        .update(occurrence === 1 ? key : JSON.stringify([...identity(f), occurrence]))
+        .digest('hex'),
       severity: GITLAB_SEVERITY[f.severity],
       location: { path: f.file, lines: { begin: f.line } },
     };

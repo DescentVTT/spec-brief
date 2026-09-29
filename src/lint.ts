@@ -131,6 +131,7 @@ export async function lint(corpus: Corpus, options: LintOptions = {}): Promise<F
           line: Math.max(1, Math.trunc(result.line)),
           brief: brief.id ?? undefined,
           hint: result.hint,
+          subject: result.subject,
         });
       }
     }

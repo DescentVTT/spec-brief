@@ -3,7 +3,7 @@ import { createHash } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 
 import { planArchive } from '../src/archive.js';
-import { collisions } from '../src/collisions.js';
+import { collisionFindings, collisions } from '../src/collisions.js';
 import { definePlugin } from '../src/index.js';
 import { lint } from '../src/lint.js';
 import {
@@ -25,7 +25,7 @@ import {
   titleWithoutId,
 } from '../src/report.js';
 import { fileNameFor, nextId, renderNewBrief } from '../src/scaffold.js';
-import { schedule } from '../src/schedule.js';
+import { schedule, scheduleFindings } from '../src/schedule.js';
 import type { Finding } from '../src/types.js';
 import { config, corpusOf, goodBrief } from './helpers.js';
 
@@ -85,33 +85,133 @@ describe('machine formats', () => {
     expect(run.results[1]?.level).toBe('note');
   });
 
-  it('writes GitLab Code Quality issues, fingerprinted by rule, file and message', () => {
-    const sha = (text: string): string => createHash('sha256').update(text).digest('hex');
+  it('writes GitLab Code Quality issues, fingerprinted by what each finding is about', () => {
+    const sha = (identity: readonly unknown[]): string => createHash('sha256').update(JSON.stringify(identity)).digest('hex');
     const issues = JSON.parse(
       gitlabCodeQuality([
-        finding({ rule: 'missing-section', line: 4, message: 'has no "Intent" section', hint: 'add it' }),
+        finding({ rule: 'missing-section', line: 4, message: 'has no "Intent" section', hint: 'add it', brief: '001', subject: 'Intent' }),
         finding({ rule: 'acme/x', severity: 'warning', file: 'b.md', line: 2 }),
         finding({ severity: 'note', line: 9 }),
         finding({ severity: 'note', line: 12 }),
+        finding({ rule: 'protected-file', line: 5, path: 'src/db/schema.ts' }),
       ]),
     ) as unknown[];
     expect(issues).toEqual([
       {
         description: 'has no "Intent" section. add it',
         check_name: 'missing-section',
-        fingerprint: sha('missing-section\u0000a.md\u0000has no "Intent" section'),
+        fingerprint: sha(['missing-section', 'a.md', '001', 'Intent']),
         severity: 'major',
         location: { path: 'a.md', lines: { begin: 4 } },
       },
-      { description: 'm', check_name: 'acme/x', fingerprint: sha('acme/x\u0000b.md\u0000m'), severity: 'minor', location: { path: 'b.md', lines: { begin: 2 } } },
+      { description: 'm', check_name: 'acme/x', fingerprint: sha(['acme/x', 'b.md', '', '']), severity: 'minor', location: { path: 'b.md', lines: { begin: 2 } } },
       // Two findings alike but for their line are two issues, told apart by their order.
-      { description: 'm', check_name: 'r', fingerprint: sha('r\u0000a.md\u0000m'), severity: 'info', location: { path: 'a.md', lines: { begin: 9 } } },
-      { description: 'm', check_name: 'r', fingerprint: sha('r\u0000a.md\u0000m\u00001'), severity: 'info', location: { path: 'a.md', lines: { begin: 12 } } },
+      { description: 'm', check_name: 'r', fingerprint: sha(['r', 'a.md', '', '']), severity: 'info', location: { path: 'a.md', lines: { begin: 9 } } },
+      { description: 'm', check_name: 'r', fingerprint: sha(['r', 'a.md', '', '', 2]), severity: 'info', location: { path: 'a.md', lines: { begin: 12 } } },
+      // A finding about one path, and no other subject, is about that path.
+      { description: 'm', check_name: 'protected-file', fingerprint: sha(['protected-file', 'a.md', '', 'src/db/schema.ts']), severity: 'major', location: { path: 'a.md', lines: { begin: 5 } } },
     ]);
-    // A finding that moves keeps its fingerprint.
-    const moved = JSON.parse(gitlabCodeQuality([finding({ line: 40 })])) as { fingerprint: string }[];
-    expect(moved[0]?.fingerprint).toBe(sha('r\u0000a.md\u0000m'));
+    const print = (over: Partial<Finding>): string => (JSON.parse(gitlabCodeQuality([finding(over)])) as { fingerprint: string }[])[0]!.fingerprint;
+    // Moved, or worded another way, a finding is the same issue.
+    expect(print({ line: 40, message: 'said another way', hint: 'and another hint' })).toBe(print({}));
+    // About another thing, or in another brief, it is another.
+    expect(print({ subject: 'Intent' })).not.toBe(print({ subject: 'Invariants' }));
+    expect(print({ brief: '001' })).not.toBe(print({ brief: '002' }));
     expect(gitlabCodeQuality([])).toBe('[]\n');
+  });
+
+  it('names what each finding is about, which its fingerprint is built from', async () => {
+    const about = (found: readonly Finding[]): string[] => found.map((f) => `${f.rule} ${f.subject ?? '-'}`).sort();
+    const cfg = config({ sections: ['Intent', { name: 'Negative Scope', mustContain: ['one', 'two'] }, { name: 'Invariants', checklist: true }, 'Report'] });
+    const text = [
+      '---',
+      'status: active',
+      'wave: two',
+      'owner: me',
+      'dependsOn: [001, 404]',
+      'affectedFiles: ["/abs", src/newmod, "docs/*.md"]',
+      '---',
+      '',
+      '# A',
+      '',
+      '## Intent',
+      '',
+      'TBD',
+      '',
+      '## Intent',
+      '',
+      'again',
+      '',
+      '## Negative Scope',
+      '',
+      '<!-- unwritten -->',
+      '',
+      '## Invariants',
+      '',
+      'no boxes',
+      '',
+    ].join('\n');
+    expect(about(await lint(corpusOf({ 'briefs/001_a.md': text }, cfg), { repoFiles: ['src/a.ts'] }))).toEqual([
+      'dependency 001',
+      'dependency 404',
+      'duplicate-section Intent',
+      'empty-section Negative Scope',
+      'field wave',
+      'glob affectedFiles: /abs',
+      'glob-matches-nothing affectedFiles: docs/*.md',
+      'literal-read-as-file affectedFiles: src/newmod',
+      'missing-checklist Invariants',
+      'missing-section Report',
+      'must-contain Negative Scope: "one"',
+      'must-contain Negative Scope: "two"',
+      'placeholder Intent',
+      'unknown-field owner',
+    ]);
+    const ordered = corpusOf({
+      'briefs/001_a.md': goodBrief({ wave: '1', dependsOn: '[002]' }),
+      'briefs/002_b.md': goodBrief({ wave: '1', dependsOn: '[001]' }),
+      'briefs/003_c.md': goodBrief({ wave: '1', dependsOn: '[004]' }),
+      'briefs/004_d.md': goodBrief({ wave: '2' }),
+      // A cycle walked 005, 007, 006 is named by its briefs in order.
+      'briefs/005_e.md': goodBrief({ dependsOn: '[007]' }),
+      'briefs/006_f.md': goodBrief({ dependsOn: '[005]' }),
+      'briefs/007_g.md': goodBrief({ dependsOn: '[006]' }),
+    });
+    const linted = await lint(ordered);
+    expect(about(linted)).toEqual(['dependency-cycle 001, 002', 'dependency-cycle 005, 006, 007', 'wave-order 002', 'wave-order 001', 'wave-order 004'].sort());
+    // lint and schedule word a cycle differently, and GitLab sees one problem.
+    const scheduled = scheduleFindings(ordered, schedule(ordered)).filter((f) => f.rule === 'dependency-cycle');
+    const cycle = linted.filter((f) => f.rule === 'dependency-cycle');
+    expect(scheduled[0]?.message).not.toBe(cycle[0]?.message);
+    const prints = (found: readonly Finding[]): string[] => (JSON.parse(gitlabCodeQuality(found)) as { fingerprint: string }[]).map((i) => i.fingerprint);
+    expect(prints(scheduled)).toHaveLength(2);
+    expect(prints(scheduled)).toEqual(prints(cycle));
+    // A pair of briefs is about the other brief of the pair.
+    const pairs = corpusOf(
+      {
+        'briefs/001_a.md': goodBrief({ wave: '1', affectedFiles: '[src/**]' }),
+        'briefs/002_b.md': goodBrief({ wave: '1', affectedFiles: '["src/**/x.ts"]' }),
+        'briefs/003_c.md': goodBrief({ wave: '1', affectedFiles: '[lib/a.ts]' }),
+        'briefs/004_d.md': goodBrief({ wave: '1', affectedFiles: '[lib/b.ts]' }),
+        'briefs/005_e.md': goodBrief({ wave: '1' }),
+      },
+      config({ rules: { 'shared-directory': 'note' } }),
+    );
+    expect(about(collisionFindings(pairs, collisions(pairs)))).toEqual(['collision 001', 'shared-directory 003', 'unscoped -']);
+    const unsure = corpusOf({ 'briefs/001_a.md': goodBrief({ wave: '1', affectedFiles: '[src/**]' }), 'briefs/002_b.md': goodBrief({ wave: '1', affectedFiles: '["**/*.ts"]' }) });
+    expect(about(collisionFindings(unsure, collisions(unsure, { budget: 1 })))).toEqual(['collision-undecided 001']);
+  });
+
+  it('gives each finding of a rule in one brief its own fingerprint, which fixing another leaves alone', async () => {
+    const two = goodBrief({ affectedFiles: '["/a", "/b"]', dependsOn: '[x, y]' }).replace('## Intent\n\nThe tree is better.\n\n', '');
+    const prints = async (text: string): Promise<string[]> =>
+      (JSON.parse(gitlabCodeQuality(await lint(corpusOf({ 'briefs/001_a.md': text })))) as { check_name: string; fingerprint: string }[]).map((i) => `${i.check_name} ${i.fingerprint}`);
+    const before = await prints(two);
+    expect(before.map((p) => p.split(' ')[0])).toEqual(['glob', 'glob', 'dependency', 'dependency', 'missing-section']);
+    expect(new Set(before).size).toBe(5);
+    // Each of the pair fixed in turn: the one left keeps the fingerprint it had, not the first's.
+    const after = await prints(two.replace('[x, y]', '[y]').replace('["/a", "/b"]', '["/b"]'));
+    expect(after).toEqual([before[1], before[3], before[4]]);
   });
 
   it('writes GitHub workflow commands with their escapes', () => {

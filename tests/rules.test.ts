@@ -475,6 +475,7 @@ describe('scopes', () => {
         message: 'whether "src/**" and "lib/a.ts" in affectedFiles are entirely protected is undecided: the search met its budget',
         hint: 'simplify the patterns until the question can be answered',
         severity: 'warning',
+        subject: 'undecided',
       },
     ]);
     expect(scopeContradiction(b, null)).toEqual([
@@ -482,6 +483,7 @@ describe('scopes', () => {
         line: 4,
         message: '"lib/a.ts" in affectedFiles is entirely protected, so nothing of it is writable',
         hint: 'drop it from affectedFiles, or narrow protectedFiles so that some of it is writable',
+        subject: 'covered',
       },
     ]);
     const single = brief(goodBrief({ affectedFiles: '[src/**]', protectedFiles: '["**/*.ts"]' }));

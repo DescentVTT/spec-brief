@@ -19,7 +19,7 @@
 import type { FileOp } from './archive.js';
 import { type Brief, lineOfField } from './brief.js';
 import { undecidedFinding, unscopedFinding } from './collisions.js';
-import { byId, type Corpus, dependencyCycles, liveDependencies, waitingOnDeferred } from './corpus.js';
+import { byId, type Corpus, cycleSubject, dependencyCycles, liveDependencies, waitingOnDeferred } from './corpus.js';
 import { editable, setEntryKeepingComment } from './frontmatter.js';
 import { readingIn, WITNESS_BUDGET } from './glob.js';
 import { configuredSeverity } from './lint.js';
@@ -265,6 +265,7 @@ export function scheduleFindings(corpus: Corpus, s: Schedule): Finding[] {
         line: lineOfField(start, 'dependsOn') + 1,
         brief: start.id ?? undefined,
         hint: 'a cycle can never become ready; remove the dependency that is not real',
+        subject: cycleSubject(members),
       });
     }
   }
