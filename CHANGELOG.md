@@ -68,6 +68,14 @@ settles a pair the search could not decide.
   `gitlab` are `lint`'s, `matrix`'s and `schedule`'s alone, where it offered
   all five under the options for every command.
 
+### Documentation
+
+- README reorganised: the scope-pattern rules are a "Scope patterns" list,
+  one rule per item, how a brief is read sits under "A brief", long
+  paragraphs are lists, and options, flags and exit codes are tables;
+  nothing was removed. SECURITY.md says how to report a vulnerability
+  privately.
+
 ## 0.2.7
 
 spec-core at 7e41240: a brace alternative that starts with `/`, such as
