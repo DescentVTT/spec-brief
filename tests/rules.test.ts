@@ -137,6 +137,15 @@ describe('deferral', () => {
     expect(await says('"TBD: when the vendor answers"')).toEqual([]);
   });
 
+  it('reads a trigger written in Chinese: a time is refused, an event passes, and 待定 is a placeholder', async () => {
+    const says = async (trigger: string): Promise<string[]> => (await findings({ [A]: deferred({ trigger }) })).map((f) => f.message);
+    expect(await says('下個月')).toEqual(['the trigger "下個月" is a date or a time, not an event']);
+    expect(await says('2026年10月')).toEqual(['the trigger "2026年10月" is a date or a time, not an event']);
+    expect(await says('當第二個租戶簽約時')).toEqual([]);
+    expect(await says('待定')).toEqual(['the trigger "待定" is a placeholder, not an event']);
+    expect(await says('待确认')).toEqual(['the trigger "待确认" is a placeholder, not an event']);
+  });
+
   it('leaves a trigger of the wrong shape to the field rule, and a brief that is not deferred alone', async () => {
     expect((await findings({ [A]: deferred({ trigger: '[a, b]' }) })).map((f) => f.rule)).toEqual(['field']);
     // Another field's problem is its own finding, and the missing trigger still one.
@@ -222,6 +231,18 @@ describe('sections', () => {
       ['TODOS remain', false],
       ['todo: this is written', true],
       ['Nothing TBD here', false],
+      // The Chinese defaults, and a full-width colon after a placeholder as after any.
+      ['待定', true],
+      ['未定', true],
+      ['- 待補', true],
+      ['- [ ] 待补', true],
+      ['**待確認**', true],
+      ['待确认', true],
+      ['待定：等廠商回覆', true],
+      ['TBD：later', true],
+      // Chinese has no spaces, so a word that goes on is not a placeholder.
+      ['待定事項列在下方', false],
+      ['未定義的行為不再出現', false],
     ];
     for (const [line, expected] of cases) {
       const text = goodBrief().replace('The tree is better.', line);

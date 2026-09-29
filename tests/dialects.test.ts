@@ -583,7 +583,7 @@ describe('configuration', () => {
         refactor: [],
         chore: [],
       },
-      placeholders: ['TBD', 'TBA', 'TODO', 'FIXME', 'XXX', '???', '...', '\u2026'],
+      placeholders: ['TBD', 'TBA', 'TODO', 'FIXME', 'XXX', '???', '...', '\u2026', '待定', '未定', '待補', '待补', '待確認', '待确认'],
       fields: [],
       archiving: {
         tasks: 'all',
