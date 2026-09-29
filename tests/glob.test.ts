@@ -16,6 +16,7 @@ import {
   treeOf,
   writtenAlternatives,
 } from '../src/glob.js';
+import { parseGlob as coreParse } from '../src/vendor/spec-core/pattern/index.js';
 
 function glob(source: string, literal?: LiteralReading | ((path: string) => LiteralReading)): Glob {
   const parsed = parseGlob(source, literal === undefined ? {} : { literal });
@@ -29,6 +30,23 @@ function error(source: string): string {
 }
 
 const matches = (pattern: string, path: string, literal?: LiteralReading): boolean => matchGlob(glob(pattern, literal), path);
+
+/**
+ * Patterns built from `atoms`, each some text, perhaps with braces in it,
+ * then braces, drawn from a sequence seeded with `start`, so that a failure
+ * names a pattern that fails again.
+ */
+function patternsOver(atoms: readonly string[], start: number): () => string {
+  let seed = start;
+  const random = (n: number): number => {
+    seed = (seed * 48271) % 2147483647;
+    return seed % n;
+  };
+  const group = (depth: number): string => `{${Array.from({ length: 2 + random(2) }, () => text(depth + 1)).join(',')}}`;
+  const text = (depth: number): string =>
+    Array.from({ length: 1 + random(3) }, () => (depth < 2 && random(4) === 0 ? group(depth) : (atoms[random(atoms.length)] as string))).join('');
+  return () => text(1) + group(0);
+}
 
 describe('parsing', () => {
   it("refuses a leading slash and a negation with spec-brief's own reasons, before the core reads them", () => {
@@ -79,6 +97,70 @@ describe('parsing', () => {
     expect(error('a[b')).toBe('a "[" is never closed');
     expect(error('[z-a]')).toBe('the range "z-a" runs backwards');
     expect(error('{a,b}{c,d}{e,f}{g,h}{i,j}{k,l}{m,n}{o,p}{q,r}')).toBe('the braces expand to more than 256 patterns');
+  });
+
+  it('refuses a brace alternative that starts with "/", as a pattern that starts with one is, naming the alternative', () => {
+    // spec-core reads a leading "/" on an alternative as on the pattern, so
+    // "{/docs,x}" is "/docs", rooted at the filesystem's root, or "x": "docs"
+    // fell out of the scope and nothing said so. It read "docs" or "x" before.
+    for (const [pattern, text] of [
+      ['{/docs,x}', '/docs'],
+      ['{x,/docs}', '/docs'],
+      ['{x,{/docs,y}}', '/docs'],
+      ['{//docs,x}', '//docs'],
+      ['{/./docs,x}', '/./docs'],
+      ['{/docs/,x}', '/docs/'],
+      ['{/*,x}', '/*'],
+      ['{/docs}', '/docs'],
+      ['{/docs,/src}', '/docs'],
+      ['{a,/b}c', '/bc'],
+      // A leading "./" names nothing, on an alternative as on the pattern.
+      ['{.//docs,x}', '/docs'],
+      ['./{/docs,x}', '/docs'],
+      ['{.,x}/{/b,c}', '/b'],
+      ['{,x}{/b,c}', '/b'],
+    ] as const) {
+      expect(error(pattern), pattern).toBe(`a pattern is relative to the repository root, and the braces expand to "${text}", which starts with "/"`);
+    }
+    // One that names no path is refused in the core's words, as it was.
+    expect(error('{/,x}')).toBe('the braces expand to "/", which names no path');
+  });
+
+  it('reads a "/" inside braces that starts no text as it did', () => {
+    // After a name the "/" is an empty segment, which names nothing:
+    // "docs/{/a,b}" is "docs//a", which is "docs/a", or "docs/b".
+    expect(matches('docs/{/a,b}', 'docs/a')).toBe(true);
+    expect(matches('docs/{/a,b}', 'docs/b')).toBe(true);
+    expect(matches('a{/b,c}', 'a/b')).toBe(true);
+    expect(matches('x{a,{/b,c}}', 'x/b')).toBe(true);
+    expect(matches('{docs,x}', 'docs')).toBe(true);
+    expect(matches('{a/,b}', 'a/x')).toBe(true);
+    // An escaped comma ends no alternative, so no text starts at the "/" after it.
+    expect(matches('{\\,/b,c}', ',/b')).toBe(true);
+  });
+
+  it('finds the alternative it names by reading the braces as the core expands them', () => {
+    for (const [pattern, text] of [
+      // A class holds no brace syntax: a "{", "}" or "," in one opens, closes
+      // or ends nothing.
+      ['{[{],/b}', '/b'],
+      ['{[}],/b}', '/b'],
+      ['{/b,[x]}]', '/b]'],
+      // Its first member is a member even when it is "]", after a "!" or "^"
+      // too, and an escaped "]" closes nothing.
+      ['{[]{],/b}', '/b'],
+      ['{[!]{],/b}', '/b'],
+      ['{[^]{],/b}', '/b'],
+      ['{[\\]{],/b}', '/b'],
+      ['{/b,[\\]}]}', '/b'],
+      // A "[" that no "]" closes within its segment is no class: "{x,[a,/}]"
+      // is "x]", "[a]" or "/]".
+      ['{x,[a,/}]', '/]'],
+      // A "}" with no "{" open is a literal, and braces after it still expand.
+      ['{/a,x}}{b,c}', '/a}b'],
+    ] as const) {
+      expect(error(pattern), pattern).toBe(`a pattern is relative to the repository root, and the braces expand to "${text}", which starts with "/"`);
+    }
   });
 
   it('refuses a pattern too large to compile, with a reason rather than an exception', () => {
@@ -209,14 +291,7 @@ describe('an alternative as written', () => {
    * and a `/` where one ends changes that alternative alone.
    */
   const agreesOver = (atoms: readonly string[], start: number): void => {
-    let seed = start;
-    const random = (n: number): number => {
-      seed = (seed * 48271) % 2147483647;
-      return seed % n;
-    };
-    const group = (depth: number): string => `{${Array.from({ length: 2 + random(2) }, () => text(depth + 1)).join(',')}}`;
-    const text = (depth: number): string =>
-      Array.from({ length: 1 + random(3) }, () => (depth < 2 && random(4) === 0 ? group(depth) : (atoms[random(atoms.length)] as string))).join('');
+    const next = patternsOver(atoms, start);
     // Whether a pattern reads as the alternatives given, taken together.
     const readsAs = (pattern: string, alternatives: readonly string[]): boolean => {
       const whole = glob(pattern);
@@ -225,7 +300,7 @@ describe('an alternative as written', () => {
     };
     let checked = 0;
     for (let n = 0; n < 1000 && checked < 50; n += 1) {
-      const pattern = text(1) + group(0);
+      const pattern = next();
       if (!parseGlob(pattern).ok) continue;
       const alternatives = writtenAlternatives(pattern);
       if (alternatives === null) continue;
@@ -241,7 +316,6 @@ describe('an alternative as written', () => {
     expect(checked).toBe(50);
   };
 
-  // No atom starts with "/": the core drops one that opens an option, and spec-brief refuses it opening a pattern.
   const atoms = ['a', 'b', 'x.ts', '?', 'a/', 'b/', '', '\\{', '\\,', '\\}', '}'];
 
   it('agrees with the core over a generated corpus: a "/" where one ends changes that alternative alone', () => {
@@ -255,6 +329,49 @@ describe('an alternative as written', () => {
     // now, they are left out as every pattern that does not parse is. "./" is
     // weighted twice so that an option made of it alone comes up at all.
     agreesOver([...atoms, '.', './', './'], 20260929);
+  });
+
+  it('agrees with the core where an option starts with "/", which spec-brief refuses where it starts a text', () => {
+    // The core dropped such a "/", and it roots one now; spec-brief refuses
+    // "{/a,b}", and "a{/a,b}" is "a/a" or "ab" as it was, so the corpus
+    // checks what is left, "/" after a name.
+    agreesOver([...atoms, '/', '/a'], 20260929);
+  });
+});
+
+describe('a rooted alternative', () => {
+  it('is refused where the core roots one, and only there, over a generated corpus', () => {
+    // Every alternative the core roots at the filesystem's root has a base
+    // that starts with "/", and no other has. Classes, escapes and lone
+    // braces are among the atoms, since the text named is found by reading
+    // the braces as the core does.
+    const next = patternsOver(['a', 'b', '/', '/a', './', '.', '', '\\,', '}', '[,]', '[{]', '[]}]', '[!]]'], 20260929);
+    let braced = 0;
+    let relative = 0;
+    for (let n = 0; n < 2000; n += 1) {
+      const pattern = next();
+      const core = coreParse(pattern, { dialect: 'path', caseSensitive: true });
+      if (!core.ok) continue;
+      const roots = core.glob.bases.some((base) => base.startsWith('/'));
+      const parsed = parseGlob(pattern);
+      expect(parsed.ok, pattern).toBe(!roots);
+      if (parsed.ok) {
+        relative += 1;
+        continue;
+      }
+      const named = /^a pattern is relative to the repository root, and the braces expand to "(.*)", which starts with "\/"$/.exec(parsed.error)?.[1];
+      if (named === undefined) {
+        expect(parsed.error, pattern).toBe('a pattern is relative to the repository root and cannot start with "/"');
+        continue;
+      }
+      braced += 1;
+      // The text named is one the core roots written alone.
+      const alone = coreParse(named, { dialect: 'path', caseSensitive: true });
+      expect(alone.ok && alone.glob.bases.every((base) => base.startsWith('/')), `${pattern}: ${named}`).toBe(true);
+    }
+    // 226 and 1435 when written.
+    expect(braced).toBeGreaterThanOrEqual(200);
+    expect(relative).toBeGreaterThanOrEqual(1000);
   });
 });
 
