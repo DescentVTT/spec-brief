@@ -18,11 +18,14 @@ import {
   prettyList,
   prettyMatrix,
   prettyPlan,
+  prettySchedule,
   sarif,
   sectionsJson,
   summaryLine,
+  titleWithoutId,
 } from '../src/report.js';
 import { fileNameFor, nextId, renderNewBrief } from '../src/scaffold.js';
+import { schedule } from '../src/schedule.js';
 import type { Finding } from '../src/types.js';
 import { config, corpusOf, goodBrief } from './helpers.js';
 
@@ -159,6 +162,71 @@ describe('lists, matrices and plans', () => {
     expect(text.split('\n')[1]).toBe('?   weird   -     0/0    no     1.md');
     const none = corpusOf({ 'briefs/1.md': '# T\n' }, config({ id: { source: 'frontmatter' }, files: '*.md' }));
     expect(prettyList([{ brief: none.briefs[0]!, ready: false, waitingOn: [] }], plainStyle).split('\n')[1]).toContain('?     ');
+  });
+
+  it('shows the status word the brief writes, where the configuration spells it in Chinese', () => {
+    const cfg = config({ status: { draft: '草稿', active: '進行中', deferred: '延後', archived: '封存' } });
+    const listed = corpusOf(
+      {
+        'briefs/001_a.md': '---\nstatus: 進行中\n---\n\n# A\n',
+        'briefs/002_b.md': '---\nstatus: 延後\n---\n\n# B\n',
+        'briefs/archive/000_z.md': '---\nstatus: 封存\n---\n\n# Z\n',
+      },
+      cfg,
+    );
+    const rows = listed.briefs.map((brief) => ({ brief, ready: false, waitingOn: [] }));
+    expect(prettyList(rows, plainStyle).split('\n').map((line) => line.split(/\s+/)[1])).toEqual(['STATUS', '進行中', '延後', '封存']);
+    // The words are still read as the lifecycle they name.
+    expect(listed.briefs.map((b) => b.status)).toEqual(['active', 'deferred', 'archived']);
+    // With no status field, the status is where the brief lives.
+    const located = corpusOf({ 'briefs/001_a.md': '# A\n' }, config({ status: { field: null } }));
+    expect(prettyList([{ brief: located.briefs[0]!, ready: true, waitingOn: [] }], plainStyle).split('\n')[1]).toBe('001  active  -     0/0    yes    A');
+  });
+
+  it('shows a title without the id it repeats, in the list and the schedule', () => {
+    const titled = corpusOf({
+      'briefs/001_a.md': goodBrief({ wave: '1', affectedFiles: '[a/**]' }).replace('# A brief', '# 001 \u2014 Rotate tokens'),
+      'briefs/002_b.md': goodBrief({ wave: '1', affectedFiles: '[b/**]' }).replace('# A brief', '# 002 - Fix - the login bug'),
+    });
+    const rows = titled.briefs.map((brief) => ({ brief, ready: true, waitingOn: [] }));
+    expect(prettyList(rows, plainStyle).split('\n').slice(1)).toEqual(['001  active  1     1/1    yes    Rotate tokens', '002  active  1     1/1    yes    Fix - the login bug']);
+    expect(prettySchedule(schedule(titled), null, plainStyle).split('\n').slice(1, 3)).toEqual(['  001  Rotate tokens', '  002  Fix - the login bug']);
+    // The title itself is as written, for the JSON and the tools that read it.
+    expect(briefJson(titled.briefs[0]!)['title']).toBe('001 \u2014 Rotate tokens');
+  });
+
+  it('takes off only the brief\'s own id, and only before a separator', () => {
+    const cases: [string, string | null, string][] = [
+      ['001 \u2014 Rotate tokens', '001', 'Rotate tokens'],
+      ['001\u2014Rotate tokens', '001', 'Rotate tokens'],
+      ['001 \u2013 Rotate tokens', '001', 'Rotate tokens'],
+      ['001: Rotate tokens', '001', 'Rotate tokens'],
+      ['001\uff1a登入', '001', '登入'],
+      ['001 - Rotate tokens', '001', 'Rotate tokens'],
+      // An id of digits is compared by value, as ids are.
+      ['12 - Rotate tokens', '012', 'Rotate tokens'],
+      ['B-12: Rotate tokens', 'B-12', 'Rotate tokens'],
+      ['12a \u2014 Rotate tokens', '12a', 'Rotate tokens'],
+      // None of these is an id and a title.
+      ['Fix - the login bug', '001', 'Fix - the login bug'],
+      ['Fix the login bug - now', 'B-1', 'Fix the login bug - now'],
+      ['0010 \u2014 x', '001', '0010 \u2014 x'],
+      ['2026\uff1aroadmap', '001', '2026\uff1aroadmap'],
+      ['001-2 migration', '001', '001-2 migration'],
+      ['B-123 \u2014 x', 'B-12', 'B-123 \u2014 x'],
+      ['001 --- x', '001', '001 --- x'],
+      ['001- x', '001', '001- x'],
+      ['001 -2', '001', '001 -2'],
+      ['001x \u2014 y', '001', '001x \u2014 y'],
+      ['Fix - the login bug', 'B-1', 'Fix - the login bug'],
+      ['null \u2014 x', null, 'null \u2014 x'],
+      // A title written with spaces before it, as a quoted front-matter value can be.
+      ['  001 \u2014 Rotate tokens', '001', 'Rotate tokens'],
+      // Nothing after the separator leaves the title as it is.
+      ['001 \u2014', '001', '001 \u2014'],
+      ['001 \u2014 x', null, '001 \u2014 x'],
+    ];
+    for (const [title, id, shown] of cases) expect(titleWithoutId(title, id), `${title} in ${String(id)}`).toBe(shown);
   });
 
   it('draws a matrix with collisions, shared directories and unscoped briefs', () => {

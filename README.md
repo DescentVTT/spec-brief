@@ -80,7 +80,7 @@ briefs/035_the-background-side.md
 
 ### `spec-brief list`
 
-Live briefs with their status, wave, task count and readiness. A brief is *ready* when every brief it depends on is archived, and it is neither a draft nor deferred. `--ready` shows only those, which is the question an orchestrator asks; `--archived` includes the archive; `--format json` gives an orchestrator the whole table, and the sections the configuration asks for, each with its `hint`.
+Live briefs with their status, in the word the brief writes (`封存` where the configuration names it for archived), wave, task count, readiness and title. The title is shown without the id it repeats: `new` writes `# 012 — Rotate tokens`, and the table has an id column, so the title shown is `Rotate tokens`; only the brief's own id comes off, and only before a dash, a colon or a spaced hyphen, so `Fix - the login bug` is shown whole. `schedule` shows titles the same way, and `--format json` gives the title as written. A brief is *ready* when every brief it depends on is archived, and it is neither a draft nor deferred. `--ready` shows only those, which is the question an orchestrator asks; `--archived` includes the archive; `--format json` gives an orchestrator the whole table, and the sections the configuration asks for, each with its `hint`.
 
 ### `spec-brief matrix`
 
