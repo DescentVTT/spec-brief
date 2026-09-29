@@ -352,6 +352,17 @@ describe('scopes', () => {
     ]);
   });
 
+  it('refuses a leading "/" after a leading "./", as the core reads one', async () => {
+    // ".//docs" is "/docs" to the core, rooted at the filesystem's root, which
+    // no repository path is under: it scoped nothing, and no finding said so.
+    const found = await findings({ [A]: goodBrief({ affectedFiles: '[src/**, ".//docs"]', protectedFiles: '[".//src/db"]' }) });
+    expect(found.map((f) => [f.rule, f.line, f.message])).toEqual([
+      ['glob', 3, '".//docs" in affectedFiles: a pattern is relative to the repository root and cannot start with "/"'],
+      ['glob', 4, '".//src/db" in protectedFiles: a pattern is relative to the repository root and cannot start with "/"'],
+    ]);
+    expect(await findings({ [A]: goodBrief({ affectedFiles: '[./docs/**]', protectedFiles: '[./docs/a.md]' }) })).toEqual([]);
+  });
+
   it('refuses a brace alternative that names no path, as the same text written alone is, naming the alternative', async () => {
     // "{./,docs}" read "./" as the contents of ".", every path, where "./"
     // alone is refused: it protected everything, so every affected pattern

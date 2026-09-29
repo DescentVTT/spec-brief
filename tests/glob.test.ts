@@ -36,6 +36,15 @@ describe('parsing', () => {
     expect(error('  !src/**')).toBe('negated patterns are not supported; narrow the positive pattern');
     expect(error('/src')).toBe('a pattern is relative to the repository root and cannot start with "/"');
     expect(error(' /src')).toBe('a pattern is relative to the repository root and cannot start with "/"');
+    // The core drops a leading "./" before it reads a leading "/", so ".//src"
+    // was "/src", rooted at the filesystem's root, and scoped nothing.
+    for (const pattern of ['.//src', '././/src', './//src', './/']) {
+      expect(error(pattern), pattern).toBe('a pattern is relative to the repository root and cannot start with "/"');
+    }
+    // A "./" that no "/" follows names nothing, and the rest is relative.
+    expect(matches('./src', 'src')).toBe(true);
+    expect(matches('././src/a.ts', 'src/a.ts')).toBe(true);
+    expect(matches('.src', '.src')).toBe(true);
     // Not at the start, a "!" is a character like any other.
     expect(matches('a!b', 'a!b')).toBe(true);
   });
