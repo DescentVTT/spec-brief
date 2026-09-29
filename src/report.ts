@@ -15,6 +15,7 @@ import type { Plan } from './archive.js';
 import type { Brief } from './brief.js';
 import type { Config, SectionRule } from './config.js';
 import type { CollisionReport } from './collisions.js';
+import { idKey } from './corpus.js';
 import { summarise } from './lint.js';
 import { ARCHIVE_RULES, COLLISION_RULES, RULES } from './rules.js';
 import { type Breach, breachReasons, holds, moves, type Passed, reasons, type Schedule } from './schedule.js';
@@ -232,7 +233,46 @@ export function sectionsJson(config: Config): Record<string, unknown>[] {
   ];
 }
 
-/** Columns padded to their widest cell; every row has the header's length. */
+/**
+ * What may stand between an id and the rest of a title: an em or an en dash,
+ * a colon, ASCII or full-width, with or without spaces, or a hyphen with a
+ * space on each side, so that `001-2 migration` keeps its id.
+ */
+const ID_SEPARATOR = /^(?:\s*[\u2014\u2013:\uff1a]|\s+-(?=\s))\s*(?=\S)/u;
+
+/**
+ * A title as a table shows it, without the id it repeats: `new` writes
+ * `# 012 — Rotate tokens`, and the table has an id column already. Only the
+ * brief's own id comes off, compared as ids are, so that `12 - x` in brief
+ * `012` loses it and `0010 — x` in brief `001` keeps it, and only before a
+ * separator: `Fix - the login bug` and `2026：roadmap` are titles. For
+ * display alone: `Brief.title`, and every JSON document, keep the title as
+ * written.
+ */
+export function titleWithoutId(title: string, id: string | null): string {
+  if (id === null) return title;
+  const text = title.trimStart();
+  // An id of digits is compared by value, so the title's own leading digits
+  // are the candidate. A title with none has `''`, which no id's key equals;
+  // any other text in its place fails `startsWith` and answers the same.
+  const lead = /^\d+$/.test(id) ? (/^\d+/.exec(text)?.[0] ?? '') : id;
+  if (!text.startsWith(lead) || idKey(lead) !== idKey(id)) return title;
+  const separator = ID_SEPARATOR.exec(text.slice(lead.length));
+  return separator === null ? title : text.slice(lead.length + separator[0].length);
+}
+
+function shownTitle(brief: Brief): string {
+  return brief.title === null ? brief.name : titleWithoutId(brief.title, brief.id);
+}
+
+/**
+ * Columns padded to their widest cell; every row has the header's length.
+ *
+ * A width is counted in UTF-16 code units, so a cell in Chinese, whose
+ * characters take two columns in a terminal, pads short. spec-core's display
+ * width replaces `length` here, in `prettySchedule` and in `prettyMatrix` once
+ * the copy has it.
+ */
 function table(header: readonly string[], rows: readonly (readonly string[])[]): string[] {
   const all = [header, ...rows];
   const widths = header.map((_, c) => Math.max(...all.map((r) => (r[c] as string).length)));
@@ -256,11 +296,11 @@ export function prettyList(rows: readonly ListRow[], style: Style): string {
     ['ID', 'STATUS', 'WAVE', 'TASKS', 'READY', 'TITLE'],
     rows.map(({ brief, ready, waitingOn }) => [
       brief.id ?? '?',
-      brief.status ?? brief.statusWord ?? '?',
+      brief.statusWord ?? brief.status ?? '?',
       brief.wave === null ? '-' : String(brief.wave),
       `${brief.tasks.filter((t) => t.checked).length}/${brief.tasks.length}`,
       brief.phase === 'archived' ? '-' : ready ? 'yes' : waitingOn.length > 0 ? `after ${waitingOn.join(', ')}` : 'no',
-      brief.title ?? brief.name,
+      shownTitle(brief),
     ]),
   );
   return [paint(style, 'dim', lines[0] as string), ...lines.slice(1)].join('\n');
@@ -368,14 +408,13 @@ export function prettySchedule(s: Schedule, written: readonly string[] | null, s
   const label = (b: Brief): string => b.id ?? b.name;
   const out: string[] = [];
   const width = Math.max(3, ...s.placements.map((p) => label(p.brief).length));
-  const titleOf = (b: Brief): string => b.title ?? b.name;
-  const titles = Math.max(0, ...s.placements.map((p) => titleOf(p.brief).length));
+  const titles = Math.max(0, ...s.placements.map((p) => shownTitle(p.brief).length));
   const waves = wavesOf(s);
   for (const wave of waves) {
     const here = s.placements.filter((p) => p.proposed === wave);
     out.push(paint(style, 'bold', `wave ${wave} · ${plural(here.length, 'brief')}`));
     for (const p of here) {
-      const title = titleOf(p.brief);
+      const title = shownTitle(p.brief);
       if (p.proposed === p.declared) {
         out.push(`  ${label(p.brief).padEnd(width)}  ${title}`);
         continue;
