@@ -141,7 +141,7 @@ Reopens an archived brief: the banner and the hash come off, the status goes bac
 
 ### Every command
 
-`--root <dir>` runs from another directory. `--config <file>` names the configuration; `--no-config` uses the defaults. `--format` is `pretty`, `json`, `sarif`, `github` or `gitlab` where the command reports findings. `--strict` makes warnings fail the run. `--no-git` leaves git out even inside a repository: the tree is read from disk, and `archive` records no commit. `--color` and `--no-color` override `NO_COLOR`, `FORCE_COLOR` and the terminal check. `--help` and `--version` do what they say.
+`--root <dir>` runs from another directory. `--config <file>` names the configuration; `--no-config` uses the defaults. `--format` is `pretty` by default, or `json`; `lint`, `matrix` and `schedule`, which report findings, also write `sarif`, `github` and `gitlab`, and `--help` lists each command's formats. `--strict` makes warnings fail the run. `--no-git` leaves git out even inside a repository: the tree is read from disk, and `archive` records no commit. `--color` and `--no-color` override `NO_COLOR`, `FORCE_COLOR` and the terminal check. `--help` and `--version` do what they say.
 
 **Exit codes:** `0` clean, `1` findings, a collision, or a refused action, `2` the run could not be trusted - a bad flag, a configuration that does not load, a brief that does not exist. A run over a briefs directory that does not exist exits 2, because a check over nothing looks exactly like a clean one.
 
