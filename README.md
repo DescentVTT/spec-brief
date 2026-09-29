@@ -96,7 +96,7 @@ wave 1 · 3 briefs
   ? 003 declares no affectedFiles and cannot be checked
 ```
 
-Scopes are intersected as globs, not compared as strings: the two above share no prefix and still meet, and the file named is one both patterns match and neither brief protects - always a file, never a directory. Two briefs whose scopes meet in several places are one collision, listing every pair of patterns that meets. A brief with no scope is reported as unscoped rather than counted as safe. The search for a shared file has a budget; a pair it cannot decide within it is marked `?` and reported as `collision-undecided`, a warning, never as a collision and never as clean. Exit 1 on a collision.
+Scopes are intersected as globs, not compared as strings: the two above share no prefix and still meet, and the file named is one both patterns match and neither brief protects - always a file, never a directory. It is a file the tree holds where there is one, the first in git's order; where the tree holds none, it is the shortest path the search built, said to be an example: `both cover src/newmod/a.ts, an example not in the tree`. `--format json` says which, as `inTree` on each pair of patterns: `true`, `false`, or `null` when the tree could not be read. Two briefs whose scopes meet in several places are one collision, listing every pair of patterns that meets. A brief with no scope is reported as unscoped rather than counted as safe. The search for a shared file has a budget; a pair it cannot decide within it is marked `?` and reported as `collision-undecided`, a warning, never as a collision and never as clean - unless the tree holds a file both patterns match and neither brief protects, which proves the collision. Exit 1 on a collision.
 
 ### `spec-brief schedule`
 
@@ -232,7 +232,7 @@ A brief is read as CommonMark reads it wherever that decides what is code or a c
 | `literal-read-as-file` | note | A path with no glob syntax that the tree does not hold and whose name has no extension, such as `src/newmod`: read as a file, and `src/newmod/` if a directory was meant. Inside braces the advice is the pattern written with the `/` added, `lib/{util,new/}`, or the alternative in an entry of its own, `lib/new/`. |
 | `archive-freeze` | error | An archived brief that changed after it was archived. |
 | `collision` | error | Two briefs in one wave whose scopes can name the same file (`matrix`). |
-| `collision-undecided` | warning | Two briefs in one wave whose collision the search could not decide within its budget (`matrix`), or a wave `schedule` passed over for it. |
+| `collision-undecided` | warning | Two briefs in one wave whose collision the search could not decide within its budget and no file of the tree proves (`matrix`), or a wave `schedule` passed over for it. |
 | `unscoped` | note | A brief sharing a wave that declares no scope (`matrix`), or one `schedule` runs alone. |
 | `shared-directory` | off | Two briefs in one wave writing into the same directory (`matrix`). |
 | `wave-schedule` | error | A brief with no wave, or a declared wave that does not hold - a collision in it, a dependency out of order - with the wave `schedule` computes and why (`schedule`). A declared wave that holds and is not the computed one is a note. |

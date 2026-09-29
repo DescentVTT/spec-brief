@@ -217,3 +217,41 @@ gives a base that starts with `/`, and the text named is rooted written
 alone. `writtenAlternatives` is checked against spec-core again over a
 corpus with `/` and `/a` among its atoms, and on each pattern of it that
 spec-brief accepts the two agree.
+
+## Amended 2026-09-30: a witness from the tree
+
+The witness was the shortest path the search could build, and the search
+does not read the tree: two briefs writing `src/Shop.Application/**` and
+`**/OrderService.cs` were told they both cover
+`src/Shop.Application/OrderService.cs`, in a tree whose file is
+`src/Shop.Application/Orders/OrderService.cs`. A reader who looks for the
+file named and does not find it doubts the collision, and a collision
+report that is doubted is switched off. spec-brief holds the tree's files
+already, for the literals.
+
+**The witness is a file of the tree where there is one.** Where the search
+finds a meeting, `meet` reads the files, and names the first, in the list's
+order, that both patterns match and neither brief protects; git's list is
+sorted, so the file named is the same on every run. Where the tree holds
+none, the search's path stands, and is said to be an example: `both cover
+src/newmod/a.ts, an example not in the tree`. JSON says which as `inTree`
+on each pair of patterns, `null` when the tree could not be read; it is a
+field added to schema 2, which a removal or a rename would bump. The files
+each pattern matches are found once per run and pattern, and only for a
+pair the search found meeting or could not decide: a pair it proves apart
+has no such file.
+
+**A file of the tree decides a pair the search could not.** A pair that
+meets the budget is undecided, a warning, because the search guesses
+nothing. A file that exists, that both patterns match and that neither
+brief protects is not a guess: both briefs may write it, and each match is
+decided by the automaton, exactly. So such a pair is a collision, an error,
+naming the file. False positives cost more than misses, and this is
+neither: it reports a collision the search could only not prove. It can
+turn a run that passed with a warning red, so it is a change a minor
+release carries. `schedule` reads the tree as `matrix` does, so the two
+still agree on which briefs can share a wave.
+
+The GitLab fingerprint of a collision is built from the pair of briefs,
+not from its message, so the file named changing is not a problem fixed
+and another found.

@@ -266,6 +266,29 @@ describe('list and matrix', () => {
     expect(doc.waves[0]?.sharedDirectories).toEqual([{ a: '001', b: '002', directories: ['src'] }]);
     expect(doc.waves[0]?.unscoped).toEqual(['003']);
   });
+
+  it('names a file the tree holds, and says so when the file named is only an example', async () => {
+    const briefs = {
+      'briefs/001_a.md': goodBrief({ wave: '1', affectedFiles: '[src/Shop.Application/**]' }),
+      'briefs/002_b.md': goodBrief({ wave: '1', affectedFiles: '["**/OrderService.cs"]' }),
+    };
+    const held = plain('cli-matrix-held', { ...briefs, 'src/Shop.Application/Orders/OrderService.cs': '' });
+    const example = plain('cli-matrix-example', { ...briefs, 'src/Shop.Application/Orders/Order.cs': '' });
+    const patterns = '001 "src/Shop.Application/**" and 002 "**/OrderService.cs" both cover';
+    expect((await run(held, ['matrix', '--no-color'])).out).toContain(`X ${patterns} src/Shop.Application/Orders/OrderService.cs\n`);
+    expect((await run(example, ['matrix', '--no-color'])).out).toContain(`X ${patterns} src/Shop.Application/OrderService.cs, an example not in the tree\n`);
+    const overlaps = async (root: string): Promise<unknown> =>
+      (JSON.parse((await run(root, ['matrix', '--format', 'json'])).out) as { waves: { collisions: { overlaps: unknown }[] }[] }).waves[0]?.collisions[0]?.overlaps;
+    const pair = ['src/Shop.Application/**', '**/OrderService.cs'];
+    expect(await overlaps(held)).toEqual([{ patterns: pair, witness: 'src/Shop.Application/Orders/OrderService.cs', inTree: true }]);
+    expect(await overlaps(example)).toEqual([{ patterns: pair, witness: 'src/Shop.Application/OrderService.cs', inTree: false }]);
+    // The file named is not the problem, the pair is: GitLab sees one collision in both trees.
+    const issue = async (root: string): Promise<{ description: string; fingerprint: string }> =>
+      (JSON.parse((await run(root, ['matrix', '--format', 'gitlab'])).out) as { description: string; fingerprint: string }[])[0]!;
+    const [inTree, notInTree] = [await issue(held), await issue(example)];
+    expect(inTree.description).not.toBe(notInTree.description);
+    expect(inTree.fingerprint).toBe(notInTree.fingerprint);
+  });
 });
 
 describe('schedule', () => {
@@ -285,8 +308,8 @@ describe('schedule', () => {
       '  003  A brief',
       'wave 2 · 1 brief',
       '  002  A brief  moves from wave 1',
-      '         wave 1 does not hold: 001 there also writes src/auth/session.ts',
-      '         not wave 1, where 001 also writes src/auth/session.ts ("src/**/session.ts" and "src/auth/**")',
+      '         wave 1 does not hold: 001 there also writes src/auth/session.ts, an example not in the tree',
+      '         not wave 1, where 001 also writes src/auth/session.ts, an example not in the tree ("src/**/session.ts" and "src/auth/**")',
       '',
       '1 brief would move; "spec-brief schedule --write" writes the waves',
       '',
@@ -321,7 +344,7 @@ describe('schedule', () => {
       'wave 2 · 1 brief',
       '  002  A brief  moves from wave 3',
       '         wave 3 also holds',
-      '         not wave 1, where 001 also writes src/auth/session.ts ("src/**/session.ts" and "src/auth/**")',
+      '         not wave 1, where 001 also writes src/auth/session.ts, an example not in the tree ("src/**/session.ts" and "src/auth/**")',
       '',
       '1 brief could move, and the declared waves hold; "spec-brief schedule --write" writes the computed ones',
       '',

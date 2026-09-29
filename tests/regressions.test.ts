@@ -9,7 +9,8 @@ import { MemoryFileSystem } from '../src/fs.js';
 import type { Git } from '../src/git.js';
 import { checkRuleIds, lint, ruleIds } from '../src/lint.js';
 import { scan } from '../src/markdown.js';
-import { matrixJson, prettyMatrix } from '../src/report.js';
+import { matrixJson, prettyMatrix, scheduleJson } from '../src/report.js';
+import { breachReasons, reasons, schedule } from '../src/schedule.js';
 import { inWords } from '../src/text.js';
 import type { Finding } from '../src/types.js';
 import { brief, config, corpusOf, goodBrief } from './helpers.js';
@@ -416,9 +417,9 @@ describe('collisions, after 0.1.0', () => {
         '001',
         '002',
         [
-          { patterns: ['src/**', 'src/x.ts'], witness: 'src/x.ts' },
-          { patterns: ['docs/**', 'docs/y.md'], witness: 'docs/y.md' },
-          { patterns: ['lib/a.ts', 'lib/**'], witness: 'lib/a.ts' },
+          { patterns: ['src/**', 'src/x.ts'], witness: 'src/x.ts', inTree: null },
+          { patterns: ['docs/**', 'docs/y.md'], witness: 'docs/y.md', inTree: null },
+          { patterns: ['lib/a.ts', 'lib/**'], witness: 'lib/a.ts', inTree: null },
         ],
       ],
     ]);
@@ -449,9 +450,9 @@ describe('collisions, after 0.1.0', () => {
               a: '001',
               b: '002',
               overlaps: [
-                { patterns: ['src/**', 'src/x.ts'], witness: 'src/x.ts' },
-                { patterns: ['docs/**', 'docs/y.md'], witness: 'docs/y.md' },
-                { patterns: ['lib/a.ts', 'lib/**'], witness: 'lib/a.ts' },
+                { patterns: ['src/**', 'src/x.ts'], witness: 'src/x.ts', inTree: null },
+                { patterns: ['docs/**', 'docs/y.md'], witness: 'docs/y.md', inTree: null },
+                { patterns: ['lib/a.ts', 'lib/**'], witness: 'lib/a.ts', inTree: null },
               ],
             },
           ],
@@ -464,6 +465,42 @@ describe('collisions, after 0.1.0', () => {
       deferred: [],
       waiting: [],
     });
+  });
+
+  it('says which files named are in the tree, in every place a collision is told', () => {
+    // The tree holds lib/a.ts and none of the other files the pairs meet on.
+    const repoFiles = ['docs/z.md', 'lib/a.ts'];
+    const corpus = corpusOf(files);
+    const report = collisions(corpus, { repoFiles });
+    expect(table(collisionFindings(corpus, report))).toEqual([
+      'briefs/002_b.md:4 error collision: overlaps 001 in wave 1 through 3 pairs of patterns: ' +
+        '"src/x.ts" and 001\'s "src/**" both cover src/x.ts, an example not in the tree; ' +
+        '"docs/y.md" and 001\'s "docs/**" both cover docs/y.md, an example not in the tree; ' +
+        '"lib/**" and 001\'s "lib/a.ts" both cover lib/a.ts' +
+        ' | run them in different waves, make one depend on the other, or narrow a scope',
+    ]);
+    expect(prettyMatrix(report, { color: false }).split('\n').slice(5, 8)).toEqual([
+      '  X 001 "src/**" and 002 "src/x.ts" both cover src/x.ts, an example not in the tree',
+      '    001 "docs/**" and 002 "docs/y.md" both cover docs/y.md, an example not in the tree',
+      '    001 "lib/a.ts" and 002 "lib/**" both cover lib/a.ts',
+    ]);
+    expect((matrixJson(report)['waves'] as { collisions: { overlaps: unknown }[] }[])[0]?.collisions[0]?.overlaps).toEqual([
+      { patterns: ['src/**', 'src/x.ts'], witness: 'src/x.ts', inTree: false },
+      { patterns: ['docs/**', 'docs/y.md'], witness: 'docs/y.md', inTree: false },
+      { patterns: ['lib/a.ts', 'lib/**'], witness: 'lib/a.ts', inTree: true },
+    ]);
+    const one = corpusOf({ [A]: goodBrief({ wave: '1', affectedFiles: '[src/**]' }), [B]: goodBrief({ wave: '1', affectedFiles: '[src/x.ts]' }) });
+    expect(collisionFindings(one, collisions(one, { repoFiles })).map((f) => f.message)).toEqual([
+      '"src/x.ts" overlaps 001\'s "src/**" in wave 1; both cover src/x.ts, an example not in the tree',
+    ]);
+    const s = schedule(one, { repoFiles });
+    expect(breachReasons(s.placements[1]!)).toEqual(['001 there also writes src/x.ts, an example not in the tree']);
+    expect(reasons(s.placements[1]!)).toEqual(['not wave 1, where 001 also writes src/x.ts, an example not in the tree ("src/x.ts" and "src/**")']);
+    const placed = (scheduleJson(s)['briefs'] as { breaches: { overlaps: unknown }[]; passed: { overlaps: unknown }[] }[])[1]!;
+    expect([placed.breaches[0]?.overlaps, placed.passed[0]?.overlaps]).toEqual([
+      [{ patterns: ['src/x.ts', 'src/**'], witness: 'src/x.ts', inTree: false }],
+      [{ patterns: ['src/x.ts', 'src/**'], witness: 'src/x.ts', inTree: false }],
+    ]);
   });
 
   it('reports a pair writing into several directories once, naming them all', () => {
