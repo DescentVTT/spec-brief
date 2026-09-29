@@ -103,7 +103,7 @@ describe('the collision matrix', () => {
     ]);
     const wave1 = report.waves[0]!;
     expect(wave1.collisions.map((c) => [c.a.id, c.b.id, c.overlaps])).toEqual([
-      ['001', '002', [{ patterns: ['src/auth/**', 'src/**/session.ts'], witness: 'src/auth/session.ts' }]],
+      ['001', '002', [{ patterns: ['src/auth/**', 'src/**/session.ts'], witness: 'src/auth/session.ts', inTree: null }]],
     ]);
     expect(wave1.shared.map((s) => [s.a.id, s.b.id, s.directories])).toEqual([['002', '003', ['src/api']]]);
     expect(wave1.unscoped.map((b) => b.id)).toEqual(['004']);

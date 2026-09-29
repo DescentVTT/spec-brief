@@ -21,7 +21,7 @@ import { lineOfField } from './brief.js';
 import { type Corpus, waitingOnDeferred, type Waiting } from './corpus.js';
 import { globBases, readingIn, WITNESS_BUDGET } from './glob.js';
 import { configuredSeverity } from './lint.js';
-import { meet, type Overlap, type Scope, scopeOf } from './scope.js';
+import { meet, type Overlap, type Scope, scopeOf, witnessText } from './scope.js';
 import { inWords } from './text.js';
 import type { Finding, Severity } from './types.js';
 
@@ -82,7 +82,7 @@ export interface CollisionOptions {
   readonly budget?: number;
 }
 
-function matrix(wave: number | null, briefs: readonly Brief[], scopes: ReadonlyMap<Brief, Scope>, budget: number): WaveMatrix {
+function matrix(wave: number | null, briefs: readonly Brief[], scopes: ReadonlyMap<Brief, Scope>, budget: number, files: readonly string[] | null): WaveMatrix {
   const collisions: Collision[] = [];
   const undecided: UndecidedPair[] = [];
   const shared: SharedDirectory[] = [];
@@ -91,7 +91,7 @@ function matrix(wave: number | null, briefs: readonly Brief[], scopes: ReadonlyM
     for (let j = i + 1; j < scoped.length; j += 1) {
       const left = scoped[i] as Scope;
       const right = scoped[j] as Scope;
-      const meeting = meet(left, right, budget);
+      const meeting = meet(left, right, budget, files);
       if (meeting.overlaps.length > 0) {
         collisions.push({ a: left.brief, b: right.brief, overlaps: meeting.overlaps });
         continue;
@@ -110,21 +110,22 @@ function matrix(wave: number | null, briefs: readonly Brief[], scopes: ReadonlyM
 }
 
 export function collisions(corpus: Corpus, options: CollisionOptions = {}): CollisionReport {
-  const reading = readingIn(options.repoFiles ?? null);
+  const files = options.repoFiles ?? null;
+  const reading = readingIn(files);
   const budget = options.budget ?? WITNESS_BUDGET;
   const deferred = corpus.live.filter((b) => b.status === 'deferred');
   const waiting = waitingOnDeferred(corpus);
   const held = new Set(waiting.map((w) => w.brief));
   const live = corpus.live.filter((b) => b.status !== 'deferred' && !held.has(b));
   const scopes = new Map(live.map((brief) => [brief, scopeOf(brief, reading)]));
-  if (options.all === true) return { waves: [matrix(null, live, scopes, budget)], unscheduled: [], deferred, waiting };
+  if (options.all === true) return { waves: [matrix(null, live, scopes, budget, files)], unscheduled: [], deferred, waiting };
   const byWave = new Map<number, Brief[]>();
   const unscheduled: Brief[] = [];
   for (const brief of live) {
     if (brief.wave === null) unscheduled.push(brief);
     else byWave.set(brief.wave, [...(byWave.get(brief.wave) ?? []), brief]);
   }
-  const waves = [...byWave.keys()].sort((a, b) => a - b).map((wave) => matrix(wave, byWave.get(wave) as Brief[], scopes, budget));
+  const waves = [...byWave.keys()].sort((a, b) => a - b).map((wave) => matrix(wave, byWave.get(wave) as Brief[], scopes, budget, files));
   return { waves, unscheduled, deferred, waiting };
 }
 
@@ -139,9 +140,9 @@ function where(wave: number | null): string {
 function collisionMessage(c: Collision, wave: number | null): string {
   if (c.overlaps.length === 1) {
     const only = c.overlaps[0] as Overlap;
-    return `"${only.patterns[1]}" overlaps ${label(c.a)}'s "${only.patterns[0]}" ${where(wave)}; both cover ${only.witness}`;
+    return `"${only.patterns[1]}" overlaps ${label(c.a)}'s "${only.patterns[0]}" ${where(wave)}; both cover ${witnessText(only)}`;
   }
-  const each = c.overlaps.map((o) => `"${o.patterns[1]}" and ${label(c.a)}'s "${o.patterns[0]}" both cover ${o.witness}`);
+  const each = c.overlaps.map((o) => `"${o.patterns[1]}" and ${label(c.a)}'s "${o.patterns[0]}" both cover ${witnessText(o)}`);
   return `overlaps ${label(c.a)} ${where(wave)} through ${c.overlaps.length} pairs of patterns: ${each.join('; ')}`;
 }
 

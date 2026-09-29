@@ -38,8 +38,8 @@ describe('two scopes meeting', () => {
     const meeting = meet(scope(['src/**', 'docs/*.md']), scope(['src/a/*.ts', 'docs/x.md', 'lib/**']));
     expect(meeting).toEqual({
       overlaps: [
-        { patterns: ['src/**', 'src/a/*.ts'], witness: 'src/a/.ts' },
-        { patterns: ['docs/*.md', 'docs/x.md'], witness: 'docs/x.md' },
+        { patterns: ['src/**', 'src/a/*.ts'], witness: 'src/a/.ts', inTree: null },
+        { patterns: ['docs/*.md', 'docs/x.md'], witness: 'docs/x.md', inTree: null },
       ],
       undecided: [],
     });
@@ -55,6 +55,32 @@ describe('two scopes meeting', () => {
 
   it('say which pairs the search could not decide', () => {
     expect(meet(scope(['src/**']), scope(['**/*.ts']), 1)).toEqual({ overlaps: [], undecided: [['src/**', '**/*.ts']] });
+  });
+
+  it('name a file the tree holds, and the path the search built only as an example', () => {
+    const shop = scope(['src/Shop.Application/**']);
+    const service = scope(['**/OrderService.cs']);
+    const tree = ['README.md', 'src/Shop.Application/Orders/OrderService.cs', 'src/Shop.Application/Payments/OrderService.cs'];
+    // The search's shortest path is not a file here; the first file of the tree both match is.
+    expect(meet(shop, service, undefined, tree).overlaps).toEqual([
+      { patterns: ['src/Shop.Application/**', '**/OrderService.cs'], witness: 'src/Shop.Application/Orders/OrderService.cs', inTree: true },
+    ]);
+    // A tree with no file both match, outside the protections, leaves the search's path, said to be an example.
+    const example = { patterns: ['src/Shop.Application/**', '**/OrderService.cs'], witness: 'src/Shop.Application/OrderService.cs', inTree: false };
+    expect(meet(shop, service, undefined, ['src/Shop.Application/Orders/Order.cs', 'lib/OrderService.cs']).overlaps).toEqual([example]);
+    expect(meet(scope(['src/Shop.Application/**'], ['src/Shop.Application/*/**']), service, undefined, tree).overlaps).toEqual([example]);
+    expect(meet(shop, scope(['**/OrderService.cs'], ['src/Shop.Application/*/**']), undefined, tree).overlaps).toEqual([example]);
+    // With no tree, nothing is said of where the path is.
+    expect(meet(shop, service).overlaps).toEqual([{ ...example, inTree: null }]);
+  });
+
+  it('settle a pair the search could not decide with a file both may write, and only with one', () => {
+    const [x, y] = [scope(['src/**']), scope(['**/*.ts'])];
+    expect(meet(x, y, 1, ['docs/a.md', 'src/a.ts'])).toEqual({ overlaps: [{ patterns: ['src/**', '**/*.ts'], witness: 'src/a.ts', inTree: true }], undecided: [] });
+    expect(meet(x, y, 1, ['docs/a.ts', 'src/a.md'])).toEqual({ overlaps: [], undecided: [['src/**', '**/*.ts']] });
+    expect(meet(scope(['src/**'], ['src/a.ts']), y, 1, ['src/a.ts'])).toEqual({ overlaps: [], undecided: [['src/**', '**/*.ts']] });
+    // A pair the search proves apart stays apart, whatever the tree holds.
+    expect(meet(scope(['src/**']), scope(['docs/**']), undefined, ['src/a.ts', 'docs/a.md'])).toEqual({ overlaps: [], undecided: [] });
   });
 
   it('agree with brute force over a generated corpus of scopes', () => {
@@ -82,7 +108,11 @@ describe('two scopes meeting', () => {
         return parsed.glob;
       });
 
+    // A tree of some of those paths, sorted as the engine's list is.
+    const tree = paths.filter((_, i) => i % 7 === 3).sort();
+
     const seen = { met: 0, apart: 0, covered: 0 };
+    const read = { held: 0, example: 0, settled: 0, undecided: 0 };
     for (let i = 0; i < 120; i += 1) {
       const a = { affected: [pattern()], protected: patterns(2) };
       const b = { affected: [pattern()], protected: patterns(1) };
@@ -97,6 +127,21 @@ describe('two scopes meeting', () => {
       // Brute force sees only short paths: it can miss a meeting, never invent one.
       if (paths.some((p) => matchGlob(x, p) && matchGlob(y, p) && !any(avoid, p))) expect(meeting.overlaps, label).toHaveLength(1);
 
+      // With a tree, the witness is its first file both may write, or the search's path as an example.
+      const held = tree.find((p) => matchGlob(x, p) && matchGlob(y, p) && !any(avoid, p));
+      const patternPair = [a.affected[0], b.affected[0]];
+      const withTree = meet(scope(a.affected, a.protected), scope(b.affected, b.protected), undefined, tree);
+      if (held !== undefined) expect(withTree, label).toEqual({ overlaps: [{ patterns: patternPair, witness: held, inTree: true }], undecided: [] });
+      else expect(withTree, label).toEqual({ overlaps: meeting.overlaps.map((o) => ({ ...o, inTree: false })), undecided: [] });
+      read.held += held === undefined ? 0 : 1;
+      read.example += held === undefined ? meeting.overlaps.length : 0;
+      // Given one state, the search decides little, and a file of the tree decides a pair alone.
+      const hurried = meet(scope(a.affected, a.protected), scope(b.affected, b.protected), 1, tree);
+      if (held !== undefined) expect(hurried, label).toEqual({ overlaps: [{ patterns: patternPair, witness: held, inTree: true }], undecided: [] });
+      else expect(hurried.overlaps.every((o) => o.inTree === false), label).toBe(true);
+      read.settled += held !== undefined && meet(scope(a.affected, a.protected), scope(b.affected, b.protected), 1).undecided.length > 0 ? 1 : 0;
+      read.undecided += hurried.undecided.length;
+
       const own = scope(a.affected, a.protected);
       const covered = contradictions(own).covered.length > 0;
       const writable = paths.some((p) => matchGlob(x, p) && !any(globs(a.protected), p));
@@ -107,6 +152,7 @@ describe('two scopes meeting', () => {
     }
     // The corpus reaches every answer, not only the easy one.
     expect(seen).toEqual({ met: 59, apart: 61, covered: 29 });
+    expect(read).toEqual({ held: 29, example: 30, settled: 29, undecided: 86 });
   });
 });
 

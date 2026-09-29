@@ -53,7 +53,7 @@ describe('placing briefs', () => {
       ['003', null, 1],
     ]);
     expect(s.placements[1]?.passed).toEqual([
-      { wave: 1, reason: 'collision', brief: s.placements[0]?.brief, overlaps: [{ patterns: ['src/**/session.ts', 'src/auth/**'], witness: 'src/auth/session.ts' }] },
+      { wave: 1, reason: 'collision', brief: s.placements[0]?.brief, overlaps: [{ patterns: ['src/**/session.ts', 'src/auth/**'], witness: 'src/auth/session.ts', inTree: null }] },
     ]);
   });
 
@@ -340,9 +340,9 @@ describe('what schedule says', () => {
           proposed: 2,
           moves: true,
           holds: false,
-          breaches: [{ reason: 'collision', brief: '001', overlaps: [{ patterns: ['src/a.ts', 'src/**'], witness: 'src/a.ts' }] }],
+          breaches: [{ reason: 'collision', brief: '001', overlaps: [{ patterns: ['src/a.ts', 'src/**'], witness: 'src/a.ts', inTree: null }] }],
           after: null,
-          passed: [{ wave: 1, reason: 'collision', brief: '001', overlaps: [{ patterns: ['src/a.ts', 'src/**'], witness: 'src/a.ts' }] }],
+          passed: [{ wave: 1, reason: 'collision', brief: '001', overlaps: [{ patterns: ['src/a.ts', 'src/**'], witness: 'src/a.ts', inTree: null }] }],
           unscoped: false,
           reasons: ['not wave 1, where 001 also writes src/a.ts ("src/a.ts" and "src/**")'],
         },

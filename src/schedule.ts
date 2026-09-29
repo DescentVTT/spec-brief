@@ -23,7 +23,7 @@ import { byId, type Corpus, cycleSubject, dependencyCycles, liveDependencies, wa
 import { editable, setEntryKeepingComment } from './frontmatter.js';
 import { readingIn, WITNESS_BUDGET } from './glob.js';
 import { configuredSeverity } from './lint.js';
-import { meet, type Overlap, type Scope, scopeOf } from './scope.js';
+import { meet, type Overlap, type Scope, scopeOf, witnessText } from './scope.js';
 import { encodeLike } from './text.js';
 import type { Finding } from './types.js';
 
@@ -100,10 +100,10 @@ function label(brief: Brief): string {
 export { byId } from './corpus.js';
 
 /** The first brief in a wave this one cannot share it with, or `null` when it can join. */
-function clash(own: Scope, wave: number, here: readonly Scope[], budget: number): Passed | null {
+function clash(own: Scope, wave: number, here: readonly Scope[], budget: number, files: readonly string[] | null): Passed | null {
   for (const other of here) {
     if (own.affected.length === 0 || other.affected.length === 0) return { wave, reason: 'unscoped', brief: other.brief };
-    const meeting = meet(own, other, budget);
+    const meeting = meet(own, other, budget, files);
     if (meeting.overlaps.length > 0) return { wave, reason: 'collision', brief: other.brief, overlaps: meeting.overlaps };
     if (meeting.undecided.length > 0) return { wave, reason: 'undecided', brief: other.brief, patterns: meeting.undecided };
   }
@@ -119,6 +119,7 @@ interface Judge {
   readonly dependents: ReadonlyMap<Brief, readonly Brief[]>;
   readonly scope: (b: Brief) => Scope;
   readonly budget: number;
+  readonly files: readonly string[] | null;
 }
 
 /**
@@ -137,14 +138,15 @@ function breachesOf(brief: Brief, wave: number, judge: Judge): Breach[] {
   }
   for (const other of judge.compared) {
     if (other === brief || other.wave !== wave) continue;
-    const overlaps = meet(judge.scope(brief), judge.scope(other), judge.budget).overlaps;
+    const overlaps = meet(judge.scope(brief), judge.scope(other), judge.budget, judge.files).overlaps;
     if (overlaps.length > 0) out.push({ reason: 'collision', brief: other, overlaps });
   }
   return out;
 }
 
 export function schedule(corpus: Corpus, options: ScheduleOptions = {}): Schedule {
-  const reading = readingIn(options.repoFiles ?? null);
+  const files = options.repoFiles ?? null;
+  const reading = readingIn(files);
   const budget = options.budget ?? WITNESS_BUDGET;
   const deferred = corpus.live.filter((b) => b.status === 'deferred').sort(byId);
   const briefs = corpus.live.filter((b) => b.status !== 'deferred').sort(byId);
@@ -164,7 +166,7 @@ export function schedule(corpus: Corpus, options: ScheduleOptions = {}): Schedul
   for (const b of [...corpus.live].sort(byId)) {
     for (const d of everyDependency.get(b) as Brief[]) dependents.set(d, [...(dependents.get(d) ?? []), b]);
   }
-  const judge: Judge = { compared: briefs.filter((b) => !waiting.has(b)), dependencies: everyDependency, dependents, scope, budget };
+  const judge: Judge = { compared: briefs.filter((b) => !waiting.has(b)), dependencies: everyDependency, dependents, scope, budget, files };
 
   const waveOf = new Map<Brief, number>();
   const occupants = new Map<number, Scope[]>();
@@ -186,7 +188,7 @@ export function schedule(corpus: Corpus, options: ScheduleOptions = {}): Schedul
     let wave = after === null ? first : after.wave + 1;
     // Ends by construction: a wave past every occupied one is empty, and an empty wave takes anyone.
     for (;;) {
-      const found = clash(own, wave, occupants.get(wave) ?? [], budget);
+      const found = clash(own, wave, occupants.get(wave) ?? [], budget, files);
       if (found === null) break;
       passed.push(found);
       wave += 1;
@@ -224,7 +226,7 @@ export function holds(p: Placement): boolean {
 /** Why a declared wave does not hold, a clause each. */
 export function breachReasons(p: Placement): string[] {
   return p.breaches.map((b) => {
-    if (b.reason === 'collision') return `${label(b.brief)} there also writes ${(b.overlaps[0] as Overlap).witness}`;
+    if (b.reason === 'collision') return `${label(b.brief)} there also writes ${witnessText(b.overlaps[0] as Overlap)}`;
     if (b.reason === 'dependency') return `it depends on ${label(b.brief)}, in wave ${b.wave}`;
     return `${label(b.brief)} depends on it, in wave ${b.wave}`;
   });
@@ -239,7 +241,7 @@ export function reasons(p: Placement): string[] {
     const there = `not wave ${passed.wave}, where ${label(passed.brief)}`;
     if (passed.reason === 'collision') {
       const [overlap] = passed.overlaps as [Overlap];
-      out.push(`${there} also writes ${overlap.witness} ("${overlap.patterns[0]}" and "${overlap.patterns[1]}")`);
+      out.push(`${there} also writes ${witnessText(overlap)} ("${overlap.patterns[0]}" and "${overlap.patterns[1]}")`);
     } else if (passed.reason === 'undecided') {
       out.push(`${there} may write the same files: the search could not decide within its budget`);
     } else if (!p.unscoped) {

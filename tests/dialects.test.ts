@@ -15,7 +15,7 @@ import { lint, sortFindings } from '../src/lint.js';
 import { scan } from '../src/markdown.js';
 import { matrixJson, prettyMatrix } from '../src/report.js';
 import { renderNewBrief, nextId } from '../src/scaffold.js';
-import { schedule } from '../src/schedule.js';
+import { breachReasons, schedule } from '../src/schedule.js';
 import { toJsonSchema, validate } from '../src/schema.js';
 import { labelMatches, lineEnding, normaliseLabel, slugify } from '../src/text.js';
 import { brief, config, corpusOf, goodBrief } from './helpers.js';
@@ -467,7 +467,7 @@ describe('collisions', () => {
       'briefs/001_a.md': goodBrief({ wave: '1', affectedFiles: '[docs/adr/**]' }),
       'briefs/002_b.md': goodBrief({ wave: '1', affectedFiles: '[docs/adr/**]' }),
     });
-    expect(collisions(corpus).waves[0]?.collisions[0]?.overlaps).toEqual([{ patterns: ['docs/adr/**', 'docs/adr/**'], witness: 'docs/adr/x' }]);
+    expect(collisions(corpus).waves[0]?.collisions[0]?.overlaps).toEqual([{ patterns: ['docs/adr/**', 'docs/adr/**'], witness: 'docs/adr/x', inTree: null }]);
   });
 
   it('counts no collision on a file either brief protects', () => {
@@ -516,6 +516,28 @@ describe('collisions', () => {
     expect(painted).toContain(`  ${esc}[33m?${esc}[39m 001 "src/**" and 002 "**/*.ts": undecided`);
     const quiet = corpusOf(Object.fromEntries(corpus.briefs.map((b) => [b.file, b.text])), config({ rules: { 'collision-undecided': 'off' } }));
     expect(collisionFindings(quiet, report)).toEqual([]);
+  });
+
+  it('reports a collision the search could not decide and a file of the tree proves, as matrix and schedule alike', () => {
+    const corpus = corpusOf({
+      'briefs/001_a.md': goodBrief({ wave: '1', affectedFiles: '[src/**]' }),
+      'briefs/002_b.md': goodBrief({ wave: '1', affectedFiles: '["**/*.ts", "**/*.md"]' }),
+    });
+    // Both briefs may write src/auth/login.ts, which exists: no guess, a collision.
+    const repoFiles = ['README.md', 'src/auth/login.ts'];
+    const report = collisions(corpus, { budget: 1, repoFiles });
+    expect(report.waves[0]?.collisions.map((c) => c.overlaps)).toEqual([[{ patterns: ['src/**', '**/*.ts'], witness: 'src/auth/login.ts', inTree: true }]]);
+    // The pair is one finding, so the pattern pair no file proves is not reported beside it.
+    expect(report.waves[0]?.undecided).toEqual([]);
+    expect(collisionFindings(corpus, report).map((f) => [f.rule, f.severity, f.message])).toEqual([
+      ['collision', 'error', '"**/*.ts" overlaps 001\'s "src/**" in wave 1; both cover src/auth/login.ts'],
+    ]);
+    const s = schedule(corpus, { budget: 1, repoFiles });
+    expect(s.placements.map((p) => [p.brief.id, p.proposed, p.passed.map((passed) => passed.reason)])).toEqual([
+      ['001', 1, []],
+      ['002', 2, ['collision']],
+    ]);
+    expect(breachReasons(s.placements[1]!)).toEqual(['001 there also writes src/auth/login.ts']);
   });
 
   it('reports no shared directory at the root, and several in order, as one pair', () => {

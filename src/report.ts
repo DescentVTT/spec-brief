@@ -14,11 +14,12 @@ import { createHash } from 'node:crypto';
 import type { Plan } from './archive.js';
 import type { Brief } from './brief.js';
 import type { Config, SectionRule } from './config.js';
-import type { CollisionReport } from './collisions.js';
+import type { CollisionReport, Overlap } from './collisions.js';
 import { idKey } from './corpus.js';
 import { summarise } from './lint.js';
 import { ARCHIVE_RULES, COLLISION_RULES, RULES } from './rules.js';
 import { type Breach, breachReasons, holds, moves, type Passed, reasons, type Schedule } from './schedule.js';
+import { witnessText } from './scope.js';
 import { inWords } from './text.js';
 import type { Finding, Severity } from './types.js';
 
@@ -356,7 +357,7 @@ export function prettyMatrix(report: CollisionReport, style: Style): string {
     // One mark per pair of briefs; each further pair of patterns on a line beneath it.
     for (const c of wave.collisions) {
       c.overlaps.forEach((o, i) => {
-        out.push(`  ${i === 0 ? paint(style, 'red', 'X') : ' '} ${label(c.a)} "${o.patterns[0]}" and ${label(c.b)} "${o.patterns[1]}" both cover ${o.witness}`);
+        out.push(`  ${i === 0 ? paint(style, 'red', 'X') : ' '} ${label(c.a)} "${o.patterns[0]}" and ${label(c.b)} "${o.patterns[1]}" both cover ${witnessText(o)}`);
       });
     }
     for (const u of wave.undecided) {
@@ -386,6 +387,16 @@ export function prettyMatrix(report: CollisionReport, style: Style): string {
   return out.join('\n').trimEnd();
 }
 
+/**
+ * A pair of patterns that meets, and the file named: `inTree` is `true` for a
+ * file the tree holds, `false` for an example the search built, `null` when
+ * the tree could not be read. Added to schema 2: a reader of it that does not
+ * know the field reads the rest as before.
+ */
+function overlapJson(o: Overlap): Record<string, unknown> {
+  return { patterns: o.patterns, witness: o.witness, inTree: o.inTree };
+}
+
 /** The matrix as JSON: briefs by id, and a collision per pair of briefs. */
 export function matrixJson(report: CollisionReport): Record<string, unknown> {
   return {
@@ -395,7 +406,7 @@ export function matrixJson(report: CollisionReport): Record<string, unknown> {
       collisions: w.collisions.map((c) => ({
         a: c.a.id,
         b: c.b.id,
-        overlaps: c.overlaps.map((o) => ({ patterns: o.patterns, witness: o.witness })),
+        overlaps: c.overlaps.map(overlapJson),
       })),
       undecided: w.undecided.map((u) => ({ a: u.a.id, b: u.b.id, patterns: u.patterns })),
       sharedDirectories: w.shared.map((s) => ({ a: s.a.id, b: s.b.id, directories: s.directories })),
@@ -471,11 +482,11 @@ export function prettySchedule(s: Schedule, written: readonly string[] | null, s
 export function scheduleJson(s: Schedule): Record<string, unknown> {
   const breach = (b: Breach): Record<string, unknown> =>
     b.reason === 'collision'
-      ? { reason: b.reason, brief: b.brief.id, overlaps: b.overlaps.map((o) => ({ patterns: o.patterns, witness: o.witness })) }
+      ? { reason: b.reason, brief: b.brief.id, overlaps: b.overlaps.map(overlapJson) }
       : { reason: b.reason, brief: b.brief.id, wave: b.wave };
   const passed = (p: Passed): Record<string, unknown> => {
     const base = { wave: p.wave, reason: p.reason, brief: p.brief.id };
-    if (p.reason === 'collision') return { ...base, overlaps: p.overlaps.map((o) => ({ patterns: o.patterns, witness: o.witness })) };
+    if (p.reason === 'collision') return { ...base, overlaps: p.overlaps.map(overlapJson) };
     if (p.reason === 'undecided') return { ...base, patterns: p.patterns };
     return base;
   };
