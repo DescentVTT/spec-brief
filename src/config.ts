@@ -258,7 +258,8 @@ export const DEFAULT_CONFIG: Config = {
     refactor: [],
     chore: [],
   },
-  placeholders: ['TBD', 'TBA', 'TODO', 'FIXME', 'XXX', '???', '...', '\u2026'],
+  // To be decided, undecided, to be filled in, to be confirmed: Traditional, then Simplified where it differs.
+  placeholders: ['TBD', 'TBA', 'TODO', 'FIXME', 'XXX', '???', '...', '\u2026', '待定', '未定', '待補', '待补', '待確認', '待确认'],
   fields: [],
   archiving: {
     tasks: 'all',

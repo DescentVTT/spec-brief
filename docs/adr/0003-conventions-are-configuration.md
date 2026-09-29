@@ -74,3 +74,29 @@ of words that say when: dates, quarters, months and weekdays, stretches of
 time, and the small words that join them. The lists are short on purpose; a
 time the rule reads as an event is a miss, which costs less than refusing an
 event that looks like a date.
+
+## Amended 2026-09-30: a trigger written in Chinese
+
+The words that say when were read as runs of letters and digits split at
+spaces and punctuation. Chinese is written without spaces, so `下個月` (next
+month), `2026年10月` and `第三季` (the third quarter) were each one word that
+was on no list, and passed as events. A trigger is now read in NFKC first,
+so full-width `Ｑ３` is `Q3`, and a run of Han characters is a word of its
+own, apart from the letters and digits beside it: `10月` is `10` and `月`.
+A run says only when if taking out the time words - `星期`, `近期`, `稍後`
+(later), `左右` (about) - and then the characters that say when or join
+them - `年 月 日 週 季`, `今 明 下 上 第 前 後`, the numerals, `在 到 的 之` -
+leaves nothing. Words come out before characters, since `稍後` is `稍`,
+which says nothing about time, and `後`. Traditional and Simplified are
+both listed.
+
+The lists stay short on purpose, for the reason above. `時` and `期` are not
+on them, so `到期時` (when it expires) is an event; nor are `每` (every) and
+`當` (when), as `every` is not; and `過年後` (after the new year) is read as
+an event, a miss. `當第二個租戶簽約時`, `月結完成後` (after the month-end
+close) and `年度稽核通過後` (after the annual audit passes) pass.
+
+The default placeholders gain `待定`, `未定`, `待補` and `待確認` (to be
+decided, undecided, to be filled in, to be confirmed), with their Simplified
+forms, and a full-width colon ends a placeholder as a colon does:
+`待定：等廠商回覆` is a placeholder, `待定事項列在下方` is not.
