@@ -1,6 +1,72 @@
 # Changelog
 
-Notable changes, newest first. Versions follow [semver](https://semver.org).
+Notable changes, newest first. Before 1.0, a minor release (0.2 to 0.3)
+carries anything that can turn a passing run red or change what a script
+reads - a finding not reported before, a changed exit code, input refused
+that was accepted, a flag, key or JSON field removed or renamed after a
+release of warning - and new features; a patch release carries only fixes
+that report less, crashes, speed and documentation, so `^0.3.0` takes no
+release that can turn a run red. This is the family's policy, recorded in
+[spec-core ADR-0009](https://github.com/DescentVTT/spec-core/blob/main/docs/adr/0009-versions-before-1-0.md);
+releases up to 0.2.7 came before it, and several of their patches changed
+what a run reports.
+
+## Unreleased
+
+A deferral trigger written in Chinese is read: `下個月` and `2026年10月` are
+times, not events. The GitLab fingerprint is built from what a finding is,
+not what it says. `matrix` names a file the tree holds, and one such file
+settles a pair the search could not decide.
+
+### Changed
+
+- A deferral trigger in Chinese that names only a time, such as `下個月`
+  (next month), `2026年10月` or `第三季`, is refused by `deferral-trigger`,
+  where it passed as an event; full-width `Ｑ３` is read as `Q3`.
+  `當第二個租戶簽約時` and `月結完成後` still pass (ADR-0003, amended).
+  Upgrading: name in `trigger` the event that brings the work back.
+- The default `placeholders` gain `待定`, `未定`, `待補` and `待確認`, with
+  their Simplified forms, and a full-width colon after a placeholder ends it
+  as a colon does, so `待定：稍後補上` and `TBD：later` hold only a
+  placeholder. Upgrading: write what the section says, or list the old
+  `placeholders` in the configuration.
+- The GitLab Code Quality fingerprint is a hash of the rule, the file, the
+  brief and what the finding is about - a section, a pattern, the other brief
+  of a pair - where it hashed the message, so a reworded finding, or a
+  collision that names another file, is the same issue. Upgrading: the first
+  merge request after the upgrade shows each spec-brief issue resolved once
+  and found again; nothing is to be done.
+- `matrix` and `schedule` name a file the tree holds where both patterns
+  match one outside the protections, and otherwise say that the file named
+  is an example: `both cover src/newmod/a.ts, an example not in the tree`
+  (ADR-0005, amended).
+- A pair the witness search could not decide, `collision-undecided`, a
+  warning, is a `collision`, an error, when the tree holds a file both
+  patterns match and neither brief protects: that file proves it. Upgrading:
+  run the two briefs in different waves, or narrow a scope, as for any
+  collision.
+
+### Added
+
+- `inTree` on each pair of patterns in the JSON of `matrix` and `schedule`:
+  `true` for a file the tree holds, `false` for an example, `null` when the
+  tree could not be read. `schemaVersion` stays 2. The library's `Overlap`
+  has it, and `meet` takes the tree's files as a fourth argument.
+- A rule's result, a plugin's included, may carry a `subject`, what the
+  finding is about, which the GitLab fingerprint is built from; a finding
+  carries it too.
+
+### Fixed
+
+- `list` shows the status word the brief writes, such as `封存` or `延後`
+  where the configuration names them, where it showed the English word it
+  stands for.
+- `list` and `schedule` show a title without the id it repeats: `new`
+  writes `# 012 — Rotate tokens`, and the id was shown twice. The JSON keeps
+  the title as written.
+- `--help` lists the formats each command writes: `sarif`, `github` and
+  `gitlab` are `lint`'s, `matrix`'s and `schedule`'s alone, where it offered
+  all five under the options for every command.
 
 ## 0.2.7
 
