@@ -59,68 +59,6 @@ export interface CliIO {
   readonly env?: Readonly<Record<string, string | undefined>>;
 }
 
-export const HELP = `spec-brief - lint, schedule and archive task briefs
-
-Usage:
-  spec-brief <command> [options]
-
-Commands:
-  init                  write .spec-brief.json and the brief directories
-  new <title>           scaffold a brief with the next free id
-  lint [brief...]       check briefs against the configuration
-  list                  briefs with their status, wave and readiness
-  matrix                scope collisions between briefs in the same wave
-  schedule              the waves the live briefs can run in, computed
-  archive <brief>       close a round: check it, stamp it, freeze it, move it
-  unarchive <brief>     reopen an archived brief
-
-Options for every command:
-  --root <dir>          run from this directory instead of the current one
-  --config <file>       use this configuration file
-  --no-config           use the defaults, ignoring any configuration file
-  --format <format>     pretty (default), json, sarif, github or gitlab
-  --strict              treat warnings as errors
-  --no-git              leave git out; read the files on disk instead
-  --color, --no-color   force colour on or off
-  -h, --help            show this help
-  -v, --version         show the version
-
-init:
-  --briefs <dir>        the directory of live briefs; default briefs
-  --archive <dir>       the directory of archived briefs; default <briefs>/archive
-
-new:
-  --id <id>             use this id instead of the next free one
-  --type <type>         a brief type from the configuration
-  --wave <n>            the wave it runs in
-  --depends-on <ids>    comma-separated ids it runs after
-  --date <YYYY-MM-DD>   the date in its front matter; default today
-
-list:
-  --ready               only briefs that can run now: dependencies archived, not drafts or deferred
-  --archived            include archived briefs
-
-matrix:
-  --all-waves           compare every live brief, whatever its wave
-
-schedule:
-  --write               write each proposed wave into its brief's front matter
-
-archive:
-  --pr <number>         the pull request the round merged in
-  --commit <rev>        the commit the round landed as
-  --base <rev>          the branch it started from; the diff runs from the merge base
-  --summary <text>      what the round did, for the banner
-  --date <YYYY-MM-DD>   the archival date; default today
-  --allow-dirty         archive although the tree has uncommitted work
-  --dry-run             print the plan and change nothing
-
-unarchive:
-  --dry-run             print the plan and change nothing
-
-Exit codes: 0 clean, 1 findings or refused, 2 the run could not be trusted.
-`;
-
 type Values = Record<string, string | boolean | undefined>;
 
 const GLOBAL: NonNullable<ParseArgsConfig['options']> = {
@@ -166,6 +104,87 @@ const COMMANDS: Readonly<Record<string, { options: NonNullable<ParseArgsConfig['
   },
   unarchive: { options: { 'dry-run': { type: 'boolean' } }, formats: ['pretty', 'json'] },
 };
+
+/**
+ * The formats each command writes, read from the table `main` checks a
+ * `--format` against, so the help names no format a command refuses: the
+ * finding formats are `lint`'s, `matrix`'s and `schedule`'s alone.
+ */
+function formatsHelp(): string {
+  const groups = new Map<string, string[]>();
+  for (const [command, spec] of Object.entries(COMMANDS)) {
+    const formats = spec.formats.join(', ');
+    groups.set(formats, [...(groups.get(formats) ?? []), command]);
+  }
+  const rows = [...groups].map(([formats, commands]) => [commands.join(', '), formats] as const);
+  const width = Math.max(...rows.map(([commands]) => commands.length));
+  return rows.map(([commands, formats]) => `  ${commands.padEnd(width)}  ${formats}`).join('\n');
+}
+
+export const HELP = `spec-brief - lint, schedule and archive task briefs
+
+Usage:
+  spec-brief <command> [options]
+
+Commands:
+  init                  write .spec-brief.json and the brief directories
+  new <title>           scaffold a brief with the next free id
+  lint [brief...]       check briefs against the configuration
+  list                  briefs with their status, wave and readiness
+  matrix                scope collisions between briefs in the same wave
+  schedule              the waves the live briefs can run in, computed
+  archive <brief>       close a round: check it, stamp it, freeze it, move it
+  unarchive <brief>     reopen an archived brief
+
+Options for every command:
+  --root <dir>          run from this directory instead of the current one
+  --config <file>       use this configuration file
+  --no-config           use the defaults, ignoring any configuration file
+  --format <format>     the output format, pretty by default; each command's are below
+  --strict              treat warnings as errors
+  --no-git              leave git out; read the files on disk instead
+  --color, --no-color   force colour on or off
+  -h, --help            show this help
+  -v, --version         show the version
+
+Formats:
+${formatsHelp()}
+
+init:
+  --briefs <dir>        the directory of live briefs; default briefs
+  --archive <dir>       the directory of archived briefs; default <briefs>/archive
+
+new:
+  --id <id>             use this id instead of the next free one
+  --type <type>         a brief type from the configuration
+  --wave <n>            the wave it runs in
+  --depends-on <ids>    comma-separated ids it runs after
+  --date <YYYY-MM-DD>   the date in its front matter; default today
+
+list:
+  --ready               only briefs that can run now: dependencies archived, not drafts or deferred
+  --archived            include archived briefs
+
+matrix:
+  --all-waves           compare every live brief, whatever its wave
+
+schedule:
+  --write               write each proposed wave into its brief's front matter
+
+archive:
+  --pr <number>         the pull request the round merged in
+  --commit <rev>        the commit the round landed as
+  --base <rev>          the branch it started from; the diff runs from the merge base
+  --summary <text>      what the round did, for the banner
+  --date <YYYY-MM-DD>   the archival date; default today
+  --allow-dirty         archive although the tree has uncommitted work
+  --dry-run             print the plan and change nothing
+
+unarchive:
+  --dry-run             print the plan and change nothing
+
+Exit codes: 0 clean, 1 findings or refused, 2 the run could not be trusted.
+`;
 
 interface Parsed {
   readonly command: string | undefined;

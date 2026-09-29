@@ -80,6 +80,18 @@ describe('help, version and usage errors', () => {
     expect((await run(cwd, ['lint', '--bogus'])).code).toBe(EXIT_ERROR);
     expect((await run(cwd, ['list', '--format', 'sarif'])).err).toBe('spec-brief: --format for list is one of pretty, json, not "sarif"\n');
   });
+
+  it('names the formats each command writes, and none it refuses', async () => {
+    // The finding formats are lint's, matrix's and schedule's: the help once
+    // offered all five under the options for every command.
+    expect(HELP).toContain(
+      ['Formats:', '  init, new, list, archive, unarchive  pretty, json', '  lint, matrix, schedule               pretty, json, sarif, github, gitlab', ''].join('\n'),
+    );
+    expect(HELP).not.toMatch(/--format <format> .*sarif/);
+    for (const command of ['init', 'new', 'list', 'archive', 'unarchive']) {
+      expect((await run(cwd, [command, '--format', 'gitlab'])).err, command).toBe(`spec-brief: --format for ${command} is one of pretty, json, not "gitlab"\n`);
+    }
+  });
 });
 
 describe('init and new', () => {
