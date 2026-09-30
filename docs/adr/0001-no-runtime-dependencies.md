@@ -200,3 +200,22 @@ filesystem's root, as one on the whole pattern does, so `{/docs,src}` is
 spec-brief refuses such an alternative, as it refuses a pattern that starts
 with `/` ([ADR-0005](0005-scopes-collide-by-intersection.md), amended), so no
 scope reads one rooted. Only `pattern/glob.ts` changed.
+
+## Amended 2026-09-30: copied again at 5666c96
+
+The copy was taken again at spec-core 5666c96, and four of its changes reach
+a user. A leading `./` goes with the slashes after it, as POSIX reads them:
+`.//docs` is `docs`, where spec-core read `/docs`, and `./{/docs,src}` is
+`docs` or `src`. spec-core now says how it reads the start of each brace
+alternative, `globAlternatives`, and `src/glob.ts` takes that reading where
+it read the braces again itself
+([ADR-0005](0005-scopes-collide-by-intersection.md), amended). A front-matter
+key is a word of any script, so `狀態: 已接受` is a key and its value, where
+it was a line the front matter could not read; a full-width colon still separates
+nothing, as in YAML. A value that starts with a letter of any script is
+written plain, so archival writes `status: 封存`, where it wrote
+`status: "封存"`. The `text` module gains `displayWidth`, the columns a text
+takes in a terminal, and `list`, `schedule` and `matrix` pad their columns
+by it, where `padEnd` counted a Han character as one column of two.
+`rebaseGlob` is not read: spec-brief takes no pattern on the command line,
+only those a brief or the configuration writes.
