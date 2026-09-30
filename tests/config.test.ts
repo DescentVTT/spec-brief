@@ -159,6 +159,9 @@ describe('resolving a configuration', () => {
       '"exclude" pattern "{draft-*.md,/x.md}": a pattern is relative to the repository root, and the braces expand to "/x.md", which starts with "/"',
     ]);
     expect(problems({ files: '/*.md' })).toEqual(['"files" pattern "/*.md": a pattern is relative to the repository root and cannot start with "/"']);
+    // A leading "./" takes the slashes after it along: ".//*.md" is "*.md",
+    // where it was refused as "/*.md" is, and the run exited 2.
+    expect(problems({ files: './/*.md', exclude: ['./{/README.md,x.md}'] })).toEqual([]);
     expect(problems({ files: '{brief,x}{/,-}*.md' })).toEqual([]);
     expect(problems({ archiving: { banner: ['{date} {sumary}'] } })).toEqual([
       expect.stringContaining('"archiving.banner" uses {sumary}; the placeholders are {date}'),

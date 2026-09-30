@@ -54,11 +54,14 @@ describe('parsing', () => {
     expect(error('  !src/**')).toBe('negated patterns are not supported; narrow the positive pattern');
     expect(error('/src')).toBe('a pattern is relative to the repository root and cannot start with "/"');
     expect(error(' /src')).toBe('a pattern is relative to the repository root and cannot start with "/"');
-    // The core drops a leading "./" before it reads a leading "/", so ".//src"
-    // was "/src", rooted at the filesystem's root, and scoped nothing.
-    for (const pattern of ['.//src', '././/src', './//src', './/']) {
-      expect(error(pattern), pattern).toBe('a pattern is relative to the repository root and cannot start with "/"');
+    // A leading "./" goes with the slashes after it, as POSIX reads them:
+    // ".//src" is "src", where it was "/src", refused as rooted.
+    for (const pattern of ['.//src', '././/src', './//src', './/./src']) {
+      expect(matches(pattern, 'src'), pattern).toBe(true);
+      expect(matches(pattern, 'lib/src'), pattern).toBe(false);
     }
+    // What is left is the root itself, refused as "./" is.
+    expect(error('.//')).toBe('the pattern names the root itself, not a path under it');
     // A "./" that no "/" follows names nothing, and the rest is relative.
     expect(matches('./src', 'src')).toBe(true);
     expect(matches('././src/a.ts', 'src/a.ts')).toBe(true);
@@ -107,23 +110,38 @@ describe('parsing', () => {
       ['{/docs,x}', '/docs'],
       ['{x,/docs}', '/docs'],
       ['{x,{/docs,y}}', '/docs'],
-      ['{//docs,x}', '//docs'],
-      ['{/./docs,x}', '/./docs'],
+      // Named as spec-core reads it, one "/" and no "./" after it.
+      ['{//docs,x}', '/docs'],
+      ['{/./docs,x}', '/docs'],
       ['{/docs/,x}', '/docs/'],
       ['{/*,x}', '/*'],
       ['{/docs}', '/docs'],
       ['{/docs,/src}', '/docs'],
       ['{a,/b}c', '/bc'],
-      // A leading "./" names nothing, on an alternative as on the pattern.
-      ['{.//docs,x}', '/docs'],
-      ['./{/docs,x}', '/docs'],
-      ['{.,x}/{/b,c}', '/b'],
       ['{,x}{/b,c}', '/b'],
     ] as const) {
       expect(error(pattern), pattern).toBe(`a pattern is relative to the repository root, and the braces expand to "${text}", which starts with "/"`);
     }
     // One that names no path is refused in the core's words, as it was.
     expect(error('{/,x}')).toBe('the braces expand to "/", which names no path');
+  });
+
+  it('reads a "/" after a leading "./" as rooting nothing, on an alternative as on the pattern', () => {
+    // A "./" goes with the slashes after it, one the braces give included:
+    // "./{/docs,x}" is ".//docs" or "./x", which is "docs" or "x". Each was
+    // refused as naming "/docs".
+    for (const [pattern, path] of [
+      ['{.//docs,x}', 'docs'],
+      ['./{/docs,x}', 'docs'],
+      ['././{/docs,x}', 'docs'],
+      ['{.,x}/{/b,c}', 'b'],
+      ['{.,x}/{/b,c}', 'x/b'],
+    ] as const) {
+      expect(matches(pattern, path), `${pattern} ${path}`).toBe(true);
+      expect(matches(pattern, `a/${path}`), `${pattern} a/${path}`).toBe(false);
+    }
+    // A "/" that no "./" of the pattern's stands before still roots its text.
+    expect(error('{./x,/docs}')).toBe('a pattern is relative to the repository root, and the braces expand to "/docs", which starts with "/"');
   });
 
   it('reads a "/" inside braces that starts no text as it did', () => {
@@ -156,8 +174,12 @@ describe('parsing', () => {
       // A "[" that no "]" closes within its segment is no class: "{x,[a,/}]"
       // is "x]", "[a]" or "/]".
       ['{x,[a,/}]', '/]'],
-      // A "}" with no "{" open is a literal, and braces after it still expand.
-      ['{/a,x}}{b,c}', '/a}b'],
+      // A "}" with no "{" open is a literal, and braces after it still
+      // expand. The text is named as spec-core gives it, such a "}" or ","
+      // written as the class of that one character, which reads the same
+      // inside braces as outside them.
+      ['{/a,x}}{b,c}', '/a[}]b'],
+      ['{/a,x},{b,c}', '/a[,]b'],
     ] as const) {
       expect(error(pattern), pattern).toBe(`a pattern is relative to the repository root, and the braces expand to "${text}", which starts with "/"`);
     }
@@ -343,8 +365,8 @@ describe('a rooted alternative', () => {
   it('is refused where the core roots one, and only there, over a generated corpus', () => {
     // Every alternative the core roots at the filesystem's root has a base
     // that starts with "/", and no other has. Classes, escapes and lone
-    // braces are among the atoms, since the text named is found by reading
-    // the braces as the core does.
+    // braces are among the atoms, since the text named is spec-core's
+    // reading of the braces, and must read alone as it did inside them.
     const next = patternsOver(['a', 'b', '/', '/a', './', '.', '', '\\,', '}', '[,]', '[{]', '[]}]', '[!]]'], 20260929);
     let braced = 0;
     let relative = 0;
@@ -369,8 +391,9 @@ describe('a rooted alternative', () => {
       const alone = coreParse(named, { dialect: 'path', caseSensitive: true });
       expect(alone.ok && alone.glob.bases.every((base) => base.startsWith('/')), `${pattern}: ${named}`).toBe(true);
     }
-    // 226 and 1435 when written.
-    expect(braced).toBeGreaterThanOrEqual(200);
+    // 226 and 1435 when written; 192 and 1487 at spec-core 5666c96, where a
+    // "/" after a "./" roots nothing.
+    expect(braced).toBeGreaterThanOrEqual(150);
     expect(relative).toBeGreaterThanOrEqual(1000);
   });
 });

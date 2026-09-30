@@ -8,11 +8,12 @@
  * spec-brief adds around it:
  *
  * - A pattern is relative to the repository root, so a leading `/` is refused
- *   rather than rooted at the filesystem: on the pattern, one after a leading
- *   `./` too, as in `.//docs`, and on a text its braces give, since spec-core
- *   reads `{/docs,x}` as `/docs` or `x`, and `docs` would fall out of the
- *   scope unsaid. A list entry's `!` has no list to belong to in a scope, so
- *   it is refused rather than read.
+ *   rather than rooted at the filesystem: on the pattern, and on a text its
+ *   braces give, since spec-core reads `{/docs,x}` as `/docs` or `x`, and
+ *   `docs` would fall out of the scope unsaid. A leading `./` goes with the
+ *   slashes after it, as POSIX reads them: `.//docs` is `docs`, and
+ *   `./{/docs,x}` is `docs` or `x`. A list entry's `!` has no list to belong
+ *   to in a scope, so it is refused rather than read.
  * - Paths compare case-sensitively on every host, as git's do.
  * - A path with no glob syntax is read as the tree reads it: a file the tree
  *   holds is that file, a directory it holds is everything beneath it, and a
@@ -30,6 +31,7 @@
  */
 
 import {
+  globAlternatives,
   globCovers as coreCovers,
   globWitness as coreWitness,
   isGlobSyntax,
@@ -76,7 +78,14 @@ export interface ParseOptions {
 export function parseGlob(source: string, options: ParseOptions = {}): GlobParse {
   const pattern = source.trim();
   if (pattern.startsWith('!')) return { ok: false, error: 'negated patterns are not supported; narrow the positive pattern' };
-  if (undotted(pattern).startsWith('/')) return { ok: false, error: 'a pattern is relative to the repository root and cannot start with "/"' };
+  // spec-core's own reading of where each alternative starts, a leading `./`
+  // and `/` included (spec-core ADR-0003). A pattern it refuses, the core's
+  // parse refuses in the same words, so either may say so. It comes first so
+  // that a pattern led by `/`, which the core roots at the filesystem's root,
+  // is refused in spec-brief's words.
+  const read = globAlternatives(pattern);
+  if (!read.ok) return { ok: false, error: read.error };
+  if (read.rooted) return { ok: false, error: 'a pattern is relative to the repository root and cannot start with "/"' };
   const given = options.literal ?? 'file';
   const literals: Literal[] = [];
   const literal = (path: string): LiteralReading => {
@@ -88,95 +97,15 @@ export function parseGlob(source: string, options: ParseOptions = {}): GlobParse
   // as a malformed one is; what the reading throws is a defect, and passes on.
   const parsed = coreParse(pattern, { dialect: 'path', caseSensitive: true, literal });
   if (!parsed.ok) return parsed;
-  // Read once the core has parsed the pattern, so that its braces close and
-  // give no more texts than the core allows.
-  const rooted = rootedAlternative(pattern);
+  // Once the core has parsed the pattern, so that an alternative naming no
+  // path, `{/,x}`, is refused in the core's words. The text is named behind
+  // the `/` that roots it, as spec-core gives it: it reads the same written
+  // alone, so a `}` or `,` no group took is written as a class, `[}]`.
+  const rooted = read.alternatives.find((alternative) => alternative.rooted);
   if (rooted !== undefined) {
-    return { ok: false, error: `a pattern is relative to the repository root, and the braces expand to "${rooted}", which starts with "/"` };
+    return { ok: false, error: `a pattern is relative to the repository root, and the braces expand to "/${rooted.text}", which starts with "/"` };
   }
   return { ok: true, glob: { source, compiled: parsed.glob, literals } };
-}
-
-/**
- * A pattern less the `./` it starts with. spec-core drops it before it reads
- * a leading `/`, since `.` names nothing: `.//docs` is `/docs`, rooted at the
- * filesystem's root.
- */
-function undotted(pattern: string): string {
-  let rest = pattern;
-  while (rest.startsWith('./')) rest = rest.slice(2);
-  return rest;
-}
-
-/**
- * The first text a pattern's braces give that starts with `/` once its `./`
- * is dropped, less that `./`: an alternative spec-core roots at the
- * filesystem's root, since braces expand before a leading `/` is read, so
- * that `{/docs,x}` is `/docs` or `x` (spec-core ADR-0003, amended
- * 2026-09-29). `undefined` when there is none. A `/` after anything else
- * starts no text: `a/{/b,c}` gives `a//b`, which is `a/b`.
- *
- * spec-core keeps nothing of the texts its braces give, and the refusal names
- * the text, as the core's own refusals do. So this expands braces as the core
- * does, for a pattern the core parsed, whose braces close and give at most
- * `MAX_ALTERNATIVES` texts: a `\` escapes the next character, a class holds
- * no brace syntax, a `}` with no `{` open is a literal, and the first braces
- * to close are expanded first, each option in turn, so the text named is the
- * first such text the core gives.
- *
- * Its loop, read one step past the end, reads `''`, which no branch acts on,
- * so a bound one further reads the same.
- */
-function rootedAlternative(pattern: string): string | undefined {
-  let depth = 0;
-  let open = 0;
-  const stops: number[] = [];
-  for (let i = 0; i < pattern.length; i += 1) {
-    const ch = pattern.charAt(i);
-    if (ch === '\\') {
-      i += 1;
-    } else if (ch === '[') {
-      const close = classEnd(pattern, i);
-      if (close !== -1) i = close;
-    } else if (ch === '{') {
-      if (depth === 0) open = i;
-      depth += 1;
-    } else if (ch === ',' && depth === 1) {
-      stops.push(i);
-    } else if (ch === '}' && depth > 0) {
-      depth -= 1;
-      if (depth === 0) {
-        let start = open + 1;
-        for (const stop of [...stops, i]) {
-          const rooted = rootedAlternative(`${pattern.slice(0, open)}${pattern.slice(start, stop)}${pattern.slice(i + 1)}`);
-          if (rooted !== undefined) return rooted;
-          start = stop + 1;
-        }
-        return undefined;
-      }
-    }
-  }
-  const text = undotted(pattern);
-  return text.startsWith('/') ? text : undefined;
-}
-
-/**
- * The index of the `]` closing a class opened at `open`, or -1 when none does
- * within its segment, as spec-core finds it while it expands braces: after a
- * `!` or `^`, the first member is a member even when it is `]`.
- */
-function classEnd(pattern: string, open: number): number {
-  let i = open + 1;
-  if (pattern.charAt(i) === '!' || pattern.charAt(i) === '^') i += 1;
-  if (pattern.charAt(i) === ']') i += 1;
-  for (; i < pattern.length; i += 1) {
-    const ch = pattern.charAt(i);
-    if (ch === '\\') i += 1;
-    else if (ch === '/') return -1;
-    else if (ch === ']') return i;
-  }
-  /* v8 ignore next -- in a pattern the core parsed, a "[" is closed, or met by a "/", before the pattern ends. */
-  return -1;
 }
 
 /**
