@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  filesMatching,
   type Glob,
   globBase,
   globBases,
@@ -10,6 +11,7 @@ import {
   held,
   intersectGlobs,
   type LiteralReading,
+  matchesAny,
   matchGlob,
   parseGlob,
   readingIn,
@@ -478,6 +480,81 @@ describe('matching', () => {
     expect(matches('src/a.ts', 'src//a.ts')).toBe(true);
     expect(matches('**', '/')).toBe(false);
     expect(matches('**', '.')).toBe(false);
+  });
+});
+
+describe('matching a list of files', () => {
+  // Paths that sort beside a directory's run, or are not written in canonical
+  // form, and names beside `/` in code-unit order: `-`, `.`, `0`.
+  const files = [
+    'src/a.ts',
+    'src/b/c.ts',
+    './src/./d.ts',
+    'src//e.ts',
+    'src-x/f.ts',
+    'src.ts',
+    'src0/g.ts',
+    'src',
+    'lib/a.ts',
+    'lib/deep/er/h.md',
+    'docs/v1.2/i.md',
+    'Src/j.ts',
+    'a/src/k.ts',
+    '.',
+    '/',
+    '',
+    'src/a.ts',
+  ];
+  const patterns = [
+    '**',
+    '*.ts',
+    '**/*.ts',
+    'src/**',
+    'src/',
+    'src',
+    'src/*.ts',
+    'src/a.ts',
+    'src/**/*.ts',
+    '{src,lib}/**',
+    '{src/a.ts,lib}',
+    'src-x/**',
+    'src?/*.ts',
+    '[a-z]*/*.ts',
+    'lib/**/h.md',
+    'docs/v1.2',
+    'docs/v1.2/',
+    'nowhere/**',
+    'a/{src,lib}/*.ts',
+    // Bases one inside another, or one that is the root: a file below both is one file.
+    '{src,src/b}/*.ts',
+    '{**/a.ts,src/*.ts}',
+  ];
+
+  it('finds what matching each file finds, in the list\'s order, however the tree reads a literal', () => {
+    // And every pattern of one to three segments drawn from these.
+    const parts = ['src', 'lib', 'Src', 'src-x', 'src0', 'docs', 'v1.2', 'deep', '*', '**', '?rc', '{src,lib}', '[a-z]*', 'a.ts', '*.ts', '*.md'];
+    const all = [...patterns];
+    for (const first of parts) {
+      all.push(first, `${first}/`);
+      for (const second of parts) {
+        all.push(`${first}/${second}`);
+        for (const third of ['*.ts', 'c.ts', '**', 'er']) all.push(`${first}/${second}/${third}`);
+      }
+    }
+    for (const reading of [readingIn(files), 'file', 'directory', 'either'] as const) {
+      for (const pattern of all) {
+        const parsed = parseGlob(pattern, { literal: reading });
+        if (!parsed.ok) continue;
+        const expected = files.filter((file) => matchGlob(parsed.glob, file));
+        expect(filesMatching(parsed.glob, files), pattern).toEqual(expected);
+        expect(matchesAny(parsed.glob, files), pattern).toBe(expected.length > 0);
+      }
+    }
+  });
+
+  it('asks nothing of an empty list', () => {
+    expect(filesMatching(glob('**'), [])).toEqual([]);
+    expect(matchesAny(glob('**'), [])).toBe(false);
   });
 });
 

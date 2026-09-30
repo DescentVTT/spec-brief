@@ -11,7 +11,7 @@
  */
 
 import type { Brief } from './brief.js';
-import { type Glob, globCovers, globWitness, type LiteralReading, matchGlob, parseGlob, WITNESS_BUDGET } from './glob.js';
+import { filesMatching, type Glob, globCovers, globWitness, type LiteralReading, matchGlob, parseGlob, WITNESS_BUDGET } from './glob.js';
 
 /** How a literal path is read, as {@link readingIn} answers for a tree. */
 export type Reading = (path: string) => LiteralReading;
@@ -74,7 +74,7 @@ function matching(files: readonly string[], glob: Glob): ReadonlySet<string> {
   }
   let found = byGlob.get(glob);
   if (found === undefined) {
-    found = new Set(files.filter((file) => matchGlob(glob, file)));
+    found = new Set(filesMatching(glob, files));
     byGlob.set(glob, found);
   }
   return found;
