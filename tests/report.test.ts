@@ -323,6 +323,7 @@ describe('lists, matrices and plans', () => {
       ['001: Rotate tokens', '001', 'Rotate tokens'],
       ['001\uff1a登入', '001', '登入'],
       ['001 - Rotate tokens', '001', 'Rotate tokens'],
+      ['001  - Rotate tokens', '001', 'Rotate tokens'],
       // An id of digits is compared by value, as ids are.
       ['12 - Rotate tokens', '012', 'Rotate tokens'],
       ['B-12: Rotate tokens', 'B-12', 'Rotate tokens'],

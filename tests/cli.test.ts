@@ -410,6 +410,10 @@ describe('archive and unarchive', () => {
     expect(existsSync(join(root, 'briefs', 'archive', '001_a.md'))).toBe(true);
 
     expect((await run(root, ['archive', '1'])).out).toBe('briefs/archive/001_a.md is already archived; nothing to do\n');
+    const reopenDry = await run(root, ['unarchive', '1', '--dry-run', '--no-color']);
+    expect(reopenDry.code).toBe(EXIT_OK);
+    expect(reopenDry.out).toContain('would move briefs/archive/001_a.md -> briefs/001_a.md');
+    expect(existsSync(join(root, 'briefs', 'archive', '001_a.md'))).toBe(true);
     const json = JSON.parse((await run(root, ['unarchive', '1', '--format', 'json'])).out) as { ok: boolean; plan: { to: string } };
     expect(json).toEqual(expect.objectContaining({ ok: true, plan: expect.objectContaining({ to: 'briefs/001_a.md' }) }));
     expect((await run(root, ['unarchive', '1'])).out).toBe('briefs/001_a.md is already live; nothing to do\n');
