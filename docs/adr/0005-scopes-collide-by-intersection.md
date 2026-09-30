@@ -203,7 +203,9 @@ A leading `./` is dropped first, from an alternative as from a whole
 pattern, so `{.//docs,src}` and `./{/docs,src}` are refused as naming
 `/docs`. `.//docs` alone is refused in the words `/docs` is: spec-core read
 it as `/docs` already, and spec-brief, which looked for a `/` at the start,
-passed it on to scope nothing. A `/` after anything else starts no text:
+passed it on to scope nothing. (Amended 2026-09-30, below: spec-core reads
+all three as relative now, and so does spec-brief.) A `/` after anything
+else starts no text:
 `docs/{/a,b}` is `docs//a`, which is `docs/a`, or `docs/b`, as it read
 before.
 
@@ -255,3 +257,31 @@ still agree on which briefs can share a wave.
 The GitLab fingerprint of a collision is built from the pair of briefs,
 not from its message, so the file named changing is not a problem fixed
 and another found.
+
+## Amended 2026-09-30: a "/" after a leading "./"
+
+spec-core 5666c96 reads a leading `./` as POSIX does, with the slashes after
+it: `.//docs` is `./docs`, which is `docs`, where spec-core read `/docs`,
+rooted at the filesystem's root
+([ADR-0001](0001-no-runtime-dependencies.md), amended). A `/` the braces
+give after the pattern's `./` is one of those slashes, so `./{/docs,src}`,
+which is `.//docs` or `./src`, roots neither alternative, and neither does
+`{.//docs,src}`. spec-brief refused all three as naming `/docs`, since that
+was the copy's reading (the amendment of 2026-09-29 above). It reads them as
+the copy does now, relative to the repository root, so a scope written so
+means what it names. `.//` is the root itself, refused as `./` is. A `/`
+that no `./` of the pattern's stands before still roots its text, and is
+refused as it was: `{./x,/docs}` names `/docs`.
+
+`src/glob.ts` no longer reads the braces to find a rooted alternative.
+spec-core says how it reads the start of each alternative, `globAlternatives`: whether a `/`
+roots it, and its text without the `./` and the slashes it starts with.
+Reading the braces a second time was the reason the two could disagree, and
+did here: the copy of the old reading would have gone on refusing `.//docs`.
+The refusal names spec-core's text behind one `/`, so `{//docs,x}` names
+`/docs`, where it named `//docs`, and `{/./docs,x}` names `/docs`. A `}` or
+`,` no group took is written as the class of that one character,
+`{/a,x}}{b,c}` naming `/a[}]b`, which reads the same inside braces as
+outside them. The generated corpus holds the refusal to spec-core's bases
+as before: a pattern is refused exactly where the core gives a base that
+starts with `/`, and the text named is rooted written alone.

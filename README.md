@@ -65,7 +65,7 @@ Scopes are globs in spec-core's `path` dialect, the one every spec-\* tool reads
 - Parentheses are literal, `C++(notes).md`, unless a group holds a `|`: an extended glob such as `+(a|b)` is refused, and written `{a,b}`.
 - A trailing `/**` or `/` is a directory's contents - at least one name below it, never the directory itself - on a brace alternative as on the whole pattern: `{src/,lib}` is `src/` or `lib`.
 - Each alternative names a path under the root, as a whole pattern does: `./` is refused, and so is `{./,src}`.
-- A pattern is relative to the repository root, so a leading `/` is refused, on an alternative as on the whole pattern: `/docs`, `.//docs` and `{/docs,src}` alike.
+- A pattern is relative to the repository root, so a leading `/` is refused, on an alternative as on the whole pattern: `/docs` and `{/docs,src}` alike. A leading `./` takes the slashes after it along, as POSIX reads them: `.//docs` is `docs`, and `./{/docs,src}` is `docs` or `src`.
 - After a name, a `/` inside braces names nothing: `docs/{/a,b}` is `docs/a` or `docs/b`.
 - A path with no glob syntax is read from the tree: a file the tree holds is that file, a directory it holds is everything beneath it, and a path it does not hold yet is a file unless it ends in `/`.
 - Write `src/newmod/` for a directory the round creates; `lint` notes a bare `src/newmod` it cannot place.
@@ -265,7 +265,7 @@ A run over a briefs directory that does not exist exits 2, because a check over 
 | `exclude` | `[]` | File-name globs that are never briefs, such as an index. |
 | `template` | `null` | A template file for `new`, with `{id}`, `{title}`, `{date}`, `{type}`, `{wave}`, `{status}`. |
 | `id` | `{ "source": "filename", "separator": "_", "digits": 3 }` | Where an id comes from, and how a new one is written. |
-| `status` | `{ "field": "status", "draft": "draft", "active": "active", "deferred": "deferred", "archived": "archived" }` | The words a repository uses. `field: null` reads status from location alone; `draft` and `deferred` may be `null` where a repository has no such word. |
+| `status` | `{ "field": "status", "draft": "draft", "active": "active", "deferred": "deferred", "archived": "archived" }` | The words a repository uses. `field` may be a key of any script, `狀態` as well as `status`, followed by an ASCII colon in the brief; `field: null` reads status from location alone; `draft` and `deferred` may be `null` where a repository has no such word. |
 | `sections` | Intent, Negative Scope, Not Empowered (optional), Invariants (checklist) | Sections every live brief carries: a name, or `{ name, aliases, mustContain, checklist, optional, hint }`. `hint` is below. |
 | `sectionOrder` | `false` | Sections must appear in the listed order. |
 | `types` | `feature`, `defect`, `refactor`, `chore` | Brief types and the sections each adds. |

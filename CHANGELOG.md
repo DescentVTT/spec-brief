@@ -16,10 +16,33 @@ what a run reports.
 A deferral trigger written in Chinese is read: `下個月` and `2026年10月` are
 times, not events. The GitLab fingerprint is built from what a finding is,
 not what it says. `matrix` names a file the tree holds, and one such file
-settles a pair the search could not decide.
+settles a pair the search could not decide. spec-core at 5666c96: `.//docs`
+is `docs`, a front-matter key may be written in Chinese, and a column in
+Chinese lines up.
 
 ### Changed
 
+- spec-core at 5666c96. A leading `./` takes the slashes after it along, as
+  POSIX reads them: `.//docs` is `docs`, and `./{/docs,src}` and
+  `{.//docs,src}` are `docs` or `src`. Each was a `glob` error naming
+  `/docs`, and a `files` or `exclude` pattern spelt so was a configuration
+  problem, and the run exited 2. `.//` is the root itself, refused as `./`
+  is. A rooted alternative is named as spec-core reads it, `{//docs,src}`
+  as `"/docs"` where it was `"//docs"` (ADR-0005, amended). Upgrading: a
+  scope refused before is read now and may meet another brief's; run
+  `spec-brief matrix` and settle what it reports.
+- A front-matter key may be a word of any script, as in YAML, so a
+  `狀態: 已接受` line is a key and its value. With `status.field` left at
+  `status` the key is `unknown-field`, a warning, where the line was a
+  `front-matter` error; the brief still declares no status. `status.field`
+  may now name `狀態` or `状态`, which could not be read before. After a
+  full-width colon, `狀態：已接受`, the line is still a `front-matter`
+  error. Upgrading: write `status:`, or set `status.field` to the key the
+  briefs write.
+- `archive`, `unarchive` and `new` write a status word that starts with a
+  letter of any script plain, `status: 封存`, where they quoted it,
+  `status: "封存"`; both read as the same word. Upgrading: a script that
+  matches the written line as text matches `status: 封存`.
 - A deferral trigger in Chinese that names only a time, such as `下個月`
   (next month), `2026年10月` or `第三季`, is refused by `deferral-trigger`,
   where it passed as an event; full-width `Ｑ３` is read as `Q3`.
@@ -58,6 +81,13 @@ settles a pair the search could not decide.
 
 ### Fixed
 
+- `list`, `schedule` and `matrix` line up a column holding Chinese - a
+  status word, a title, a brief named by its file - by the columns a
+  terminal gives it, where a Han character was counted as one column of
+  two.
+- `unknown-field`, and a configuration key nobody declared, suggest no key
+  that keeps nothing of the one written: `狀態` was asked
+  `did you mean "id"?`.
 - `list` shows the status word the brief writes, such as `封存` or `延後`
   where the configuration names them, where it showed the English word it
   stands for.
