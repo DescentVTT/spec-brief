@@ -440,6 +440,16 @@ describe('scaffolding', () => {
     const noStatus = renderNewBrief(config({ status: { field: null } }), { id: '1', title: 'T', date: '2026-09-24', type: 'unknown', dependsOn: [] }, null);
     expect(noStatus.startsWith('---\ndate: 2026-09-24\ntype: unknown\naffectedFiles: []')).toBe(true);
   });
+
+  it('writes a status word in Chinese as it is typed, and reads the brief back', () => {
+    // "草稿" was written quoted; a word of any script that YAML reads plain is
+    // written plain. Under a key in Chinese, the brief it writes is one it reads.
+    const chinese = config({ status: { field: '狀態', draft: '草稿', active: '進行中' } });
+    const text = renderNewBrief(chinese, { id: '1', title: 'T', date: '2026-09-24' }, null);
+    expect(text.split('\n').slice(0, 3)).toEqual(['---', '狀態: 草稿', 'date: 2026-09-24']);
+    const drafted = corpusOf({ 'briefs/001_t.md': text }, chinese).briefs[0];
+    expect([drafted?.status, drafted?.statusWord, drafted?.frontMatter?.problems]).toEqual(['draft', '草稿', []]);
+  });
 });
 
 describe('the library', () => {
