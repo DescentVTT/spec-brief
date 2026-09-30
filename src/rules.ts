@@ -103,10 +103,11 @@ function isPlaceholder(line: string, placeholders: readonly string[]): boolean {
   const lower = text.toLowerCase();
   return placeholders.some((p) => {
     const word = p.toLowerCase();
-    // A space, a colon or a dash, after a stop or not, introduces a note on the
-    // placeholder: `TBD: ask the vendor`, `TBD. Ask the vendor.` A stop that
-    // goes on into a word, `TODO.md`, is part of that word.
-    return lower.startsWith(word) && /^[.!?;\u2026]*(?:$|[\s:\-\u2014])/.test(lower.slice(word.length));
+    // A space, a colon or an em dash, after a stop or not, introduces a note on
+    // the placeholder: `TBD: ask the vendor`, `TBD. Ask the vendor.`, `TBD - later`.
+    // A stop or a hyphen that goes on into a word, `TODO.md`, `TODO-driven`,
+    // is part of that word. An em dash joins no words, so none is made across it.
+    return lower.startsWith(word) && /^[.!?;\u2026\-]*(?:$|[\s:\u2014])/.test(lower.slice(word.length));
   });
 }
 

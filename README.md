@@ -269,7 +269,7 @@ A run over a briefs directory that does not exist exits 2, because a check over 
 | `sections` | Intent, Negative Scope, Not Empowered (optional), Invariants (checklist) | Sections every live brief carries: a name, or `{ name, aliases, mustContain, checklist, optional, hint }`. `hint` is below. |
 | `sectionOrder` | `false` | Sections must appear in the listed order. |
 | `types` | `feature`, `defect`, `refactor`, `chore` | Brief types and the sections each adds. |
-| `placeholders` | `TBD`, `TODO`, `FIXME`, ... | Words that mark a section as unwritten: alone or ended by `.`, `!`, `?`, `;` or `…`, and then nothing, or a space, a colon or a dash and a note. `TODO.md` is a file name, not a placeholder. |
+| `placeholders` | `TBD`, `TODO`, `FIXME`, ... | Words that mark a section as unwritten: alone or ended by `.`, `!`, `?`, `;`, `…` or `-`, and then nothing, or a space, a colon or an em dash and a note. `TODO.md` and `TODO-driven` are words, not placeholders. |
 | `fields` | `[]` | Front-matter keys the repository uses beyond the built-in ones. |
 | `archiving.tasks` | `"all"` | `"all"`, or the sections whose boxes must be closed. |
 | `archiving.dispositions` | `**Delegated`, `**Accepted debt`, `**Rejected` | What a note under an open box starts with to close it. |

@@ -127,3 +127,8 @@ or a dash after it, `TBD. Ask the vendor.`; a stop that goes on into a
 word, `TODO.md`, is part of that word, and the line is content.
 `deferral-trigger` refuses `TBD.` as the placeholder it is, where it passed
 as an event; a note after a placeholder there is still the event itself.
+A hyphen is read as a stop is: before a space or at the end of the line it
+ends a placeholder, `TBD -`, `TBD - later`, and run straight into a word it
+is part of that word, so `TODO-driven work is out.` and `XXX-large` are
+content. An em dash joins no words, and `TBD—ask the vendor` stays a
+placeholder.
