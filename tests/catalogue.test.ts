@@ -297,6 +297,16 @@ describe('what archive says when it refuses', () => {
 });
 
 describe('what the terminal shows', () => {
+  it('builds the help from the table that checks each command\'s --format', async () => {
+    // The help is built as the CLI module loads, so a table it cannot read
+    // stops every test file that imports the module from loading at all;
+    // imported here, inside a test, it fails this test instead.
+    const { HELP } = await import('../src/cli.js');
+    expect(HELP).toContain(
+      ['Formats:', '  init, new, list, archive, unarchive  pretty, json', '  lint, matrix, schedule               pretty, json, sarif, github, gitlab', ''].join('\n'),
+    );
+  });
+
   it('lists briefs with their readiness', () => {
     const corpus = corpusOf({
       'briefs/001_a.md': goodBrief({ wave: '2' }, '\n- [ ] one more\n'),

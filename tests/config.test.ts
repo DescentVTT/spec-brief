@@ -78,6 +78,9 @@ describe('the schema language', () => {
     expect(closest('satus', ['status', 'wave'])).toBe('status');
     expect(closest('dependson', ['dependsOn'])).toBe('dependsOn');
     expect(closest('abc', ['xyz'])).toBeUndefined();
+    // A short word is allowed two edits, not three.
+    expect(closest('fiel', ['fields'])).toBe('fields');
+    expect(closest('fie', ['fields'])).toBeUndefined();
     // A word two edits from a key of two letters, keeping none of them, is
     // no misspelling of it: "狀態" was told "did you mean "id"?".
     expect(closest('狀態', ['id', 'wave'])).toBeUndefined();

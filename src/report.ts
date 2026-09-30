@@ -302,6 +302,7 @@ function padStart(text: string, width: number): string {
 function table(header: readonly string[], rows: readonly (readonly string[])[]): string[] {
   const all = [header, ...rows];
   const widths = header.map((_, c) => Math.max(...all.map((r) => displayWidth(r[c] as string))));
+  // Padding the last cell would change nothing: trimEnd takes it off again.
   return all.map((r) =>
     r
       .map((cell, c) => (c === r.length - 1 ? cell : padEnd(cell, widths[c] as number)))
