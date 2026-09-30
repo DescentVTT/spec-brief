@@ -13,6 +13,15 @@ what a run reports.
 
 ## Unreleased
 
+### Changed
+
+- A placeholder ended by `!`, `?`, `;` or an ellipsis is read as one
+  ended by a period is: `TBD!` and `TBD?` are a `placeholder`. A trigger
+  that is only a placeholder and a stop, `TBD.`, is refused by
+  `deferral-trigger` as a placeholder, where it passed as an event
+  (ADR-0003). Upgrading: fill the section, or name the event that brings the
+  work back.
+
 ### Removed
 
 - spec-brief reads English only (ADR-0003). A deferral trigger that names
@@ -22,6 +31,11 @@ what a run reports.
   a placeholder no longer ends it. Upgrading: write the trigger in English,
   e.g. `trigger: when the second tenant signs`, and list any Chinese
   placeholder the repository uses under `placeholders`.
+
+### Fixed
+
+- A section whose line opens with a placeholder and a dot that goes on into
+  a word, `TODO.md lists the open work.`, is no longer a `placeholder`.
 
 ## 0.3.0
 

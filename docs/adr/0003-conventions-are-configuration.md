@@ -115,3 +115,15 @@ are words on no list and read as events: a miss, which the rule accepts.
 The default placeholders are English again, and a full-width colon after a
 placeholder is not a colon. A repository may still list `待定` under
 `placeholders`, and it is then read as any placeholder is.
+
+## Amended 2026-09-30: the stop after a placeholder
+
+A placeholder was followed by nothing, or by a space, a colon, a dash or a
+period and then anything. So `TBD.` was a placeholder and `TBD!` and `TBD?`
+were not, while `TODO.md lists the open work.` was one, though it says
+something. Now any stop that ends a sentence - `.`, `!`, `?`, `;`, `…` -
+ends a placeholder as a period did, and a note may follow a space, a colon
+or a dash after it, `TBD. Ask the vendor.`; a stop that goes on into a
+word, `TODO.md`, is part of that word, and the line is content.
+`deferral-trigger` refuses `TBD.` as the placeholder it is, where it passed
+as an event; a note after a placeholder there is still the event itself.

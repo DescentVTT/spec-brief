@@ -88,6 +88,11 @@ function contentLines(brief: Brief, section: Section): number[] {
   return lines;
 }
 
+/** Whether `text` is the placeholder `word`, alone or with the stops that end a sentence: `TBD`, `TBD.`, `TBD?!`. */
+function onlyPlaceholder(text: string, word: string): boolean {
+  return text.startsWith(word) && /^[.!?;\u2026]*$/.test(text.slice(word.length));
+}
+
 function isPlaceholder(line: string, placeholders: readonly string[]): boolean {
   const text = line
     .replace(/^\s*(?:[-*+]|\d{1,9}[.)])\s+/, '')
@@ -98,7 +103,10 @@ function isPlaceholder(line: string, placeholders: readonly string[]): boolean {
   const lower = text.toLowerCase();
   return placeholders.some((p) => {
     const word = p.toLowerCase();
-    return lower === word || (lower.startsWith(word) && /^[\s:.\-\u2014]/.test(lower.slice(word.length)));
+    // A space, a colon or a dash, after a stop or not, introduces a note on the
+    // placeholder: `TBD: ask the vendor`, `TBD. Ask the vendor.` A stop that
+    // goes on into a word, `TODO.md`, is part of that word.
+    return lower.startsWith(word) && /^[.!?;\u2026]*(?:$|[\s:\-\u2014])/.test(lower.slice(word.length));
   });
 }
 
@@ -548,7 +556,8 @@ export const RULES: readonly Rule[] = [
       }
       const line = at(lineOfField(brief, 'trigger'));
       const hint = `name what must happen before the work resumes, ${example}`;
-      if (config.placeholders.some((p) => p.toLowerCase() === trigger.toLowerCase())) {
+      // A note after a placeholder is the event itself: `TBD: when the vendor answers`.
+      if (config.placeholders.some((p) => onlyPlaceholder(trigger.toLowerCase(), p.toLowerCase()))) {
         return [{ line, message: `the trigger "${trigger}" is a placeholder, not an event`, hint }];
       }
       if (!namesAnEvent(trigger)) {
