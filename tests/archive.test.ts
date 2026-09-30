@@ -306,6 +306,21 @@ describe('the archived text', () => {
     expect(plan.ops).toEqual([]);
     expect(plan.from).toBe(plan.to);
   });
+
+  it('writes a status word in Chinese as it is typed, under a status key in Chinese', () => {
+    // YAML reads a word of any script plain, and "封存" is written so, where
+    // it was quoted. A key in Chinese is a key, so the status field may be
+    // one: the line was a front-matter error.
+    const cfg = config({ status: { field: '狀態', active: '進行中', archived: '封存' } });
+    const corpus = corpusOf({ [A]: goodBrief().replace('status: active', '狀態: 進行中') }, cfg);
+    const plan = planArchive(corpus, the(corpus, '001'), { date: '2026-09-24', commit: COMMIT, changes: [] });
+    expect(plan.blocking).toEqual([]);
+    const text = write(plan, 'briefs/archive/001_a.md');
+    expect(text.split('\n').slice(0, 2)).toEqual(['---', '狀態: 封存']);
+    const archived = corpusOf({ 'briefs/archive/001_a.md': text }, cfg);
+    const back = planUnarchive(archived, the(archived, '001'));
+    expect(write(back, A).split('\n').slice(0, 2)).toEqual(['---', '狀態: 進行中']);
+  });
 });
 
 describe('reopening', () => {

@@ -88,6 +88,22 @@ describe('status', () => {
     expect(await findings({ [A]: goodBrief({ status: 'draft' }) })).toEqual([]);
   });
 
+  it('reads a status key in Chinese where the configuration names it, and as a key nobody declared elsewhere', async () => {
+    // "狀態" is a key, as a word of any script is to YAML. It was a line the
+    // front matter could not read, an error; unnamed by "status.field" it is
+    // now a key nobody declared, and the brief declares no status.
+    const written = goodBrief().replace('status: active', '狀態: 進行中');
+    expect((await findings({ [A]: written })).map((f) => [f.rule, f.severity, f.message, f.hint])).toEqual([
+      ['status', 'error', 'declares no "status"', 'add "status: active" to the front matter'],
+      ['unknown-field', 'warning', '"狀態" is not a key spec-brief knows', 'if the repository uses it, list it under "fields" in the configuration'],
+    ]);
+    expect(await findings({ [A]: written }, config({ status: { field: '狀態', active: '進行中' } }))).toEqual([]);
+    // YAML separates a key with an ASCII colon only: after a full-width one
+    // the line is still one the front matter cannot read.
+    const fullWidth = goodBrief().replace('status: active', 'status: active\n狀態：進行中');
+    expect((await findings({ [A]: fullWidth })).map((f) => [f.rule, f.message])).toEqual([['front-matter', 'not a "key: value" line']]);
+  });
+
   it('reads location only when no field is configured', async () => {
     const cfg = config({ status: { field: null } });
     expect(await findings({ [A]: goodBrief({ status: 'anything' }) }, cfg)).toEqual([]);
