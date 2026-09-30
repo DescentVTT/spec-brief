@@ -100,3 +100,18 @@ The default placeholders gain `待定`, `未定`, `待補` and `待確認` (to b
 decided, undecided, to be filled in, to be confirmed), with their Simplified
 forms, and a full-width colon ends a placeholder as a colon does:
 `待定：等廠商回覆` is a placeholder, `待定事項列在下方` is not.
+
+## Amended 2026-09-30: English only
+
+The maintainer chose to read English only: a small team maintains one
+language, and a heuristic in a second language is where false positives
+come from. A brief may be written in any language; the words spec-brief
+reads for a time and for a placeholder are English. The amendment above
+stays as the history of what was tried.
+
+A trigger is read as runs of letters and digits again, with no NFKC step
+and no runs of Han characters, so `下個月`, `2026年10月` and full-width `Ｑ３`
+are words on no list and read as events: a miss, which the rule accepts.
+The default placeholders are English again, and a full-width colon after a
+placeholder is not a colon. A repository may still list `待定` under
+`placeholders`, and it is then read as any placeholder is.

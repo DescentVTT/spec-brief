@@ -11,6 +11,18 @@ release that can turn a run red. This is the family's policy, recorded in
 releases up to 0.2.7 came before it, and several of their patches changed
 what a run reports.
 
+## Unreleased
+
+### Removed
+
+- spec-brief reads English only (ADR-0003). A deferral trigger that names
+  only a time in Chinese (`下個月`, `2026年10月`, full-width `Ｑ３`) passes
+  as an event again, the default `placeholders` lose `待定`, `未定`,
+  `待補`, `待確認` and their Simplified forms, and a full-width colon after
+  a placeholder no longer ends it. Upgrading: write the trigger in English,
+  e.g. `trigger: when the second tenant signs`, and list any Chinese
+  placeholder the repository uses under `placeholders`.
+
 ## 0.3.0
 
 Deferral triggers and placeholders written in Chinese are read, the GitLab

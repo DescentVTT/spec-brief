@@ -92,90 +92,14 @@ describe('a trigger', () => {
   });
 });
 
-describe('the words for a time, in Chinese', () => {
-  // Written out, Traditional and Simplified, as the English vocabulary is:
-  // each alone names no event.
-  const words = [
-    ...['星期', '禮拜', '礼拜', '季度', '年度', '小時', '小时', '分鐘', '分钟'],
-    ...['近期', '稍後', '稍后', '以後', '以后', '將來', '将来', '未來', '未来', '改天', '馬上', '马上', '很快', '不久', '左右'],
-  ];
-  const characters = [
-    ...['年', '月', '日', '天', '週', '周', '季', '旬', '號', '号', '午'],
-    ...['初', '底', '末', '中', '半'],
-    ...['今', '明', '去', '上', '下', '本', '這', '这', '次', '前', '後', '后', '早', '晚', '第', '個', '个'],
-    ...['〇', '零', '一', '二', '三', '四', '五', '六', '七', '八', '九', '十', '百', '兩', '两', '幾', '几'],
-    ...['在', '於', '于', '到', '的', '之'],
-  ];
-
-  for (const word of [...words, ...characters]) {
-    it(`"${word}" names no event`, () => {
-      expect(namesAnEvent(word)).toBe(false);
-    });
-  }
-
-  it('takes a word out before its characters, and is no wider than the lists', () => {
-    // `稍後` is later; `稍` alone is not a time, so reading `後` first would leave it.
-    expect(namesAnEvent('稍後')).toBe(false);
-    // `時` and `期` stay events, so a trigger on an expiry passes; `每` and `當`
-    // are every and when, which the English list leaves out too.
-    for (const word of ['稍', '時', '期', '每', '當', '到期時', '每月結算完成時', '度']) {
-      expect(namesAnEvent(word), word).toBe(true);
-    }
-  });
-});
-
 describe('a trigger written in Chinese', () => {
-  it('names none when it is only a date or a time', () => {
-    for (const trigger of [
-      '下個月',
-      '下个月',
-      '下週',
-      '下周',
-      '下季',
-      '明年',
-      '年底',
-      '月底',
-      '第三季',
-      '10月',
-      '十月',
-      '2026年10月',
-      '二〇二六年十月',
-      '10月15號',
-      '兩週後',
-      '两周后',
-      '稍後',
-      '稍后',
-      '近期',
-      // A word written twice is taken out twice.
-      '星期一到星期五',
-      // A number beside Han characters is a word of its own.
-      'Q3之後',
-      // Full-width letters and digits are read as the ASCII they stand for.
-      'Ｑ３',
-      '２０２６年１０月',
-      '２０２６－１０',
-    ]) {
-      expect(namesAnEvent(trigger), trigger).toBe(false);
-    }
-  });
-
-  it('names an event when a word says what must happen', () => {
-    for (const trigger of [
-      '當第二個租戶簽約時',
-      '当第二个租户签约时',
-      'p95 超過 200 ms 時',
-      'v2.0 上線後',
-      '月結完成後',
-      '年度稽核通過後',
-      '當 Q3 營收超過預估時',
-      'ｖ２ 上線後',
-    ]) {
+  // The words for a time are English (ADR-0003, amended 2026-09-30). A time in
+  // another language is a word on no list, and full-width letters and digits
+  // are not the ASCII ones, so each reads as an event: a miss, which the rule
+  // accepts.
+  it('names an event, whatever time it says', () => {
+    for (const trigger of ['下個月', '第三季', '2026年10月', 'Ｑ３', '２０２６－１０']) {
       expect(namesAnEvent(trigger), trigger).toBe(true);
     }
-  });
-
-  it('reads a holiday as an event: a miss the rule accepts, as it accepts "noon"', () => {
-    expect(namesAnEvent('過年後')).toBe(true);
-    expect(namesAnEvent('春節後')).toBe(true);
   });
 });

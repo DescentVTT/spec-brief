@@ -50,7 +50,7 @@ Every privilege change issues a new session token and invalidates the old one.
 - [ ] a rotated token is rejected by every endpoint
 ```
 
-Work put off for later is a brief too, with `status: deferred` and a `trigger` naming the event that brings it back - "when the second tenant signs", "when p95 exceeds 200 ms", `當第二個租戶簽約時`, never a date: not `Q3`, not `下個月` (next month), not `2026年10月`. A deferred brief stays in the briefs directory, is never ready, and runs in no wave until someone sets it `active`.
+Work put off for later is a brief too, with `status: deferred` and a `trigger` naming the event that brings it back - "when the second tenant signs", "when p95 exceeds 200 ms", never a date: not `Q3`, not `2026-10`. A deferred brief stays in the briefs directory, is never ready, and runs in no wave until someone sets it `active`.
 
 - The id comes from the file name (`012_rotate-session-tokens.md`) or from an `id` field.
 - `affectedFiles` is the scope the round may write.
@@ -269,7 +269,7 @@ A run over a briefs directory that does not exist exits 2, because a check over 
 | `sections` | Intent, Negative Scope, Not Empowered (optional), Invariants (checklist) | Sections every live brief carries: a name, or `{ name, aliases, mustContain, checklist, optional, hint }`. `hint` is below. |
 | `sectionOrder` | `false` | Sections must appear in the listed order. |
 | `types` | `feature`, `defect`, `refactor`, `chore` | Brief types and the sections each adds. |
-| `placeholders` | `TBD`, `TODO`, `FIXME`, ..., `待定`, `未定`, `待補`, `待確認` and their Simplified forms | Words that mark a section as unwritten: alone, or followed by a space, a colon (`：` too), a period or a dash. |
+| `placeholders` | `TBD`, `TODO`, `FIXME`, ... | Words that mark a section as unwritten: alone, or followed by a space, a colon, a period or a dash. |
 | `fields` | `[]` | Front-matter keys the repository uses beyond the built-in ones. |
 | `archiving.tasks` | `"all"` | `"all"`, or the sections whose boxes must be closed. |
 | `archiving.dispositions` | `**Delegated`, `**Accepted debt`, `**Rejected` | What a note under an open box starts with to close it. |
@@ -330,14 +330,14 @@ How a heading fills a section, and what counts as a heading, a task or a link, i
 | `missing-section` | error | A required section that is absent. |
 | `duplicate-section` | warning | A section that appears twice. |
 | `empty-section` | error | A section with no content; a comment is not content. A warning in a draft. |
-| `placeholder` | error | A section holding only `TBD`, `TODO`, `待定` or an empty box. A warning in a draft. |
+| `placeholder` | error | A section holding only `TBD`, `TODO` or an empty box. A warning in a draft. |
 | `missing-checklist` | error | A checklist section with no task item. A warning in a draft. |
 | `must-contain` | error | A section without the text the configuration requires of it. |
 | `section-order` | error | Sections out of the configured order, when one is configured. |
 | `dependency` | error | A dependency on itself, or on a brief that does not exist. |
 | `dependency-cycle` | error | Live briefs that depend on each other in a cycle, reported once, as a path. |
 | `wave-order` | error | A live dependency that does not run in an earlier wave. |
-| `deferral-trigger` | error | A deferred brief with no `trigger`, or one that is only a date or a time - `2026-10`, `Q3`, `next month`, `October`, `下個月`, `2026年10月`, `第三季` - or a placeholder, rather than an event such as "when the second tenant signs". Full-width `Ｑ３` reads as `Q3`. |
+| `deferral-trigger` | error | A deferred brief with no `trigger`, or one that is only a date or a time - `2026-10`, `Q3`, `next month`, `October` - or a placeholder, rather than an event such as "when the second tenant signs". The words for a time are English. |
 | `glob` | error | A scope pattern spec-brief cannot read. |
 | `scope-contradiction` | error | Patterns in `affectedFiles` that `protectedFiles` cover entirely, so nothing of them is writable - one finding per brief, naming each. A pattern the search cannot decide is a warning. |
 | `glob-matches-nothing` | note | A scope pattern that matches no file git sees, tracked or untracked - expected when the round creates it. |
