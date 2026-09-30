@@ -28,6 +28,13 @@ function* walk(directory: string): Generator<string> {
 
 const sources = [...walk('src')];
 
+/** A source file without its comments, which are prose and may name what the code does not do. */
+function code(file: string): string {
+  return readFileSync(file, 'utf8')
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/\/\/.*$/gm, '');
+}
+
 /**
  * Every file the repository holds or is about to: tracked, or untracked and
  * not ignored. A list kept by hand missed the configuration files and the
@@ -67,10 +74,6 @@ describe('the tree', () => {
 
   it('writes no `any` in the source', () => {
     // Comments are prose, and prose may say "any".
-    const code = (file: string): string =>
-      readFileSync(file, 'utf8')
-        .replace(/\/\*[\s\S]*?\*\//g, '')
-        .replace(/\/\/.*$/gm, '');
     const offenders = sources.filter((file) => /(?::\s*any\b|\bas any\b|<any>|any\[\])/.test(code(file)));
     expect(offenders).toEqual([]);
     expect(/:\s*any\b/.test(code('src/lint.ts'))).toBe(false);
@@ -91,10 +94,6 @@ describe('the tree', () => {
     // A pattern a user wrote, compiled to a backtracking RegExp, can take
     // seconds to fail on one long name. Globs run on spec-core's automata; a
     // RegExp here is a literal the author wrote and measured.
-    const code = (file: string): string =>
-      readFileSync(file, 'utf8')
-        .replace(/\/\*[\s\S]*?\*\//g, '')
-        .replace(/\/\/.*$/gm, '');
     const offenders = sources.filter((file) => file.endsWith('.ts') && /\bRegExp\s*\(/.test(code(file)));
     expect(offenders).toEqual([]);
     expect(sources).toContain('src/vendor/spec-core/pattern/glob.ts');
@@ -103,10 +102,11 @@ describe('the tree', () => {
   it('keeps I/O at the edges', () => {
     // The modules that meet the disk, git or the process. Everything else is
     // a pure function of its arguments, which is why the suite can hand it
-    // corpora that never existed on disk.
+    // corpora that never existed on disk. A comment may name the process,
+    // as spec-core's display width names the Unicode version a host reports.
     const EDGES = ['src/cli.ts', 'src/engine.ts', 'src/fs.ts', 'src/git.ts', 'src/plugins.ts'];
     const io = /from 'node:(?:fs|fs\/promises|child_process|module|os|process)'/;
-    const touching = sources.filter((file) => io.test(readFileSync(file, 'utf8')) || readFileSync(file, 'utf8').includes('process.'));
+    const touching = sources.filter((file) => io.test(code(file)) || code(file).includes('process.'));
     expect(touching.sort()).toEqual(EDGES);
   });
 });

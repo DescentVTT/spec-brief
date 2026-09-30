@@ -373,14 +373,14 @@ describe('scopes', () => {
     ]);
   });
 
-  it('refuses a leading "/" after a leading "./", as the core reads one', async () => {
-    // ".//docs" is "/docs" to the core, rooted at the filesystem's root, which
-    // no repository path is under: it scoped nothing, and no finding said so.
-    const found = await findings({ [A]: goodBrief({ affectedFiles: '[src/**, ".//docs"]', protectedFiles: '[".//src/db"]' }) });
-    expect(found.map((f) => [f.rule, f.line, f.message])).toEqual([
-      ['glob', 3, '".//docs" in affectedFiles: a pattern is relative to the repository root and cannot start with "/"'],
-      ['glob', 4, '".//src/db" in protectedFiles: a pattern is relative to the repository root and cannot start with "/"'],
-    ]);
+  it('reads a "/" after a leading "./" as the core does, rooting nothing', async () => {
+    // ".//docs" is "docs", as POSIX reads it: the "./" goes with the slashes
+    // after it. It was refused as "/docs" is.
+    expect(await findings({ [A]: goodBrief({ affectedFiles: '[src/**, ".//docs/**"]', protectedFiles: '[".//src/db/**"]' }) })).toEqual([]);
+    expect(await findings({ [A]: goodBrief({ affectedFiles: '["./{/docs,src}/**"]' }) })).toEqual([]);
+    // Read so, it protects what "src/db" does.
+    const both = await findings({ [A]: goodBrief({ affectedFiles: '[".//src/db/**"]', protectedFiles: '[src/db/**]' }) });
+    expect(both.map((f) => f.rule)).toEqual(['scope-contradiction']);
     expect(await findings({ [A]: goodBrief({ affectedFiles: '[./docs/**]', protectedFiles: '[./docs/a.md]' }) })).toEqual([]);
   });
 
@@ -408,7 +408,7 @@ describe('scopes', () => {
     for (const [pattern, text] of [
       ['{lib,/docs}', '/docs'],
       ['{lib,{/docs,x}}', '/docs'],
-      ['{//docs,lib}', '//docs'],
+      ['{//docs,lib}', '/docs'],
     ] as const) {
       const refused = await findings({ [A]: goodBrief({ affectedFiles: JSON.stringify([pattern]) }) });
       expect(refused.map((f) => [f.rule, f.message]), pattern).toEqual([
