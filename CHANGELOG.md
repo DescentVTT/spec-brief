@@ -11,7 +11,11 @@ release that can turn a run red. This is the family's policy, recorded in
 releases up to 0.2.7 came before it, and several of their patches changed
 what a run reports.
 
-## Unreleased
+## 0.4.0
+
+spec-brief reads English only again, and a placeholder is told from a word
+that begins with one: `TBD!` is a placeholder, `TODO.md` and `TODO-driven`
+are not.
 
 ### Changed
 
