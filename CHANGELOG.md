@@ -11,99 +11,61 @@ release that can turn a run red. This is the family's policy, recorded in
 releases up to 0.2.7 came before it, and several of their patches changed
 what a run reports.
 
-## Unreleased
+## 0.3.0
 
-A deferral trigger written in Chinese is read: `下個月` and `2026年10月` are
-times, not events. The GitLab fingerprint is built from what a finding is,
-not what it says. `matrix` names a file the tree holds, and one such file
-settles a pair the search could not decide. spec-core at 5666c96: `.//docs`
-is `docs`, a front-matter key may be written in Chinese, and a column in
-Chinese lines up.
+Deferral triggers and placeholders written in Chinese are read, the GitLab
+fingerprint no longer changes with a message's wording, `matrix` names a file
+the tree holds, and Chinese columns line up. spec-core is at 5666c96.
 
 ### Changed
 
-- spec-core at 5666c96. A leading `./` takes the slashes after it along, as
-  POSIX reads them: `.//docs` is `docs`, and `./{/docs,src}` and
-  `{.//docs,src}` are `docs` or `src`. Each was a `glob` error naming
-  `/docs`, and a `files` or `exclude` pattern spelt so was a configuration
-  problem, and the run exited 2. `.//` is the root itself, refused as `./`
-  is. A rooted alternative is named as spec-core reads it, `{//docs,src}`
-  as `"/docs"` where it was `"//docs"` (ADR-0005, amended). Upgrading: a
-  scope refused before is read now and may meet another brief's; run
-  `spec-brief matrix` and settle what it reports.
-- A front-matter key may be a word of any script, as in YAML, so a
-  `狀態: 已接受` line is a key and its value. With `status.field` left at
-  `status` the key is `unknown-field`, a warning, where the line was a
-  `front-matter` error; the brief still declares no status. `status.field`
-  may now name `狀態` or `状态`, which could not be read before. After a
-  full-width colon, `狀態：已接受`, the line is still a `front-matter`
-  error. Upgrading: write `status:`, or set `status.field` to the key the
-  briefs write.
-- `archive`, `unarchive` and `new` write a status word that starts with a
-  letter of any script plain, `status: 封存`, where they quoted it,
-  `status: "封存"`; both read as the same word. Upgrading: a script that
-  matches the written line as text matches `status: 封存`.
-- A deferral trigger in Chinese that names only a time, such as `下個月`
-  (next month), `2026年10月` or `第三季`, is refused by `deferral-trigger`,
-  where it passed as an event; full-width `Ｑ３` is read as `Q3`.
-  `當第二個租戶簽約時` and `月結完成後` still pass (ADR-0003, amended).
-  Upgrading: name in `trigger` the event that brings the work back.
-- The default `placeholders` gain `待定`, `未定`, `待補` and `待確認`, with
-  their Simplified forms, and a full-width colon after a placeholder ends it
-  as a colon does, so `待定：稍後補上` and `TBD：later` hold only a
-  placeholder. Upgrading: write what the section says, or list the old
-  `placeholders` in the configuration.
-- The GitLab Code Quality fingerprint is a hash of the rule, the file, the
-  brief and what the finding is about - a section, a pattern, the other brief
-  of a pair - where it hashed the message, so a reworded finding, or a
-  collision that names another file, is the same issue. Upgrading: the first
-  merge request after the upgrade shows each spec-brief issue resolved once
-  and found again; nothing is to be done.
+- spec-core at 5666c96: `.//docs`, `./{/docs,src}` and `{.//docs,src}` read
+  as relative patterns, where they were refused as rooted (ADR-0005).
+  Upgrading: a scope refused before is read now; run `spec-brief matrix`.
+- A front-matter key may be written in any script: `狀態: 已接受` is an
+  `unknown-field` warning where it was a `front-matter` error, and
+  `status.field` may name `狀態` or `状态`. Upgrading: write `status:`, or
+  set `status.field`.
+- `archive`, `unarchive` and `new` write a status word such as `封存`
+  unquoted. Upgrading: a script matching the written line sees
+  `status: 封存`.
+- A deferral trigger that names only a time in Chinese (`下個月`,
+  `2026年10月`, `第三季`, full-width `Ｑ３`) is refused by `deferral-trigger`
+  (ADR-0003). Upgrading: name the event that brings the work back.
+- The default `placeholders` gain `待定`, `未定`, `待補`, `待確認` and their
+  Simplified forms, and a full-width colon ends a placeholder as a colon
+  does. Upgrading: fill the section, or list the old `placeholders`.
+- The GitLab fingerprint is built from the rule, the file, the brief and
+  the finding's subject, never its message. Upgrading: the first merge
+  request after upgrading shows each issue resolved and found again once.
 - `matrix` and `schedule` name a file the tree holds where both patterns
-  match one outside the protections, and otherwise say that the file named
-  is an example: `both cover src/newmod/a.ts, an example not in the tree`
-  (ADR-0005, amended).
-- A pair the witness search could not decide, `collision-undecided`, a
-  warning, is a `collision`, an error, when the tree holds a file both
-  patterns match and neither brief protects: that file proves it. Upgrading:
-  run the two briefs in different waves, or narrow a scope, as for any
-  collision.
+  match one outside the protections, or say the file named is an example
+  (ADR-0005).
+- A pair the search could not decide is a `collision` (an error) when the
+  tree holds a file both patterns match and neither brief protects.
+  Upgrading: run the two briefs in different waves, or narrow a scope.
 
 ### Added
 
-- `inTree` on each pair of patterns in the JSON of `matrix` and `schedule`:
-  `true` for a file the tree holds, `false` for an example, `null` when the
-  tree could not be read. `schemaVersion` stays 2. The library's `Overlap`
-  has it, and `meet` takes the tree's files as a fourth argument.
-- A rule's result, a plugin's included, may carry a `subject`, what the
-  finding is about, which the GitLab fingerprint is built from; a finding
-  carries it too.
+- `inTree` on each pair of patterns in `matrix` and `schedule` JSON
+  (`schemaVersion` stays 2); `meet` takes the tree's files.
+- A rule's result, a plugin's included, may carry a `subject`, which the
+  GitLab fingerprint is built from.
 
 ### Fixed
 
-- `list`, `schedule` and `matrix` line up a column holding Chinese - a
-  status word, a title, a brief named by its file - by the columns a
-  terminal gives it, where a Han character was counted as one column of
-  two.
-- `unknown-field`, and a configuration key nobody declared, suggest no key
-  that keeps nothing of the one written: `狀態` was asked
-  `did you mean "id"?`.
-- `list` shows the status word the brief writes, such as `封存` or `延後`
-  where the configuration names them, where it showed the English word it
-  stands for.
-- `list` and `schedule` show a title without the id it repeats: `new`
-  writes `# 012 — Rotate tokens`, and the id was shown twice. The JSON keeps
-  the title as written.
-- `--help` lists the formats each command writes: `sarif`, `github` and
-  `gitlab` are `lint`'s, `matrix`'s and `schedule`'s alone, where it offered
-  all five under the options for every command.
+- `list`, `schedule` and `matrix` line up columns holding Chinese.
+- `unknown-field` no longer suggests a key that shares nothing with the one
+  written (`狀態` was asked about `id`).
+- `list` shows the status word the brief writes, such as `封存`, not its
+  English equivalent.
+- `list` and `schedule` show a title without the id it repeats.
+- `--help` lists the formats each command writes.
 
 ### Documentation
 
-- README reorganised: the scope-pattern rules are a "Scope patterns" list,
-  one rule per item, how a brief is read sits under "A brief", long
-  paragraphs are lists, and options, flags and exit codes are tables;
-  nothing was removed. SECURITY.md says how to report a vulnerability
+- The README is reorganised into lists and tables, with a "Scope patterns"
+  list of one rule per item; SECURITY.md says how to report a vulnerability
   privately.
 
 ## 0.2.7
