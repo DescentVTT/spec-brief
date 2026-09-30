@@ -98,7 +98,7 @@ function isPlaceholder(line: string, placeholders: readonly string[]): boolean {
   const lower = text.toLowerCase();
   return placeholders.some((p) => {
     const word = p.toLowerCase();
-    return lower === word || (lower.startsWith(word) && /^[\s:.\-\u2014\uff1a]/.test(lower.slice(word.length)));
+    return lower === word || (lower.startsWith(word) && /^[\s:.\-\u2014]/.test(lower.slice(word.length)));
   });
 }
 

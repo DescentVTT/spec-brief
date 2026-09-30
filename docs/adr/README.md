@@ -7,7 +7,7 @@ changes is superseded by a new record that says so; the old one keeps its text.
 | --- | --- |
 | [0001](0001-no-runtime-dependencies.md) | No runtime dependencies: the front-matter reader and the Markdown scanner are written here; amended as the glob engine, then the scanner and the reader, became spec-core's, copied and verified by hash, with the dialect a brief is read in kept here. |
 | [0002](0002-the-brief-is-the-record.md) | The brief is the record: no status file, no manifest, no roadmap editing, no persisted intermediate state. |
-| [0003](0003-conventions-are-configuration.md) | Conventions are configuration, measured against two repositories that keep briefs; amended with a status for deferred work and its observable trigger, then for a trigger written in Chinese. |
+| [0003](0003-conventions-are-configuration.md) | Conventions are configuration, measured against two repositories that keep briefs; amended with a status for deferred work and its observable trigger, then for a trigger written in Chinese, and for English only again. |
 | [0004](0004-archival-is-a-planned-transaction.md) | Archival is a planned transaction over files; git is read, never written. |
 | [0005](0005-scopes-collide-by-intersection.md) | Scopes collide by glob intersection, with a witness; amended for spec-core's engine: a literal is read from the tree, a witness is a file, protection wins, and undecided is an answer; amended so the witness is a file of the tree where one exists, and such a file decides a pair the search could not. |
 | [0006](0006-the-freeze-lives-in-the-file.md) | The freeze is a hash in the archived brief's own front matter, not a ledger. |
