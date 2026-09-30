@@ -11,6 +11,18 @@ release that can turn a run red. This is the family's policy, recorded in
 releases up to 0.2.7 came before it, and several of their patches changed
 what a run reports.
 
+## Unreleased
+
+### Changed
+
+- **`lint`, `matrix`, `schedule` and `archive` take time that grows with the
+  briefs and the tree, not with the one times the other.** Every scope pattern
+  was asked about every file git sees; the tree is now indexed by path once a
+  run, and a pattern is asked only about the files below the directories its
+  matches must lie in. Over 240 briefs and 93,000 files a lint took 35 s,
+  nine tenths of it matching, and `matrix` 16 s. Nothing any command answers
+  has changed.
+
 ## 0.4.0
 
 spec-brief reads English only again, and a placeholder is told from a word
