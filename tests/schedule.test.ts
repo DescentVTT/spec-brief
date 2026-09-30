@@ -483,6 +483,29 @@ describe('the edges of the schedule', () => {
       '',
       '2 briefs would move; "spec-brief schedule --write" writes the waves',
     ]);
+    // Measured in a terminal's columns: an id and a title in Chinese take two
+    // for each Han character, where padding by UTF-16 units counted one, and
+    // "moves from" stood out of line under a longer title.
+    const chinese = corpusOf(
+      {
+        'briefs/a.md': goodBrief({ id: '7', title: '短', affectedFiles: '[a]', wave: '1' }),
+        'briefs/b.md': goodBrief({ id: '甲乙丙', title: '輪換登入權杖', affectedFiles: '[a]' }),
+        'briefs/c.md': goodBrief({ id: '8', title: 'Mid title', affectedFiles: '[a]', wave: '3' }),
+      },
+      cfg,
+    );
+    expect(prettySchedule(schedule(chinese), null, { color: false }).split('\n').slice(0, 10)).toEqual([
+      'wave 1 · 1 brief',
+      '  7       短',
+      'wave 2 · 1 brief',
+      '  8       Mid title     moves from wave 3',
+      '            wave 3 also holds',
+      '            not wave 1, where 7 also writes a ("a" and "a")',
+      'wave 3 · 1 brief',
+      '  甲乙丙  輪換登入權杖  moves from no wave',
+      '            not wave 1, where 7 also writes a ("a" and "a")',
+      '            not wave 2, where 8 also writes a ("a" and "a")',
+    ]);
     const esc = String.fromCharCode(27);
     const painted = prettySchedule(schedule(corpus), null, { color: true });
     expect(painted).toContain(`${esc}[1mwave 1 · 1 brief${esc}[22m`);
