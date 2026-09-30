@@ -283,6 +283,26 @@ describe('lists, matrices and plans', () => {
     expect(prettyList([{ brief: located.briefs[0]!, ready: true, waitingOn: [] }], plainStyle).split('\n')[1]).toBe('001  active  -     0/0    yes    A');
   });
 
+  it('lines up a status and a title in Chinese by the columns a terminal gives them', () => {
+    // A Han character is one UTF-16 unit and two columns. Padded by units,
+    // "進行中" fell three columns short of "STATUS", and "暫緩處理", the
+    // widest word, was measured as four: every column after it was out of line.
+    const cfg = config({ status: { active: '進行中', deferred: '暫緩處理' } });
+    const listed = corpusOf(
+      {
+        'briefs/001_a.md': '---\nstatus: 進行中\nwave: 1\n---\n\n# 輪換權杖\n',
+        'briefs/002_b.md': '---\nstatus: 暫緩處理\n---\n\n# Fix the login bug\n',
+      },
+      cfg,
+    );
+    const rows = listed.briefs.map((brief) => ({ brief, ready: false, waitingOn: [] }));
+    expect(prettyList(rows, plainStyle).split('\n')).toEqual([
+      'ID   STATUS    WAVE  TASKS  READY  TITLE',
+      '001  進行中    1     0/0    no     輪換權杖',
+      '002  暫緩處理  -     0/0    no     Fix the login bug',
+    ]);
+  });
+
   it('shows a title without the id it repeats, in the list and the schedule', () => {
     const titled = corpusOf({
       'briefs/001_a.md': goodBrief({ wave: '1', affectedFiles: '[a/**]' }).replace('# A brief', '# 001 \u2014 Rotate tokens'),
@@ -348,6 +368,29 @@ describe('lists, matrices and plans', () => {
       ].join('\n'),
     );
     expect(prettyMatrix(collisions(corpusOf({})), plainStyle)).toBe('no live briefs');
+  });
+
+  it('lines up a brief named in Chinese in the matrix, by the columns a terminal gives it', () => {
+    // A brief with no id is labelled by its file name. "任務.md" is five
+    // UTF-16 units and seven columns: padded by units, its row and column
+    // stood two columns off every other.
+    const cfg = config({ id: { source: 'frontmatter' }, files: '*.md' });
+    const named = corpusOf(
+      {
+        'briefs/任務.md': goodBrief({ wave: '1', affectedFiles: '[a]' }),
+        'briefs/x.md': goodBrief({ wave: '1', affectedFiles: '[a]' }),
+        'briefs/yy.md': goodBrief({ wave: '1', affectedFiles: '[b]' }),
+      },
+      cfg,
+    );
+    expect(prettyMatrix(collisions(named), plainStyle).split('\n')).toEqual([
+      'wave 1 \u00b7 3 briefs',
+      '              x.md    yy.md  任務.md',
+      '  x.md           \u00b7        \u00b7        X',
+      '  yy.md          \u00b7        \u00b7        \u00b7',
+      '  任務.md        X        \u00b7        \u00b7',
+      '  X x.md "a" and 任務.md "a" both cover a',
+    ]);
   });
 
   it('tells a dry run from a real one, and prints the banner only on a dry run', () => {

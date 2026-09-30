@@ -22,6 +22,7 @@ import { type Breach, breachReasons, holds, moves, type Passed, reasons, type Sc
 import { witnessText } from './scope.js';
 import { inWords } from './text.js';
 import type { Finding, Severity } from './types.js';
+import { displayWidth } from './vendor/spec-core/text/index.js';
 
 export type Format = 'pretty' | 'json' | 'sarif' | 'github' | 'gitlab';
 
@@ -283,19 +284,27 @@ function shownTitle(brief: Brief): string {
 }
 
 /**
- * Columns padded to their widest cell; every row has the header's length.
- *
- * A width is counted in UTF-16 code units, so a cell in Chinese, whose
- * characters take two columns in a terminal, pads short. spec-core's display
- * width replaces `length` here, in `prettySchedule` and in `prettyMatrix` once
- * the copy has it.
+ * A text padded to `width` columns of a terminal. `padEnd` counts UTF-16
+ * units, and a Han character is one unit and two columns, so `已接受` padded
+ * so fell three columns short. Every width here is the widest of the texts it
+ * pads, so none is longer than its width.
  */
+function padEnd(text: string, width: number): string {
+  return text + ' '.repeat(width - displayWidth(text));
+}
+
+/** A text padded on the left to `width` columns of a terminal, as {@link padEnd} pads on the right. */
+function padStart(text: string, width: number): string {
+  return ' '.repeat(width - displayWidth(text)) + text;
+}
+
+/** Columns padded to their widest cell, in a terminal's columns; every row has the header's length. */
 function table(header: readonly string[], rows: readonly (readonly string[])[]): string[] {
   const all = [header, ...rows];
-  const widths = header.map((_, c) => Math.max(...all.map((r) => (r[c] as string).length)));
+  const widths = header.map((_, c) => Math.max(...all.map((r) => displayWidth(r[c] as string))));
   return all.map((r) =>
     r
-      .map((cell, c) => (c === r.length - 1 ? cell : cell.padEnd(widths[c] as number)))
+      .map((cell, c) => (c === r.length - 1 ? cell : padEnd(cell, widths[c] as number)))
       .join('  ')
       .trimEnd(),
   );
@@ -330,13 +339,13 @@ export function prettyMatrix(report: CollisionReport, style: Style): string {
     const title = wave.wave === null ? 'all live briefs' : `wave ${wave.wave}`;
     out.push(paint(style, 'bold', `${title} \u00b7 ${plural(wave.briefs.length, 'brief')}`));
     const names = wave.briefs.map(label);
-    const width = Math.max(3, ...names.map((n) => n.length));
+    const width = Math.max(3, ...names.map(displayWidth));
     const pairs = (list: readonly { readonly a: Brief; readonly b: Brief }[]): Set<string> =>
       new Set(list.flatMap((p) => [`${label(p.a)}\u0000${label(p.b)}`, `${label(p.b)}\u0000${label(p.a)}`]));
     const hits = pairs(wave.collisions);
     const unknown = pairs(wave.undecided);
     const near = pairs(wave.shared);
-    out.push(`  ${''.padEnd(width)}  ${names.map((n) => n.padStart(width)).join('  ')}`);
+    out.push(`  ${' '.repeat(width)}  ${names.map((n) => padStart(n, width)).join('  ')}`);
     for (const row of names) {
       const cells = names.map((col) => {
         const key = `${row}\u0000${col}`;
@@ -352,7 +361,7 @@ export function prettyMatrix(report: CollisionReport, style: Style): string {
                   : '\u00b7';
         return `${' '.repeat(width - 1)}${mark}`;
       });
-      out.push(`  ${row.padEnd(width)}  ${cells.join('  ')}`);
+      out.push(`  ${padEnd(row, width)}  ${cells.join('  ')}`);
     }
     // One mark per pair of briefs; each further pair of patterns on a line beneath it.
     for (const c of wave.collisions) {
@@ -434,8 +443,8 @@ function wavesOf(s: Schedule): number[] {
 export function prettySchedule(s: Schedule, written: readonly string[] | null, style: Style): string {
   const label = (b: Brief): string => b.id ?? b.name;
   const out: string[] = [];
-  const width = Math.max(3, ...s.placements.map((p) => label(p.brief).length));
-  const titles = Math.max(0, ...s.placements.map((p) => shownTitle(p.brief).length));
+  const width = Math.max(3, ...s.placements.map((p) => displayWidth(label(p.brief))));
+  const titles = Math.max(0, ...s.placements.map((p) => displayWidth(shownTitle(p.brief))));
   const waves = wavesOf(s);
   for (const wave of waves) {
     const here = s.placements.filter((p) => p.proposed === wave);
@@ -443,11 +452,11 @@ export function prettySchedule(s: Schedule, written: readonly string[] | null, s
     for (const p of here) {
       const title = shownTitle(p.brief);
       if (p.proposed === p.declared) {
-        out.push(`  ${label(p.brief).padEnd(width)}  ${title}`);
+        out.push(`  ${padEnd(label(p.brief), width)}  ${title}`);
         continue;
       }
       const from = p.declared === null ? 'no wave' : `wave ${p.declared}`;
-      out.push(`  ${label(p.brief).padEnd(width)}  ${title.padEnd(titles)}  ${paint(style, 'yellow', `moves from ${from}`)}`);
+      out.push(`  ${padEnd(label(p.brief), width)}  ${padEnd(title, titles)}  ${paint(style, 'yellow', `moves from ${from}`)}`);
       // Why the declared wave holds or does not comes first: it decides whether the move is asked for.
       const verdict = p.declared === null ? [] : holds(p) ? [`wave ${p.declared} also holds`] : [`wave ${p.declared} does not hold: ${breachReasons(p).join('; ')}`];
       for (const reason of [...verdict, ...reasons(p)]) out.push(`  ${' '.repeat(width)}    ${paint(style, 'dim', reason)}`);
