@@ -261,10 +261,15 @@ describe('sections', () => {
       ['TBD.: ask the vendor', true],
       ['TBD\u2014ask the vendor', true],
       ['TBD-', true],
-      // A stop that goes on into a word is part of that word.
+      ['TBD -', true],
+      ['TBD- ask the vendor', true],
+      ['TBD-- ask the vendor', true],
+      // A stop or a hyphen that goes on into a word is part of that word.
       ['TODO.md lists the open work.', false],
       ['XXX.yaml stays as it is.', false],
       ['TBD!important', false],
+      ['TODO-driven work is out.', false],
+      ['XXX-large files stay in the bucket.', false],
       // A word as long as a placeholder, ended by a stop, is still a word.
       ['None.', false],
       // The placeholders are English, and a full-width colon is not a colon (ADR-0003, amended 2026-09-30).

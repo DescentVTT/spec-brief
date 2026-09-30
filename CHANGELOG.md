@@ -36,6 +36,8 @@ what a run reports.
 
 - A section whose line opens with a placeholder and a dot that goes on into
   a word, `TODO.md lists the open work.`, is no longer a `placeholder`.
+- Nor is one whose placeholder runs into a word by a hyphen, such as
+  `TODO-driven work is out.`; `TBD -` and `TBD - later` still are.
 
 ## 0.3.0
 
