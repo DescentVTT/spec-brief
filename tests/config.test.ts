@@ -68,7 +68,9 @@ describe('the schema language', () => {
       ],
     };
     expect(validate(schema, { b: 'x' })).toEqual([]);
-    expect(validate(schema, { c: 'x' })).toEqual(['"c" is not a known key; did you mean "a"?', '"a" is required']);
+    expect(validate(schema, { aa: 'x' })).toEqual(['"aa" is not a known key; did you mean "a"?', '"a" is required']);
+    // "c" keeps nothing of "a", and is no misspelling of it.
+    expect(validate(schema, { c: 'x' })).toEqual(['"c" is not a known key', '"a" is required']);
     expect(validate({ type: 'anyOf', options: [] }, 1)).toEqual(['the configuration must be ']);
   });
 
@@ -76,6 +78,13 @@ describe('the schema language', () => {
     expect(closest('satus', ['status', 'wave'])).toBe('status');
     expect(closest('dependson', ['dependsOn'])).toBe('dependsOn');
     expect(closest('abc', ['xyz'])).toBeUndefined();
+    // A word two edits from a key of two letters, keeping none of them, is
+    // no misspelling of it: "狀態" was told "did you mean "id"?".
+    expect(closest('狀態', ['id', 'wave'])).toBeUndefined();
+    expect(closest('by', ['id'])).toBeUndefined();
+    // One that keeps a character is, however short.
+    expect(closest('ib', ['id'])).toBe('id');
+    expect(closest('i', ['id'])).toBe('id');
   });
 
   it('renders JSON Schema with descriptions, nullability and closed objects', () => {

@@ -149,13 +149,17 @@ export function validate(schema: Schema, value: unknown, path = ''): string[] {
   }
 }
 
-/** The known key nearest to a misspelling, when one is near enough to be what was meant. */
+/**
+ * The known key nearest to a misspelling, when one is near enough to be what
+ * was meant. One that keeps no character of the word is no misspelling of it,
+ * however short both are: `狀態` is two edits from `id`.
+ */
 export function closest(word: string, options: readonly string[]): string | undefined {
   let best: string | undefined;
   let bestDistance = Math.max(2, Math.floor(word.length / 3)) + 1;
   for (const option of options) {
     const d = distance(word.toLowerCase(), option.toLowerCase());
-    if (d < bestDistance) {
+    if (d < bestDistance && d < Math.max(word.length, option.length)) {
       best = option;
       bestDistance = d;
     }
