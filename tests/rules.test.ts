@@ -6,6 +6,7 @@ import { checkRuleIds, failing, lint, ruleIds, severityOf, sortFindings, summari
 import { type Rule, scopeContradiction } from '../src/rules.js';
 import type { Finding } from '../src/types.js';
 import { brief, config, corpusOf, goodBrief } from './helpers.js';
+import { fastestInTurn, instrumented } from './timing.js';
 
 async function findings(files: Record<string, string>, cfg = config(), repoFiles: string[] | null = null): Promise<Finding[]> {
   return lint(corpusOf(files, cfg), { repoFiles });
@@ -593,6 +594,44 @@ describe('scopes', () => {
       ['glob-matches-nothing', 'note', '"src/new/**" in affectedFiles matches no file in the tree'],
       ['glob-matches-nothing', 'note', '"gone.ts" in protectedFiles matches no file in the tree'],
     ]);
+  });
+
+  it('judges the patterns against the tree in time linear in the patterns and the files', async () => {
+    // Each brief writes a directory of its own, and the tree has 400 files in
+    // each. Every pattern was asked about every file until one matched.
+    const tree = (count: number): string[] => Array.from({ length: count * 400 }, (_, n) => `src/m${Math.floor(n / 400)}/f${n % 400}.ts`);
+    const run = (count: number) => {
+      const corpus = corpusOf(
+        Object.fromEntries(
+          Array.from({ length: count }, (_, n) => [
+            `briefs/${String(n + 1).padStart(3, '0')}_x.md`,
+            goodBrief({ affectedFiles: `[src/m${n}/**, src/m${n}/f0.ts]`, protectedFiles: `[src/m${n}/f1.ts]` }),
+          ]),
+        ),
+      );
+      const files = tree(count);
+      // A copy for each run, so that each reads its tree afresh, as a run of the command does.
+      return () => lint(corpus, { repoFiles: [...files] });
+    };
+    const small = run(10);
+    const large = run(40);
+    expect(await large()).toEqual([]);
+    const beyond = await findings({ [A]: goodBrief({ affectedFiles: '[src/m40/**, src/m39/f399.ts]' }) }, config(), tree(40));
+    expect(beyond.map((f) => f.message)).toEqual(['"src/m40/**" in affectedFiles matches no file in the tree']);
+    if (instrumented()) return;
+    // Four lints of ten briefs over 4,000 files against one of forty over
+    // 16,000: work that grows with patterns times files takes four times as
+    // long on the larger. Twice linear is allowed, and 100 ms for noise. On
+    // the machine this was written on, the larger took 990 ms against 590 ms
+    // allowed before, and after, 24 ms, as long as the four smaller.
+    const [fourSmall, oneLarge] = (await fastestInTurn(
+      3,
+      async () => {
+        for (let n = 0; n < 4; n += 1) await small();
+      },
+      large,
+    )) as [number, number];
+    expect(oneLarge).toBeLessThan(2 * fourSmall + 100);
   });
 });
 

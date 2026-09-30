@@ -117,6 +117,84 @@ export function matchGlob(glob: Glob, path: string): boolean {
   return canonical !== '' && glob.compiled.match(canonical);
 }
 
+/** A list of files by path, so the files below a directory are one run of it. */
+interface FileIndex {
+  /** Each path the list holds, as {@link matchGlob} reads it, once, in code-unit order. */
+  readonly paths: readonly string[];
+  /** The positions in the list of each path's files. */
+  readonly positions: ReadonlyMap<string, readonly number[]>;
+}
+
+const indexes = new WeakMap<readonly string[], FileIndex>();
+
+/** The index of a list. Built once per list, which every pattern of a run shares, as {@link treeOf} is. */
+function indexOf(files: readonly string[]): FileIndex {
+  const known = indexes.get(files);
+  if (known !== undefined) return known;
+  const positions = new Map<string, number[]>();
+  files.forEach((file, position) => {
+    const path = segments(file).join('/');
+    const others = positions.get(path);
+    if (others === undefined) positions.set(path, [position]);
+    else others.push(position);
+  });
+  const index = { paths: [...positions.keys()].sort(), positions };
+  indexes.set(files, index);
+  return index;
+}
+
+/**
+ * The positions of the files a glob can match: the run of the index below
+ * each of its bases. spec-core names, for each brace alternative, the
+ * directory every match of it lies below, or `''` where a match can lie
+ * anywhere, so a file below none of them cannot match. Asking every pattern
+ * about every file made `lint`, `matrix` and `schedule` grow with patterns
+ * times files: over 240 briefs and 93,000 files a lint took 35 s, nine tenths
+ * of it matching.
+ */
+function* candidates(index: FileIndex, glob: Glob): Generator<number> {
+  const { paths, positions } = index;
+  for (const base of glob.compiled.bases) {
+    const prefix = base === '' ? '' : `${base}/`;
+    // The first path that sorts at or after the prefix. `<=` finds the same
+    // one, an equivalent mutant: no path read so ends with `/`, so none
+    // equals a prefix but `''`, which no glob matches.
+    let low = 0;
+    let high = paths.length;
+    while (low < high) {
+      const middle = (low + high) >>> 1;
+      if ((paths[middle] as string) < prefix) low = middle + 1;
+      else high = middle;
+    }
+    for (let place = low; place < paths.length && (paths[place] as string).startsWith(prefix); place += 1) {
+      yield* positions.get(paths[place] as string) as readonly number[];
+    }
+  }
+}
+
+/**
+ * The files of a list a glob matches, in the list's order: those
+ * {@link matchGlob} matches, asked only of the files below one of the glob's
+ * bases.
+ */
+export function filesMatching(glob: Glob, files: readonly string[]): string[] {
+  const index = indexOf(files);
+  const matched = new Set<number>();
+  for (const position of candidates(index, glob)) {
+    if (matchGlob(glob, files[position] as string)) matched.add(position);
+  }
+  return [...matched].sort((a, b) => a - b).map((position) => files[position] as string);
+}
+
+/** Whether a glob matches any file of a list, asked only of the files below one of its bases. */
+export function matchesAny(glob: Glob, files: readonly string[]): boolean {
+  const index = indexOf(files);
+  for (const position of candidates(index, glob)) {
+    if (matchGlob(glob, files[position] as string)) return true;
+  }
+  return false;
+}
+
 /**
  * A shortest path every glob in `include` matches and none in `exclude` does,
  * `none` as a proof that there is no such path, or `undecided` when the search

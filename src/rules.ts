@@ -13,7 +13,7 @@ import { type Config, type SectionRule, statusWords } from './config.js';
 import { type Corpus, cycleSubject, dependencyCycles, duplicateIds, idKey, resolveDependency } from './corpus.js';
 import { findEntry } from './frontmatter.js';
 import { integrityOf } from './integrity.js';
-import { type Glob, hasExtension, held, isGlobSyntax, matchGlob, parseGlob, readingIn, treeOf, WITNESS_BUDGET, writtenAlternatives } from './glob.js';
+import { type Glob, hasExtension, held, isGlobSyntax, matchesAny, parseGlob, readingIn, treeOf, WITNESS_BUDGET, writtenAlternatives } from './glob.js';
 import { hasContent, type Section } from './markdown.js';
 import { closest } from './schema.js';
 import { contradictions, patternsOf, scopeOf, type ScopePattern } from './scope.js';
@@ -604,7 +604,7 @@ export const RULES: readonly Rule[] = [
       return SCOPE_FIELDS.flatMap((field) =>
         patternsOf(brief[field], reading)
           // A literal the tree does not hold is literal-read-as-file's finding.
-          .filter((p) => unheldLiterals(p.glob, repoFiles).length === 0 && !repoFiles.some((file) => matchGlob(p.glob, file)))
+          .filter((p) => unheldLiterals(p.glob, repoFiles).length === 0 && !matchesAny(p.glob, repoFiles))
           .map((p) => ({
             line: at(lineOfField(brief, field)),
             message: `"${p.pattern}" in ${field} matches no file in the tree`,
