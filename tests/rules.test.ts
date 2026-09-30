@@ -149,8 +149,11 @@ describe('deferral', () => {
     expect(await says('next month')).toHaveLength(1);
     expect(await says('Q3')).toHaveLength(1);
     expect(await says('tbd')).toEqual([`deferral-trigger@3: the trigger "tbd" is a placeholder, not an event | ${event}`]);
+    expect(await says('TBD.')).toEqual([`deferral-trigger@3: the trigger "TBD." is a placeholder, not an event | ${event}`]);
+    for (const trigger of ['tbd?!', 'TBD;', 'TBD\u2026']) expect(await says(trigger), trigger).toHaveLength(1);
     // A placeholder word inside an event is only a word.
     expect(await says('"TBD: when the vendor answers"')).toEqual([]);
+    expect(await says('"TBD. When the vendor answers."')).toEqual([]);
   });
 
   it('reads a trigger in English: a time or a placeholder in Chinese is read as an event', async () => {
@@ -245,6 +248,25 @@ describe('sections', () => {
       ['TODOS remain', false],
       ['todo: this is written', true],
       ['Nothing TBD here', false],
+      // Any stop that ends a sentence ends a placeholder, as a period does, and a note may follow a space.
+      ['TBD.', true],
+      ['TBD!', true],
+      ['TBD?', true],
+      ['TBD;', true],
+      ['TBD\u2026', true],
+      ['TBD?!', true],
+      ['????', true],
+      ['TBD. Ask the vendor.', true],
+      ['TBD! ask the vendor', true],
+      ['TBD.: ask the vendor', true],
+      ['TBD\u2014ask the vendor', true],
+      ['TBD-', true],
+      // A stop that goes on into a word is part of that word.
+      ['TODO.md lists the open work.', false],
+      ['XXX.yaml stays as it is.', false],
+      ['TBD!important', false],
+      // A word as long as a placeholder, ended by a stop, is still a word.
+      ['None.', false],
       // The placeholders are English, and a full-width colon is not a colon (ADR-0003, amended 2026-09-30).
       ['待定', false],
       ['- [ ] 待確認', false],
