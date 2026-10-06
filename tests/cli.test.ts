@@ -61,6 +61,23 @@ describe('arguments', () => {
   it('refuses an unknown command and an unknown option', () => {
     expect(() => parse(['lnit'])).toThrow(new UsageError('"lnit" is not a command; run spec-brief --help'));
     expect(() => parse(['lint', '--pr', '3'])).toThrow(UsageError);
+    expect(String(new UsageError('no'))).toBe('UsageError: no');
+  });
+
+  it('takes what follows "--" for the command, whatever it looks like', () => {
+    expect(() => parse(['--', '--root'])).toThrow(new UsageError('"--root" is not a command; run spec-brief --help'));
+  });
+
+  it('reads the arguments the process was started with when it is handed none', async () => {
+    const started = process.argv;
+    const stdout = new Sink();
+    try {
+      process.argv = ['node', 'spec-brief', '--help'];
+      expect(await main(undefined, { stdout, stderr: new Sink() })).toBe(EXIT_OK);
+    } finally {
+      process.argv = started;
+    }
+    expect(stdout.text).toBe(HELP);
   });
 });
 
@@ -115,6 +132,34 @@ describe('init and new', () => {
       expect.objectContaining({ $schema: './node_modules/@descent-vtt/spec-brief/schema.json', briefs: 'briefs' }),
     );
     expect((await run(root, ['init'])).err).toBe('spec-brief: .spec-brief.json already exists here; edit it instead\n');
+    // The file that keeps an empty directory in git holds nothing.
+    expect(readFileSync(join(root, 'briefs', '.gitkeep'), 'utf8')).toBe('');
+  });
+
+  it('writes into --root, not into the directory it was started in', async () => {
+    const root = dir('cli-init-into');
+    const elsewhere = dir('cli-init-from');
+    expect((await run(elsewhere, ['init', '--root', root])).code).toBe(EXIT_OK);
+    expect(existsSync(join(root, '.spec-brief.json'))).toBe(true);
+    expect(existsSync(join(elsewhere, '.spec-brief.json'))).toBe(false);
+  });
+
+  it('refuses directories that are one, or the root', async () => {
+    const refusal = { code: EXIT_ERROR, out: '', err: 'spec-brief: --briefs and --archive must be two directories\n' };
+    expect(await run(dir('cli-init-one'), ['init', '--briefs', 'a', '--archive', './a/'])).toEqual(refusal);
+    expect(await run(dir('cli-init-briefs-root'), ['init', '--briefs', '.'])).toEqual(refusal);
+    expect(await run(dir('cli-init-archive-root'), ['init', '--archive', '.'])).toEqual(refusal);
+  });
+
+  it('says where an unexpected failure was thrown, and exits 2', async () => {
+    // A file where a directory is wanted is no error spec-brief names: the
+    // filesystem's own is reported whole, so the report can be acted on.
+    const root = dir('cli-init-file');
+    writeTree(root, { specs: 'a file, not a directory' });
+    const result = await run(root, ['init', '--briefs', 'specs']);
+    expect(result.code).toBe(EXIT_ERROR);
+    expect(result.out).toBe('');
+    expect(result.err).toMatch(/^spec-brief: unexpected error: Error: E[A-Z]+: [^\n]+\n {4}at /);
   });
 
   it('takes the directories as options, keeps existing ones, and reports as JSON', async () => {
@@ -135,10 +180,18 @@ describe('init and new', () => {
     const text = readFileSync(join(root, 'briefs', '001_rotate-the-tokens.md'), 'utf8');
     expect(text).toContain('date: 2026-09-24\ntype: feature\nwave: 2\ndependsOn: ["7", "8"]');
     const json = await run(root, ['new', 'Second', '--format', 'json', '--date', '2026-01-02']);
-    expect(JSON.parse(json.out)).toEqual(expect.objectContaining({ command: 'new', file: 'briefs/002_second.md' }));
+    expect(JSON.parse(json.out)).toEqual(expect.objectContaining({ command: 'new', ok: true, file: 'briefs/002_second.md' }));
+    expect(readFileSync(join(root, 'briefs', '002_second.md'), 'utf8')).toContain('\ndate: 2026-01-02\n');
     expect((await run(root, ['new'])).err).toBe('spec-brief: new needs a title: spec-brief new "<title>"\n');
+    expect((await run(root, ['new', '  '])).err).toBe('spec-brief: new needs a title: spec-brief new "<title>"\n');
     expect((await run(root, ['new', 'x', '--wave', 'two'])).err).toBe('spec-brief: --wave must be a whole number of at least 0, not "two"\n');
+    // A number with anything before or after it is not one.
+    expect((await run(root, ['new', 'x', '--wave', '2nd'])).err).toBe('spec-brief: --wave must be a whole number of at least 0, not "2nd"\n');
+    expect((await run(root, ['new', 'x', '--wave', 'v2'])).err).toBe('spec-brief: --wave must be a whole number of at least 0, not "v2"\n');
     expect((await run(root, ['new', 'x', '--id', '001'])).err).toBe('spec-brief: the id "001" is taken\n');
+    // The least a number may be is allowed.
+    expect((await run(root, ['new', 'Third', '--wave', '0'])).out).toBe('wrote briefs/003_third.md\n');
+    expect(readFileSync(join(root, 'briefs', '003_third.md'), 'utf8')).toContain('\nwave: 0\n');
   });
 });
 
@@ -156,6 +209,7 @@ describe('lint', () => {
     expect(pretty.out).toContain('1 error, 1 warning, 0 notes in 2 brief(s)\n');
     const one = await run(root, ['lint', '2']);
     expect(one.code).toBe(EXIT_OK);
+    expect(one.out).toContain('0 errors, 1 warning, 0 notes in 1 brief(s)\n');
     expect((await run(root, ['lint', '2', '--strict'])).code).toBe(EXIT_FAILED);
   });
 
@@ -177,6 +231,7 @@ describe('lint', () => {
     const root = plain('cli-lint-color', { 'briefs/001_a.md': goodBrief({ type: 'epic' }) });
     const esc = String.fromCharCode(27);
     expect((await run(root, ['lint'], {}, true)).out).toContain(`${esc}[`);
+    expect((await run(root, ['lint'])).out).not.toContain(esc);
     expect((await run(root, ['lint'], { NO_COLOR: '1' }, true)).out).not.toContain(esc);
     expect((await run(root, ['lint'], { NO_COLOR: '' }, true)).out).toContain(esc);
     expect((await run(root, ['lint'], { FORCE_COLOR: '1' })).out).toContain(esc);
@@ -197,6 +252,35 @@ describe('lint', () => {
     expect((await run(root, ['lint', '404'])).err).toBe('spec-brief: no brief is named "404"\n');
     expect((await run(root, ['lint', '--no-config', '--root', root])).code).toBe(EXIT_OK);
     expect((await run(process.cwd(), ['lint', '--config', join(root, '.spec-brief.json')])).code).toBe(EXIT_OK);
+  });
+
+  it('runs from --root instead of the directory it was started in, on the file --config names, and on the defaults under --no-config', async () => {
+    const root = plain('cli-root', {
+      '.spec-brief.json': JSON.stringify({ briefs: 'specs' }),
+      'other.json': JSON.stringify({ briefs: 'briefs' }),
+      'specs/001_a.md': goodBrief(),
+      'briefs/001_b.md': goodBrief(),
+      'briefs/002_c.md': goodBrief(),
+    });
+    const elsewhere = dir('cli-elsewhere');
+    expect(await run(elsewhere, ['lint', '--root', root])).toEqual({ code: EXIT_OK, out: '1 brief(s) checked, no findings\n', err: '' });
+    expect((await run(elsewhere, ['lint'])).code).toBe(EXIT_ERROR);
+    // The file named is the one read, not the one a search from here would find.
+    expect(await run(root, ['lint', '--config', 'other.json'])).toEqual({ code: EXIT_OK, out: '2 brief(s) checked, no findings\n', err: '' });
+    // The defaults read briefs/, which the configuration here does not.
+    expect(await run(root, ['lint', '--no-config'])).toEqual({ code: EXIT_OK, out: '2 brief(s) checked, no findings\n', err: '' });
+  });
+
+  it('reads the files on disk under --no-git, the ones git ignores among them', async () => {
+    const root = repo('cli-no-git', {
+      '.gitignore': 'generated/\n',
+      'briefs/001_a.md': goodBrief({ wave: '1', affectedFiles: '[generated/**]' }),
+      'briefs/002_b.md': goodBrief({ wave: '1', affectedFiles: '["**/out.ts"]' }),
+      'generated/deep/out.ts': '',
+    });
+    const both = '001 "generated/**" and 002 "**/out.ts" both cover';
+    expect((await run(root, ['matrix', '--no-color'])).out).toContain(`X ${both} generated/out.ts, an example not in the tree\n`);
+    expect((await run(root, ['matrix', '--no-color', '--no-git'])).out).toContain(`X ${both} generated/deep/out.ts\n`);
   });
 });
 
@@ -233,6 +317,13 @@ describe('list and matrix', () => {
       ['The Defect, Measured', 'defect'],
     ]);
     expect(ready.sections[0]?.hint).toBe('The state of the tree when this round is done, and why it matters. One paragraph.');
+    const live = JSON.parse((await run(root, ['list', '--format', 'json'])).out) as { briefs: { id: string; ready: boolean; waitingOn: string[] }[] };
+    expect(live).toEqual(expect.objectContaining({ command: 'list', ok: true }));
+    expect(live.briefs.map((b) => [b.id, b.ready, b.waitingOn])).toEqual([
+      ['001', true, []],
+      ['002', false, ['003']],
+      ['003', true, []],
+    ]);
     const empty = plain('cli-list-empty', { 'briefs/.gitkeep': '' });
     expect((await run(empty, ['list'])).out).toBe('no briefs\n');
     const missing = plain('cli-list-missing', {});
@@ -252,6 +343,7 @@ describe('list and matrix', () => {
     expect(pretty.out).toContain('wave 1 \u00b7 2 briefs');
     expect(pretty.out).toContain('X 001 "src/auth/**" and 002 "src/**/session.ts" both cover src/auth/session.ts');
     const json = JSON.parse((await run(root, ['matrix', '--format', 'json'])).out) as { waves: { wave: number; collisions: unknown[] }[]; unscheduled: string[] };
+    expect(json).toEqual(expect.objectContaining({ command: 'matrix', ok: false, checked: 3 }));
     expect(json.waves.map((w) => [w.wave, w.collisions.length])).toEqual([
       [0, 0],
       [1, 1],
@@ -391,6 +483,8 @@ describe('schedule', () => {
     expect(refused.code).toBe(EXIT_FAILED);
     expect(refused.out).toContain('cycle: 001 -> 002 -> 001\n');
     expect(refused.out).toContain('nothing was written: the dependencies form a cycle\n');
+    // The view shows the cycle; it is not printed again beneath it as a finding.
+    expect(refused.out).not.toContain('dependency-cycle');
     expect(readFileSync(join(cycle, 'briefs/003_c.md'), 'utf8')).toBe(goodBrief({ affectedFiles: '[c]' }));
     const open = plain('cli-schedule-open', { 'briefs/001_a.md': '---\nstatus: active\n' });
     const edit = await run(open, ['schedule', '--write', '--no-color']);
@@ -399,6 +493,22 @@ describe('schedule', () => {
     expect(edit.out).toContain('the front matter is never closed, so wave 1 cannot be written into it  front-matter');
     expect(readFileSync(join(open, 'briefs/001_a.md'), 'utf8')).toBe('---\nstatus: active\n');
     expect((await run(plain('cli-schedule-missing', {}), ['schedule'])).code).toBe(EXIT_ERROR);
+  });
+
+  it('still says which waves do not hold when it could write none of them', async () => {
+    // Written, the waves hold and the findings that said they did not are
+    // answered. Refused, nothing was written, and they stand.
+    const root = plain('cli-schedule-refused', { ...files, 'briefs/004_d.md': '---\nstatus: active\n' });
+    const doc = JSON.parse((await run(root, ['schedule', '--write', '--format', 'json'])).out) as { ok: boolean; written: string[]; findings: { rule: string; file: string }[] };
+    expect(doc.ok).toBe(false);
+    expect(doc.written).toEqual([]);
+    expect(doc.findings.map((f) => [f.rule, f.file])).toEqual([
+      ['wave-schedule', 'briefs/002_b.md'],
+      ['front-matter', 'briefs/004_d.md'],
+      ['unscoped', 'briefs/004_d.md'],
+      ['wave-schedule', 'briefs/004_d.md'],
+    ]);
+    expect(readFileSync(join(root, 'briefs/002_b.md'), 'utf8')).toBe(files['briefs/002_b.md']);
   });
 });
 
@@ -409,6 +519,11 @@ describe('archive and unarchive', () => {
     expect(dry.code).toBe(EXIT_OK);
     expect(dry.out).toContain('would move briefs/001_a.md -> briefs/archive/001_a.md');
     expect(dry.out).toContain('> Done.');
+    // No commit or base was named, so the scope went unmeasured, and the plan says so.
+    expect(dry.out).toContain('affectedFiles went unchecked: no commit or base was named, so the files the round changed were not read  scope-unmeasured\n');
+    // Dated today, as the environment says it, or the day it is told.
+    expect(dry.out).toContain('> **Archived 2026-09-24.**');
+    expect((await run(root, ['archive', '1', '--dry-run', '--date', '2026-02-03', '--no-color'])).out).toContain('> **Archived 2026-02-03.**');
     expect(existsSync(join(root, 'briefs', '001_a.md'))).toBe(true);
 
     const done = await run(root, ['archive', '001', '--commit', 'HEAD', '--pr', '12', '--no-color']);
@@ -423,8 +538,9 @@ describe('archive and unarchive', () => {
     expect(reopenDry.out).toContain('would move briefs/archive/001_a.md -> briefs/001_a.md');
     expect(existsSync(join(root, 'briefs', 'archive', '001_a.md'))).toBe(true);
     const json = JSON.parse((await run(root, ['unarchive', '1', '--format', 'json'])).out) as { ok: boolean; plan: { to: string } };
-    expect(json).toEqual(expect.objectContaining({ ok: true, plan: expect.objectContaining({ to: 'briefs/001_a.md' }) }));
+    expect(json).toEqual(expect.objectContaining({ command: 'unarchive', ok: true, plan: expect.objectContaining({ to: 'briefs/001_a.md' }) }));
     expect((await run(root, ['unarchive', '1'])).out).toBe('briefs/001_a.md is already live; nothing to do\n');
+    expect((await run(root, ['unarchive'])).err).toBe('spec-brief: unarchive takes one brief: spec-brief unarchive <brief>\n');
   });
 
   it('refuses with the reasons and exits 1, and exits 2 on bad arguments', async () => {

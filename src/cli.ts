@@ -239,9 +239,9 @@ export function parse(argv: readonly string[]): Parsed {
   }
 }
 
+/** The value of an option declared a string, which is all `parseArgs` gives one. */
 function text(values: Values, key: string): string | undefined {
-  const value = values[key];
-  return typeof value === 'string' ? value : undefined;
+  return values[key] as string | undefined;
 }
 
 function flag(values: Values, key: string): boolean {
@@ -285,11 +285,9 @@ function useColor(values: Values, io: CliIO): boolean {
 }
 
 async function openEngine(run: Run): Promise<BriefEngine> {
-  const root = text(run.values, 'root');
-  const config = text(run.values, 'config');
   return BriefEngine.open({
-    cwd: root === undefined ? run.cwd : root,
-    ...(config === undefined ? {} : { config }),
+    cwd: text(run.values, 'root') ?? run.cwd,
+    config: text(run.values, 'config'),
     ...(flag(run.values, 'no-git') ? { git: null } : {}),
     noConfig: flag(run.values, 'no-config'),
   });
@@ -477,7 +475,8 @@ export async function main(argv: readonly string[] = process.argv.slice(2), io: 
   }
   if (flag(values, 'help') || command === undefined) {
     stdout.write(HELP);
-    return command === undefined && !flag(values, 'help') ? EXIT_ERROR : EXIT_OK;
+    // Asked for, the help is the answer; printed because no command was named, it is the error.
+    return flag(values, 'help') ? EXIT_OK : EXIT_ERROR;
   }
   const spec = COMMANDS.get(command) as CommandSpec;
   const format = (text(values, 'format') ?? 'pretty') as Format;
@@ -491,7 +490,8 @@ export async function main(argv: readonly string[] = process.argv.slice(2), io: 
       stdout.write(t);
     },
     err,
-    style: { color: format === 'pretty' && useColor(values, io) },
+    // Read by the pretty format alone: the others have nothing to colour.
+    style: { color: useColor(values, io) },
     format,
     strict: flag(values, 'strict'),
     version: await version(),
