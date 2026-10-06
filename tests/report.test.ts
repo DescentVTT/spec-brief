@@ -394,6 +394,27 @@ describe('lists, matrices and plans', () => {
     ]);
   });
 
+  it('marks each pair of briefs where they stand, two that share an id as the two rows they are', () => {
+    // Two branches each allocated 001, and lint says so. The grid marked a
+    // pair by its labels and read a pair of one label as the diagonal: it
+    // showed the two 001s apart, over the line that says they collide, and
+    // the second as meeting 002, which only the first does.
+    const twins = corpusOf({
+      'briefs/001_a.md': goodBrief({ wave: '1', affectedFiles: '[src/**]' }),
+      'briefs/001_b.md': goodBrief({ wave: '1', affectedFiles: '[src/a/x.ts]' }),
+      'briefs/002_c.md': goodBrief({ wave: '1', affectedFiles: '[src/b/y.ts]' }),
+    });
+    expect(prettyMatrix(collisions(twins), plainStyle).split('\n')).toEqual([
+      'wave 1 · 3 briefs',
+      '       001  001  002',
+      '  001    ·    X    X',
+      '  001    X    ·    ·',
+      '  002    X    ·    ·',
+      '  X 001 "src/**" and 001 "src/a/x.ts" both cover src/a/x.ts',
+      '  X 001 "src/**" and 002 "src/b/y.ts" both cover src/b/y.ts',
+    ]);
+  });
+
   it('tells a dry run from a real one, and prints the banner only on a dry run', () => {
     const plan = planArchive(corpus, corpus.briefs[0]!, { date: '2026-09-24', changes: [{ path: 'x', insertions: 1, deletions: 0 }] });
     const dry = prettyPlan(plan, true, plainStyle);

@@ -341,28 +341,29 @@ export function prettyMatrix(report: CollisionReport, style: Style): string {
     out.push(paint(style, 'bold', `${title} \u00b7 ${plural(wave.briefs.length, 'brief')}`));
     const names = wave.briefs.map(label);
     const width = Math.max(3, ...names.map(displayWidth));
+    // A pair is marked by where its briefs stand in the wave, not by their
+    // labels: two briefs that share an id are two rows, and may collide. No
+    // pair is of a brief with itself, so the diagonal needs no rule of its own.
+    const place = new Map(wave.briefs.map((b, i) => [b, i]));
     const pairs = (list: readonly { readonly a: Brief; readonly b: Brief }[]): Set<string> =>
-      new Set(list.flatMap((p) => [`${label(p.a)}\u0000${label(p.b)}`, `${label(p.b)}\u0000${label(p.a)}`]));
+      new Set(list.flatMap((p) => [`${place.get(p.a)},${place.get(p.b)}`, `${place.get(p.b)},${place.get(p.a)}`]));
     const hits = pairs(wave.collisions);
     const unknown = pairs(wave.undecided);
     const near = pairs(wave.shared);
     out.push(`  ${' '.repeat(width)}  ${names.map((n) => padStart(n, width)).join('  ')}`);
-    for (const row of names) {
-      const cells = names.map((col) => {
-        const key = `${row}\u0000${col}`;
-        const mark =
-          row === col
-            ? '\u00b7'
-            : hits.has(key)
-              ? paint(style, 'red', 'X')
-              : unknown.has(key)
-                ? paint(style, 'yellow', '?')
-                : near.has(key)
-                  ? paint(style, 'yellow', '~')
-                  : '\u00b7';
+    for (const [row, name] of names.entries()) {
+      const cells = names.map((_, col) => {
+        const key = `${row},${col}`;
+        const mark = hits.has(key)
+          ? paint(style, 'red', 'X')
+          : unknown.has(key)
+            ? paint(style, 'yellow', '?')
+            : near.has(key)
+              ? paint(style, 'yellow', '~')
+              : '\u00b7';
         return `${' '.repeat(width - 1)}${mark}`;
       });
-      out.push(`  ${padEnd(row, width)}  ${cells.join('  ')}`);
+      out.push(`  ${padEnd(name, width)}  ${cells.join('  ')}`);
     }
     // One mark per pair of briefs; each further pair of patterns on a line beneath it.
     for (const c of wave.collisions) {
