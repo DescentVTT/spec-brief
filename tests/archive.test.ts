@@ -223,6 +223,11 @@ describe('refusals', () => {
     expect(planArchive(open, the(open, '001'), { date: '2026-09-24' }).blocking.map((f) => [f.rule, f.message, f.hint])).toEqual([
       ['front-matter', 'the front matter is never closed, so it cannot be written into', 'close the front matter with a "---" line'],
     ]);
+    // A banner goes above a block never closed, where it hides it; the block is refused all the same.
+    const bannered = corpusOf({ [A]: '---\nstatus: active\n\n# T\n' });
+    expect(planArchive(bannered, the(bannered, '001'), { date: '2026-09-24' }).blocking.map((f) => f.message)).toEqual([
+      'the front matter is never closed, so it cannot be written into',
+    ]);
   });
 });
 
