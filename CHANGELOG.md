@@ -43,6 +43,16 @@ what a run reports.
   `·`, above the line that says they collide, and where one of them collides
   with a third brief it marked the other as well. The findings,
   `--format json` and the exit code were right and are unchanged.
+- `matrix` marks in its grid only what the run reports. With
+  `shared-directory` off, as it is unless a configuration turns it on, two
+  briefs writing into one directory were still marked `~`, over a line saying
+  both write into it, though no finding was reported and the exit code said
+  nothing; in a repository whose briefs all write under `src/` that was a
+  mark on every pair. They are `·` now, and `~` once the rule is on. The
+  same holds for the other rules of the matrix: `collision`,
+  `collision-undecided` or `unscoped` turned off marks nothing either.
+  `--format json` is unchanged: it lists every pair the comparison found
+  under `waves`, beside the `findings` the run reports.
 - `archive` and `unarchive` refuse a brief whose banner stands on the first
   line of the file, above front matter they cannot write into. A banner there
   hides the block under it, so the brief is read as having none; for TOML,

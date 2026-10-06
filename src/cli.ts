@@ -12,6 +12,7 @@ import { parseArgs, type ParseArgsConfig } from 'node:util';
 
 import { TransactionError, ConflictError } from './apply.js';
 import type { Plan } from './archive.js';
+import { reported } from './collisions.js';
 import { CONFIG_FILES, ConfigError, initialConfig } from './config.js';
 import { BriefEngine, EngineError, today } from './engine.js';
 import { NodeFileSystem } from './fs.js';
@@ -397,7 +398,8 @@ async function runMatrix(run: Run): Promise<number> {
   const { report, findings } = await engine.collisions({ all: flag(run.values, 'all-waves') });
   const sorted = sortFindings(findings);
   if (run.format === 'pretty') {
-    run.out(`${prettyMatrix(report, run.style)}\n`);
+    // Drawn from what the run reports, so a rule that is off marks nothing in the grid.
+    run.out(`${prettyMatrix(reported(engine.corpus, report), run.style)}\n`);
     return failing(sorted, run.strict) ? EXIT_FAILED : EXIT_OK;
   }
   return emitFindings(run, 'matrix', sorted, engine.corpus.live.length, matrixJson(report));

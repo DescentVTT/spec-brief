@@ -367,6 +367,52 @@ describe('list and matrix', () => {
     expect(doc.waves[0]?.unscoped).toEqual(['003']);
   });
 
+  it('marks in the grid what the run reports, and nothing for a rule that is off', async () => {
+    // Two briefs that write into one directory, and one with no scope. The
+    // shared directory is a rule of its own, off unless the configuration
+    // turns it on (ADR-0005): off, the grid marked the pair "~" all the same,
+    // over a line saying so, with no finding behind either.
+    const briefs = {
+      'briefs/001_a.md': goodBrief({ wave: '1', affectedFiles: '[src/a.ts]' }),
+      'briefs/002_b.md': goodBrief({ wave: '1', affectedFiles: '[src/b.ts]' }),
+      'briefs/003_c.md': goodBrief({ wave: '1' }),
+    };
+    const drawn = async (name: string, rules: Record<string, string>): Promise<{ grid: string[]; findings: string[]; wave: unknown }> => {
+      const root = plain(name, { '.spec-brief.json': JSON.stringify({ rules }), ...briefs });
+      const doc = JSON.parse((await run(root, ['matrix', '--format', 'json'])).out) as { findings: { rule: string }[]; waves: unknown[] };
+      return { grid: (await run(root, ['matrix', '--no-color'])).out.split('\n'), findings: doc.findings.map((f) => f.rule), wave: doc.waves[0] };
+    };
+    const off = await drawn('cli-matrix-rule-off', {});
+    expect(off.grid).toEqual([
+      'wave 1 · 3 briefs',
+      '       001  002  003',
+      '  001    ·    ·    ·',
+      '  002    ·    ·    ·',
+      '  003    ·    ·    ·',
+      '  ? 003 declares no affectedFiles and cannot be checked',
+      '',
+    ]);
+    expect(off.findings).toEqual(['unscoped']);
+    const on = await drawn('cli-matrix-rule-on', { 'shared-directory': 'note' });
+    expect(on.grid).toEqual([
+      'wave 1 · 3 briefs',
+      '       001  002  003',
+      '  001    ·    ~    ·',
+      '  002    ~    ·    ·',
+      '  003    ·    ·    ·',
+      '  ~ 001 and 002 both write into src/',
+      '  ? 003 declares no affectedFiles and cannot be checked',
+      '',
+    ]);
+    expect(on.findings).toEqual(['shared-directory', 'unscoped']);
+    // Any rule of the matrix: with `unscoped` off too, the brief with no scope is not marked either.
+    const quiet = await drawn('cli-matrix-rules-off', { unscoped: 'off' });
+    expect(quiet.grid.slice(5)).toEqual(['']);
+    expect(quiet.findings).toEqual([]);
+    // The JSON document lists every pair the comparison found, beside the findings that say which of them the run reports.
+    expect(off.wave).toEqual(expect.objectContaining({ sharedDirectories: [{ a: '001', b: '002', directories: ['src'] }], unscoped: ['003'] }));
+  });
+
   it('names a file the tree holds, and says so when the file named is only an example', async () => {
     const briefs = {
       'briefs/001_a.md': goodBrief({ wave: '1', affectedFiles: '[src/Shop.Application/**]' }),

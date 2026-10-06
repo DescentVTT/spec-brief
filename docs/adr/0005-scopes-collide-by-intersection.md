@@ -285,3 +285,32 @@ The refusal names spec-core's text behind one `/`, so `{//docs,x}` names
 outside them. The generated corpus holds the refusal to spec-core's bases
 as before: a pattern is refused exactly where the core gives a base that
 starts with `/`, and the text named is rooted written alone.
+
+## Amended 2026-10-07: the grid marks what the run reports
+
+The matrix a terminal shows is the run's report, not a picture of the scopes
+beside it. `matrix` prints no list of findings in that format: the marks in
+the grid, and the lines beneath it that say why, are how a person reads them.
+So a mark is a finding, and a rule that is off marks nothing.
+
+It did not hold. The grid was drawn from every pair the comparison found,
+whatever the rules said, and the shared directory showed it: the decision
+above makes it a separate rule, off by default, because it hints and is no
+merge conflict, and two briefs writing `src/a.ts` and `src/b.ts` were marked
+`~` all the same, over a line saying both write into `src/`, with no finding
+behind either and nothing in the exit code. In a repository whose briefs all
+write under `src/` that is a mark on every pair, the report that cries wolf
+the rule was turned off to avoid. A brief with no scope was listed with
+`unscoped` off, and a collision marked `X` with `collision` off, the same
+way.
+
+The findings and the grid are now made from one thing, the report with what
+a rule that is off would have marked left out (`reported` in
+`src/collisions.ts`), so they agree by construction: `·` where the run
+reports nothing, and `~` once a repository turns `shared-directory` on. A
+legend that called the mark no finding would have kept the noise and asked
+the reader to discount it.
+
+`--format json` is a document for a script and keeps both: every pair the
+comparison found under `waves`, `sharedDirectories` among them, and the run's
+`findings` beside them, which say which of those it reports.

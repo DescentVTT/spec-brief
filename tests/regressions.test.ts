@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 
 import { planArchive, planUnarchive, type Plan } from '../src/archive.js';
 import { BANNER_CLOSE, BANNER_OPEN } from '../src/brief.js';
-import { collisionFindings, collisions } from '../src/collisions.js';
+import { collisionFindings, collisions, reported } from '../src/collisions.js';
 import { ConfigError, resolveConfig, typeSections } from '../src/config.js';
 import { type Corpus, findBriefs } from '../src/corpus.js';
 import { BriefEngine } from '../src/engine.js';
@@ -591,5 +591,85 @@ describe('a name every object answers to, after 0.4.1', () => {
   it('is not a placeholder: a template that says it is left as written', () => {
     expect(fillTemplate('{id}: {constructor} {toString} {__proto__} {title}', { id: '001', title: 'T' })).toBe('001: {constructor} {toString} {__proto__} T');
     expect(fillTemplate('{constructor}', { constructor: 'given' })).toBe('given');
+  });
+});
+
+describe('the matrix and what the run reports, after 0.4.1', () => {
+  // The grid a terminal shows drew every pair the comparison found, whatever
+  // the rules said. With `shared-directory` off, as it is unless a repository
+  // turns it on, two briefs writing into one directory were marked "~", over
+  // a line saying so, and no finding stood behind either.
+  const CLEAN = ['wave 1 · 2 briefs', '       001  002', '  001    ·    ·', '  002    ·    ·'];
+
+  /** The grid as `matrix` draws it, and the rules of the findings the same run makes. */
+  function told(files: Record<string, string>, rules: Record<string, string> = {}, budget?: number): { grid: string[]; rules: string[] } {
+    const corpus = corpusOf(files, config({ rules }));
+    const report = collisions(corpus, budget === undefined ? {} : { budget });
+    return { grid: prettyMatrix(reported(corpus, report), { color: false }).split('\n'), rules: collisionFindings(corpus, report).map((f) => f.rule) };
+  }
+
+  it('marks a shared directory while its rule is on, and not while it is off', () => {
+    const files = { [A]: goodBrief({ wave: '1', affectedFiles: '[src/a.ts]' }), [B]: goodBrief({ wave: '1', affectedFiles: '[src/b.ts]' }) };
+    expect(told(files)).toEqual({ grid: CLEAN, rules: [] });
+    expect(told(files, { 'shared-directory': 'off' })).toEqual({ grid: CLEAN, rules: [] });
+    expect(told(files, { 'shared-directory': 'note' })).toEqual({
+      grid: ['wave 1 · 2 briefs', '       001  002', '  001    ·    ~', '  002    ~    ·', '  ~ 001 and 002 both write into src/'],
+      rules: ['shared-directory'],
+    });
+  });
+
+  it('marks a collision, an undecided pair and a brief with no scope while their rules are on, and none of them while they are off', () => {
+    const colliding = { [A]: goodBrief({ wave: '1', affectedFiles: '[src/**]' }), [B]: goodBrief({ wave: '1', affectedFiles: '[src/x.ts]' }) };
+    expect(told(colliding)).toEqual({
+      grid: ['wave 1 · 2 briefs', '       001  002', '  001    ·    X', '  002    X    ·', '  X 001 "src/**" and 002 "src/x.ts" both cover src/x.ts'],
+      rules: ['collision'],
+    });
+    expect(told(colliding, { collision: 'off' })).toEqual({ grid: CLEAN, rules: [] });
+
+    // A search that may visit one state decides nothing about these two.
+    const hard = { [A]: goodBrief({ wave: '1', affectedFiles: '[src/**]' }), [B]: goodBrief({ wave: '1', affectedFiles: '["**/*.ts"]' }) };
+    expect(told(hard, {}, 1)).toEqual({
+      grid: ['wave 1 · 2 briefs', '       001  002', '  001    ·    ?', '  002    ?    ·', '  ? 001 "src/**" and 002 "**/*.ts": undecided within the search\'s budget'],
+      rules: ['collision-undecided'],
+    });
+    expect(told(hard, { 'collision-undecided': 'off' }, 1)).toEqual({ grid: CLEAN, rules: [] });
+
+    const bare = { [A]: goodBrief({ wave: '1', affectedFiles: '[src/a.ts]' }), [B]: goodBrief({ wave: '1' }) };
+    expect(told(bare)).toEqual({ grid: [...CLEAN, '  ? 002 declares no affectedFiles and cannot be checked'], rules: ['unscoped'] });
+    expect(told(bare, { unscoped: 'off' })).toEqual({ grid: CLEAN, rules: [] });
+  });
+
+  it('leaves out only what is off, and leaves the report it was given as it was', () => {
+    const files = {
+      [A]: goodBrief({ wave: '1', affectedFiles: '[src/**]' }),
+      [B]: goodBrief({ wave: '1', affectedFiles: '[src/x.ts, lib/b.ts]' }),
+      'briefs/003_c.md': goodBrief({ wave: '1', affectedFiles: '[lib/c.ts]' }),
+      'briefs/004_d.md': goodBrief({ wave: '1' }),
+      'briefs/005_e.md': goodBrief(),
+    };
+    const corpus = corpusOf(files, config({ rules: { collision: 'off', 'shared-directory': 'warning' } }));
+    const report = collisions(corpus);
+    const shown = reported(corpus, report);
+    const counts = (r: typeof report): number[] => r.waves.flatMap((w) => [w.collisions.length, w.undecided.length, w.shared.length, w.unscoped.length]);
+    expect(counts(report)).toEqual([1, 0, 1, 1]);
+    expect(counts(shown)).toEqual([0, 0, 1, 1]);
+    expect(shown.waves[0]?.briefs).toBe(report.waves[0]?.briefs);
+    expect(shown.unscheduled).toBe(report.unscheduled);
+    // The two that collide are not marked, with `collision` off; the two that share a directory are.
+    expect(prettyMatrix(shown, { color: false }).split('\n')).toEqual([
+      'wave 1 · 4 briefs',
+      '       001  002  003  004',
+      '  001    ·    ·    ·    ·',
+      '  002    ·    ·    ~    ·',
+      '  003    ·    ~    ·    ·',
+      '  004    ·    ·    ·    ·',
+      '  ~ 002 and 003 both write into lib/',
+      '  ? 004 declares no affectedFiles and cannot be checked',
+      '',
+      'no wave: 005',
+    ]);
+    // The document a script reads lists every pair the comparison found; its findings say which the run reports.
+    expect((matrixJson(report)['waves'] as { collisions: unknown[] }[])[0]?.collisions).toHaveLength(1);
+    expect(collisionFindings(corpus, report).map((f) => f.rule)).toEqual(['shared-directory', 'unscoped']);
   });
 });
