@@ -328,9 +328,15 @@ function withIntegrity(lines: readonly string[]): string[] {
  * matter and is not refused by it already - the rule lowered, or a reopening,
  * which lint does not gate - is refused here. It leaves the front matter as
  * written rather than half edited.
+ *
+ * The front matter judged is the brief's own, or for a brief read as having
+ * none, whatever block the `lines` about to be edited open with. They open
+ * with one where a banner stood at the very top of the file: it hid the block
+ * under it from every reader, and with the banner taken out that block is
+ * what an edit would go into.
  */
-function writable(brief: Brief, edits: boolean, blocking: Finding[]): boolean {
-  const frontMatter = brief.frontMatter;
+function writable(brief: Brief, lines: readonly string[], edits: boolean, blocking: Finding[]): boolean {
+  const frontMatter = brief.frontMatter ?? readFrontMatter(lines);
   if (frontMatter === null || editable(frontMatter)) return true;
   if (edits && !blocking.some((f) => f.rule === 'front-matter')) {
     const open = frontMatter.close === -1;
@@ -536,7 +542,7 @@ export function planArchive(corpus: Corpus, brief: Brief, request: ArchiveReques
   };
   const banner = renderBanner(config.archiving.banner, values);
   if (banner.length > 0) lines = withBanner(lines, banner);
-  const writes = writable(brief, config.status.field !== null || config.archiving.freeze, blocking);
+  const writes = writable(brief, lines, config.status.field !== null || config.archiving.freeze, blocking);
   if (writes && config.status.field !== null) {
     lines = setEntry(lines, readFrontMatter(lines), config.status.field, renderScalar(config.status.archived));
   }
@@ -649,7 +655,7 @@ export function planUnarchive(corpus: Corpus, brief: Brief, request: UnarchiveRe
   lines = withoutBanner(lines, brief.banner);
   lines = removeEntry(lines, readFrontMatter(lines), INTEGRITY_FIELD);
   const field = config.status.field;
-  if (writable(brief, field !== null, blocking) && field !== null) {
+  if (writable(brief, lines, field !== null, blocking) && field !== null) {
     lines = setEntry(lines, readFrontMatter(lines), field, renderScalar(config.status.active));
   }
   // Archival gives a brief with no front matter a block to hold its hash.

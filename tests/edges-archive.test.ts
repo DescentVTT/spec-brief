@@ -129,6 +129,29 @@ describe('archiving', () => {
     expect(written(planUnarchive(corpus, corpus.briefs[0]!), A)).toBe('# T');
   });
 
+  it('refuses front matter a banner at the very top stood above, when it cannot write into it', () => {
+    // Above the block, the banner hides it from every reader; with the banner
+    // gone the file opens with it, and it is what the status is written into.
+    const top = `${BANNER_OPEN}\n> x\n${BANNER_CLOSE}\n\n`;
+    const live = corpusOf({ [A]: `${top}+++\nstatus = "active"\n+++\n\n# T\n` });
+    const plan = planArchive(live, live.briefs[0]!, { date: '2026-09-24' });
+    expect(plan.blocking.map((f) => [f.rule, f.severity, f.line, f.message, f.hint])).toEqual([
+      ['front-matter', 'error', 1, 'the front matter is TOML, which spec-brief does not write', 'write the front matter as YAML between "---" lines'],
+    ]);
+    expect(written(plan, TO).startsWith(`+++\nstatus = "active"\n+++\n\n${BANNER_OPEN}\n`)).toBe(true);
+    const archived = corpusOf({ [TO]: `${top}---\nstatus: archived\n\n# T\n` });
+    const back = planUnarchive(archived, archived.briefs[0]!);
+    expect(back.blocking.map((f) => [f.rule, f.message, f.hint])).toEqual([
+      ['front-matter', 'the front matter is never closed, so it cannot be written into', 'close the front matter with a "---" line'],
+    ]);
+    expect(written(back, A)).toBe('---\nstatus: archived\n\n# T\n');
+    // A block it can write into is written into, as it always was.
+    const yaml = corpusOf({ [TO]: `${top}---\nstatus: archived\n---\n\n# T\n` });
+    const reopened = planUnarchive(yaml, yaml.briefs[0]!);
+    expect(reopened.blocking).toEqual([]);
+    expect(written(reopened, A)).toBe('---\nstatus: active\n---\n\n# T\n');
+  });
+
   it('plans a reopening with no banner and no changes of its own', () => {
     const corpus = corpusOf({ [TO]: goodBrief({ status: 'archived' }) });
     const plan = planUnarchive(corpus, corpus.briefs[0]!);
