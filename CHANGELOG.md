@@ -37,6 +37,12 @@ what a run reports.
   `must be undefined`, and is now `is not a known key`. `{constructor}` in a
   brief template is left as written, where the new brief was given a
   function's source.
+- `matrix` draws its grid by brief, not by id. Two live briefs that share an
+  id, which `lint` reports as `duplicate-id`, are two rows under one label,
+  and the grid marked a pair by its labels: where the two collide it showed
+  `·`, above the line that says they collide, and where one of them collides
+  with a third brief it marked the other as well. The findings,
+  `--format json` and the exit code were right and are unchanged.
 
 ## 0.4.1
 
