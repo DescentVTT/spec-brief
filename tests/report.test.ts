@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 
 import { planArchive } from '../src/archive.js';
 import { collisionFindings, collisions } from '../src/collisions.js';
@@ -249,12 +249,17 @@ describe('machine formats', () => {
 });
 
 describe('lists, matrices and plans', () => {
-  const corpus = corpusOf({
-    'briefs/001_a.md': goodBrief({ wave: '1', affectedFiles: '[src/api/a.ts]' }),
-    'briefs/002_b.md': goodBrief({ wave: '1', affectedFiles: '[src/api/b.ts, src/x/**]' }),
-    'briefs/003_c.md': goodBrief({ wave: '1', affectedFiles: '[src/x/y.ts]' }),
-    'briefs/004_d.md': goodBrief({ wave: '1' }),
-    'briefs/005_e.md': goodBrief(),
+  // Built for each test (ADR-0009): parsed as the file loads, the briefs would
+  // make the parser's mutants static, measured against the whole suite.
+  let corpus: ReturnType<typeof corpusOf>;
+  beforeEach(() => {
+    corpus = corpusOf({
+      'briefs/001_a.md': goodBrief({ wave: '1', affectedFiles: '[src/api/a.ts]' }),
+      'briefs/002_b.md': goodBrief({ wave: '1', affectedFiles: '[src/api/b.ts, src/x/**]' }),
+      'briefs/003_c.md': goodBrief({ wave: '1', affectedFiles: '[src/x/y.ts]' }),
+      'briefs/004_d.md': goodBrief({ wave: '1' }),
+      'briefs/005_e.md': goodBrief(),
+    });
   });
 
   it('describes a brief as JSON', () => {
@@ -604,13 +609,17 @@ describe('the library', () => {
 });
 
 describe('section hints', () => {
-  const cfg = config({
-    sections: [
-      { name: 'Mission', hint: 'Why the round exists --> and for whom.' },
-      { name: 'Deliverables', checklist: true },
-      'Intent',
-    ],
-    types: { spike: { sections: [{ name: 'Findings', aliases: ['Results'], optional: true, mustContain: ['Measured'], hint: 'What the spike measured.' }] } },
+  // Built for each test, so the code that resolves it is measured by the tests that use it and not as the file loads.
+  let cfg: ReturnType<typeof config>;
+  beforeEach(() => {
+    cfg = config({
+      sections: [
+        { name: 'Mission', hint: 'Why the round exists --> and for whom.' },
+        { name: 'Deliverables', checklist: true },
+        'Intent',
+      ],
+      types: { spike: { sections: [{ name: 'Findings', aliases: ['Results'], optional: true, mustContain: ['Measured'], hint: 'What the spike measured.' }] } },
+    });
   });
 
   it('are read from the configuration, and must say something', () => {
