@@ -177,3 +177,71 @@ noise between two runs of one source. The full gate sits at the core's 93,
 under both, and moves up with the measurement. Twenty-six minutes is cheap
 enough that the full sweep could run on every push to main as the core sweep
 does; it stays weekly until a push shows the need.
+
+## Amended 2026-10-07
+
+**The full sweep's survivors, read one by one.** Main's sweep of 9e2f6a1 (run
+37511908755) read 95.22% over 7,096 mutants: 6,716 killed, 41 timed out, 315
+survived and 24 without coverage; 94.64% with every timeout lost. Each of the
+339 it left undetected was read and applied by hand: killed by a test that
+states what a caller sees, removed with code that decided nothing, or left
+as equivalent with a comment at the code saying why. The sweep of that branch
+(run 37535078122) read **99.31% over 6,941 mutants**: 6,852 killed, 41 timed
+out, 45 survived and 3 without coverage; 98.72% with every timeout lost. Of
+the 339, 197 are the same mutant at the same text and detected there, 109
+are gone with their text, and 33 stand where they stood; the 48 the branch
+leaves are the equivalent ones, each commented. The core sweep of the same
+commit read 99.38% over 5,286, with 30 survived. The gate stays at 93 until
+main has been measured, and then moves up under that worst case.
+
+Reading them was a review again, and found what no test had:
+
+- **A table kept in an object answers to names it was never given.**
+  `constructor`, `toString` and `__proto__` are on every object, so
+  `spec-brief constructor` passed for a command and ended on a stack trace
+  with exit 1, a brief with `type: constructor` stopped lint for every brief,
+  a configuration key `toString` was "must be undefined", and `{constructor}`
+  in a template was filled with a function's source. The commands are a map,
+  and a type, a key and a placeholder are asked for as an own key.
+- **A directory named `..drafts` was taken for a path out of the work tree**,
+  and a configuration there lost git: archival skipped its dirty-tree check
+  and reported the scope as unmeasured.
+- **The matrix marked a pair of briefs by their ids**, so two briefs that
+  share one drew as one. The 2026-09-26 amendment calls the diagonal's mutant
+  equivalent; that held while no two labels were equal, and the grid is now
+  drawn by where a brief stands, with no diagonal of its own.
+- **A banner on a file's first line hides the front matter under it**, and an
+  archival of such a brief with a TOML or an unclosed block threw out of the
+  planner instead of refusing.
+
+What the pass taught, for the next one:
+
+- **Vitest resolves an import as a bundler does.** A path without an
+  extension loads under the test runner and not under Node, so no test here
+  can tell which resolver a plugin's path went through by what loads; the
+  message of a path that does not load tells them apart.
+- **A condition the host does not offer goes under the test's control, in a
+  file of its own.** A rename another process holds, a directory that may not
+  be read and names that come in no order are Windows' or Linux's, never
+  both: `tests/io-faults.test.ts` mocks `rename` and `readdir` alone, as the
+  sibling tools do, and every other call reaches the disk.
+- **A hand replay that finds a mutant by the text around it must say where
+  it landed.** With a comment added above a mutant, its longer anchors no
+  longer match, and the shortest one found the same line in another
+  function, whose test then "killed" it.
+- **What a test file builds while it loads is static to Stryker**, as the
+  2026-09-26 amendment says, and it was still done: three test files parsed
+  briefs or resolved a configuration at `describe` level, which made the
+  reader's, the scanner's and the schema's mutants static. They are built
+  for each test now. Listing the tests with a probe in `parseBrief` and
+  `resolveConfig` finds such calls, since `vitest list` loads every file and
+  runs none. Main's sweep counted 1,308 static mutants, 18% of all and by
+  Stryker's estimate two thirds of its time; the branch's counts 722, a
+  tenth and half.
+
+**Shards, not yet.** The full sweep took 22 to 31 minutes as one job, and 25
+on the branch. It runs weekly and on request, outside the path of a change,
+and under the 45 minutes at which its workflow says it wants shards. Split
+as spec-harness's is, it would finish sooner, at the price of the merge
+script and its tests kept here as well, and of every shard's own start. The
+static mutants above were the cheaper minutes, and were taken first.
