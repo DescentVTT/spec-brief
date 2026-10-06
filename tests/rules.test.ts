@@ -745,6 +745,11 @@ describe('running rules', () => {
     const f = (file: string, line: number, rule: string, message: string, severity: Finding['severity'] = 'error'): Finding => ({ file, line, rule, message, severity });
     const sorted = sortFindings([f('b', 1, 'r', 'm'), f('a', 2, 'r', 'm'), f('a', 1, 's', 'm'), f('a', 1, 'r', 'n'), f('a', 1, 'r', 'm', 'note')]);
     expect(sorted.map((x) => `${x.file}${x.line}${x.rule}${x.message}`)).toEqual(['a1rm', 'a1rn', 'a1sm', 'a2rm', 'b1rm']);
+    // Each key decides before the next is asked: a later file is later whatever its line, a later rule whatever its message.
+    const byFile = [f('a', 2, 'r', 'm'), f('b', 1, 'r', 'm')];
+    expect(sortFindings(byFile)).toEqual(byFile);
+    const byRule = [f('a', 1, 'r', 'n'), f('a', 1, 's', 'm')];
+    expect(sortFindings(byRule)).toEqual(byRule);
     expect(summarise([f('a', 1, 'r', 'm'), f('a', 1, 'r', 'm', 'warning'), f('a', 1, 'r', 'm', 'note'), f('a', 1, 'r', 'm', 'note')])).toEqual({ errors: 1, warnings: 1, notes: 2 });
     expect(failing([f('a', 1, 'r', 'm', 'warning')], false)).toBe(false);
     expect(failing([f('a', 1, 'r', 'm', 'warning')], true)).toBe(true);
