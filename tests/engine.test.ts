@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
 
 import type { Plan, Waiver } from '../src/archive.js';
+import { BANNER_CLOSE, BANNER_OPEN } from '../src/brief.js';
 import { ConfigError, DEFAULT_CONFIG, resolveConfig } from '../src/config.js';
 import { BriefEngine, EngineError, isDate, today } from '../src/engine.js';
 import { MemoryFileSystem } from '../src/fs.js';
@@ -32,6 +33,9 @@ describe('dates', () => {
     expect(today({ SOURCE_DATE_EPOCH: '1790208000' })).toBe('2026-09-24');
     expect(today({ SOURCE_DATE_EPOCH: 'soon' })).toBe(new Date().toISOString().slice(0, 10));
     expect(today({})).toBe(new Date().toISOString().slice(0, 10));
+    // A number with anything before or after it is not a number of seconds.
+    expect(today({ SOURCE_DATE_EPOCH: '1790208000s' })).toBe(new Date().toISOString().slice(0, 10));
+    expect(today({ SOURCE_DATE_EPOCH: 's1790208000' })).toBe(new Date().toISOString().slice(0, 10));
   });
 
   it('accepts only real calendar dates', () => {
@@ -39,6 +43,12 @@ describe('dates', () => {
     expect(isDate('2026-02-30')).toBe(false);
     expect(isDate('2026-9-24')).toBe(false);
     expect(isDate('yesterday')).toBe(false);
+    // A year past 9999 with its month is ten characters too, and is not a date written YYYY-MM-DD.
+    expect(isDate('+010000-01')).toBe(false);
+  });
+
+  it('says which kind of error it raises', () => {
+    expect(String(new EngineError('invalid', 'no'))).toBe('EngineError: no');
   });
 });
 
@@ -76,8 +86,27 @@ describe('an engine over memory', () => {
     const engine = memoryEngine({ 'briefs/001_a.md': goodBrief(), 'briefs/001_b.md': goodBrief() });
     await engine.load();
     expect(() => engine.find('9')).toThrow(new EngineError('not-found', 'no brief is named "9"'));
-    expect(() => engine.find('1')).toThrow('"1" names 2 briefs: briefs/001_a.md, briefs/001_b.md');
+    expect(() => engine.find('1')).toThrow(new EngineError('ambiguous', '"1" names 2 briefs: briefs/001_a.md, briefs/001_b.md'));
     expect(engine.find('001_b.md').file).toBe('briefs/001_b.md');
+  });
+
+  it('refuses to report on a briefs directory that is not there, and reports on one that is empty', async () => {
+    const missing = memoryEngine({ 'elsewhere/001_a.md': goodBrief() });
+    await missing.load();
+    expect(() => missing.requireBriefs()).toThrow(
+      new EngineError('not-found', 'briefs/ does not exist; run "spec-brief init", or set "briefs" in the configuration'),
+    );
+    const empty = memoryEngine({ 'briefs/notes.txt': '' });
+    expect((await empty.load()).briefs).toEqual([]);
+    expect(() => empty.requireBriefs()).not.toThrow();
+  });
+
+  it('reads no brief from a file that is gone between the listing and the read', async () => {
+    const fs = new MemoryFileSystem({ 'briefs/001_a.md': goodBrief(), 'briefs/002_b.md': goodBrief() });
+    const read = fs.read.bind(fs);
+    fs.read = (path) => (path === 'briefs/002_b.md' ? Promise.resolve(null) : read(path));
+    const engine = new BriefEngine({ root: '/v', config: DEFAULT_CONFIG, configFile: null, fs, git: null, plugins: [] });
+    expect((await engine.load()).briefs.map((b) => b.file)).toEqual(['briefs/001_a.md']);
   });
 
   it('lints all briefs or the ones named, and knows which are ready', async () => {
@@ -108,14 +137,27 @@ describe('an engine over memory', () => {
     const plan = await engine.planArchive('1', { date: '2026-09-24' });
     await engine.apply(plan);
     expect(engine.corpus.archived.map((b) => b.file)).toEqual(['briefs/archive/001_a.md']);
+    // A plan with nothing left to do changes nothing, and nothing is read again.
+    const archived = engine.corpus;
     await engine.apply(await engine.planArchive('1', { date: '2026-09-24' }));
+    expect(engine.corpus).toBe(archived);
     const refused = await engine.planArchive('2', { date: '2026-09-24' });
-    await expect(engine.apply(refused)).rejects.toThrow('archive of briefs/002_b.md is refused: is a draft');
+    await expect(engine.apply(refused)).rejects.toThrow(
+      new EngineError('refused', 'archive of briefs/002_b.md is refused: is a draft, and a draft has not been executed'),
+    );
     await engine.apply(engine.planUnarchive('1'));
     expect(engine.corpus.live.map((b) => b.file)).toEqual(['briefs/001_a.md', 'briefs/002_b.md']);
-    await expect(engine.planArchive('1', { date: '24/09/2026' })).rejects.toThrow('is not a date written YYYY-MM-DD');
-    await expect(engine.planArchive('1', { noGit: true, commit: 'HEAD' })).rejects.toThrow('a commit or a base needs git');
-    expect((await engine.planArchive('1')).banner[1]).toBe(`> **Archived ${today()}.**`);
+    await expect(engine.planArchive('1', { date: '24/09/2026' })).rejects.toThrow(new EngineError('invalid', '"24/09/2026" is not a date written YYYY-MM-DD'));
+    await expect(engine.planArchive('1', { noGit: true, commit: 'HEAD' })).rejects.toThrow(
+      new EngineError('invalid', 'a commit or a base needs git; drop --no-git, or drop --commit and --base'),
+    );
+    // A round with no summary, pull request or commit has a banner without their sentences.
+    expect((await engine.planArchive('1')).banner).toEqual([
+      BANNER_OPEN,
+      `> **Archived ${today()}.**`,
+      '> The body below describes the tree before execution and is not maintained.',
+      BANNER_CLOSE,
+    ]);
   });
 
   it('asks git for the commit, the diff from the merge base, the tree and the remote', async () => {
@@ -139,6 +181,8 @@ describe('an engine over memory', () => {
     };
     const engine = memoryEngine({ 'briefs/001_a.md': goodBrief() }, DEFAULT_CONFIG, git);
     await engine.load();
+    // The tree is the one git sees, not the one on the disk.
+    expect(await engine.repoFiles()).toEqual(['src/a.ts']);
     const plan = await engine.planArchive('1', { base: 'main', pr: 3, date: '2026-09-24' });
     expect(calls).toEqual(['commit HEAD', 'merge-base main 1234567890ab', 'changes base0 1234567890ab']);
     expect(plan.banner).toContain('> Merged in pull request [#3](https://github.com/o/r/pull/3).');
@@ -158,7 +202,7 @@ describe('an engine over memory', () => {
     calls.length = 0;
     await engine.planArchive('1', { date: '2026-09-24' });
     expect(calls).toEqual([]);
-    await expect(engine.planArchive('1', { commit: 'missing' })).rejects.toThrow('"missing" names no commit');
+    await expect(engine.planArchive('1', { commit: 'missing' })).rejects.toThrow(new EngineError('not-found', '"missing" names no commit'));
     const configured = memoryEngine({ 'briefs/001_a.md': goodBrief() }, resolveConfig({ archiving: { base: 'trunk' } }), git);
     await configured.load();
     calls.length = 0;
@@ -175,28 +219,40 @@ describe('an engine over memory', () => {
     expect(created.file).toBe('briefs/008_split-the-auth-module.md');
     expect(created.content).toContain('status: draft\ndate: 2026-09-24\ntype: refactor\nwave: 2\ndependsOn: ["007"]\n');
     expect(engine.corpus.live.map((b) => b.id)).toEqual(['008']);
-    await expect(engine.create({ title: ' ' })).rejects.toThrow('a brief needs a title');
-    await expect(engine.create({ title: 'x', id: '008' })).rejects.toThrow('the id "008" is taken');
-    await expect(engine.create({ title: 'x', id: 'a b' })).rejects.toThrow('cannot be an id');
+    await expect(engine.create({ title: ' ' })).rejects.toThrow(new EngineError('invalid', 'a brief needs a title'));
+    await expect(engine.create({ title: 'x', id: '008' })).rejects.toThrow(new EngineError('exists', 'the id "008" is taken'));
+    await expect(engine.create({ title: 'x', id: 'a b' })).rejects.toThrow(new EngineError('invalid', '"a b" cannot be an id: no whitespace, slashes or "_"'));
     await expect(engine.create({ title: 'x', id: 'a_b' })).rejects.toThrow('cannot be an id');
-    await expect(engine.create({ title: 'x', type: 'epic' })).rejects.toThrow('"epic" is not a brief type here; use one of feature, defect, refactor, chore');
-    await expect(engine.create({ title: 'x', date: 'soon' })).rejects.toThrow('is not a date');
+    await expect(engine.create({ title: 'x', type: 'epic' })).rejects.toThrow(
+      new EngineError('invalid', '"epic" is not a brief type here; use one of feature, defect, refactor, chore'),
+    );
+    await expect(engine.create({ title: 'x', date: 'soon' })).rejects.toThrow(new EngineError('invalid', '"soon" is not a date written YYYY-MM-DD'));
     await expect(engine.create({ title: '!!!', id: '009', date: '2026-09-24' })).resolves.toEqual(expect.objectContaining({ file: 'briefs/009.md' }));
     await expect(engine.create({ title: '!!!', id: '010', date: '2026-09-24' })).resolves.toEqual(expect.objectContaining({ file: 'briefs/010.md' }));
     await expect(engine.create({ title: 'y', id: '011', date: '2026-09-24' })).resolves.toBeDefined();
     await expect(engine.create({ title: 'y', id: '12', date: '2026-09-24' })).resolves.toBeDefined();
     const clash = memoryEngine({ 'briefs/001_y.md': 'not a brief anyone reads' }, resolveConfig({ files: 'x*.md' }));
     await clash.load();
-    await expect(clash.create({ title: 'y', id: '001', date: '2026-09-24' })).rejects.toThrow('briefs/001_y.md already exists');
+    await expect(clash.create({ title: 'y', id: '001', date: '2026-09-24' })).rejects.toThrow(new EngineError('exists', 'briefs/001_y.md already exists'));
     const typeless = memoryEngine({}, resolveConfig({ types: {} }));
     await typeless.load();
     await expect(typeless.create({ title: 'x', type: 't' })).rejects.toThrow('use one of (none)');
   });
 
+  it('takes an id for taken when a brief has it, not when a file only bears the name', async () => {
+    // Where ids are declared, a brief that declares none has none, whatever its file is called.
+    const engine = memoryEngine({ 'briefs/notes.md': goodBrief() }, resolveConfig({ files: '*.md', id: { source: 'frontmatter' } }));
+    await engine.load();
+    expect(engine.corpus.briefs.map((b) => [b.name, b.id])).toEqual([['notes.md', null]]);
+    const created = await engine.create({ title: 'Other', id: 'notes.md', date: '2026-09-24' });
+    expect(created.file).toBe('briefs/other.md');
+    await expect(engine.create({ title: 'Again', id: 'notes.md', date: '2026-09-24' })).rejects.toThrow(new EngineError('exists', 'the id "notes.md" is taken'));
+  });
+
   it('allocates no id where the ids are not numbers', async () => {
     const engine = memoryEngine({ 'briefs/B-1_x.md': goodBrief() }, resolveConfig({ files: '*.md' }));
     await engine.load();
-    await expect(engine.create({ title: 'x' })).rejects.toThrow('there is no next one; pass --id');
+    await expect(engine.create({ title: 'x' })).rejects.toThrow(new EngineError('invalid', 'the ids here are not numbers, so there is no next one; pass --id'));
   });
 
   it('fills a configured template, and refuses a template that is not there', async () => {
@@ -206,7 +262,7 @@ describe('an engine over memory', () => {
     expect(created.content).toBe('# 001: T (1) draft 2026-09-24 {other}\n');
     const missing = memoryEngine({}, resolveConfig({ template: 'gone.md' }));
     await missing.load();
-    await expect(missing.create({ title: 'x' })).rejects.toThrow('the template gone.md does not exist');
+    await expect(missing.create({ title: 'x' })).rejects.toThrow(new EngineError('not-found', 'the template gone.md does not exist'));
   });
 });
 
@@ -241,12 +297,43 @@ describe('opening a repository', () => {
     const explicit = await BriefEngine.open({ cwd: root, config: 'conf/b.json', git: null });
     expect(explicit.root).toBe(join(root, 'conf'));
     expect(explicit.config.briefs).toBe('x');
+    expect(explicit.configFile).toBe('b.json');
     const defaults = await BriefEngine.open({ cwd: root, noConfig: true, git: null, fs: new MemoryFileSystem({ 'briefs/001_a.md': goodBrief() }) });
     expect(defaults.configFile).toBeNull();
     expect(defaults.corpus.briefs).toHaveLength(1);
-    await expect(BriefEngine.open({ cwd: root, config: 'missing.json' })).rejects.toThrow('does not exist');
+    await expect(BriefEngine.open({ cwd: root, config: 'missing.json', git: null })).rejects.toThrow(
+      new EngineError('not-found', `${join(root, 'missing.json')} does not exist`),
+    );
     writeFileSync(join(root, 'bad.json'), '{"briefs": 1}');
     await expect(BriefEngine.open({ cwd: root, config: 'bad.json' })).rejects.toBeInstanceOf(ConfigError);
+  });
+
+  it('uses the defaults where a configuration is there to be found, when told to', async () => {
+    const root = dir('open-no-config');
+    writeTree(root, { '.spec-brief.json': JSON.stringify({ briefs: 'specs' }), 'specs/001_a.md': goodBrief(), 'briefs/002_b.md': goodBrief() });
+    const engine = await BriefEngine.open({ cwd: root, noConfig: true, git: null });
+    expect(engine.configFile).toBeNull();
+    expect(engine.corpus.live.map((b) => b.id)).toEqual(['002']);
+  });
+
+  it('leaves git out of finding the root as well, and takes a git it is handed', async () => {
+    const root = dir('open-told');
+    initRepo(root);
+    writeTree(root, { 'sub/briefs/001_a.md': goodBrief() });
+    const without = await BriefEngine.open({ cwd: join(root, 'sub'), noConfig: true, git: null });
+    expect(without.root).toBe(join(root, 'sub'));
+    expect(without.git).toBeNull();
+    const handed: Git = {
+      commit: () => Promise.resolve(null),
+      mergeBase: () => Promise.resolve(null),
+      changes: () => Promise.resolve([]),
+      dirty: () => Promise.resolve([]),
+      files: () => Promise.resolve([]),
+      remoteUrl: () => Promise.resolve(null),
+    };
+    const given = await BriefEngine.open({ cwd: join(root, 'sub'), noConfig: true, git: handed });
+    expect(given.git).toBe(handed);
+    expect(given.root).toBe(root);
   });
 
   it('leaves git out for a configuration beside the work tree, and keeps it in a directory inside it named with two dots', async () => {
@@ -365,8 +452,12 @@ describe('plugins', () => {
       'named.mjs': "export const plugin = { name: 'named', rules: [] };",
       'node_modules/pkg/package.json': JSON.stringify({ name: 'pkg', main: 'index.js' }),
       'node_modules/pkg/index.js': "module.exports = { name: 'pkg', rules: [] };",
+      'node_modules/nulled/package.json': JSON.stringify({ name: 'nulled', exports: null, main: 'index.js' }),
+      'node_modules/nulled/index.js': "module.exports = { name: 'nulled', rules: [] };",
       'package.json': '{}',
     });
+    // "exports": null is a package that declares none, and resolves by its "main".
+    expect((await loadPlugins([{ module: 'nulled', options: undefined }], root)).map((p) => p.name)).toEqual(['nulled']);
     const plugins = await loadPlugins(
       [
         { module: './object.mjs', options: undefined },
@@ -395,11 +486,15 @@ describe('plugins', () => {
     );
     expect(found.map((p) => p.name)).toEqual(['esm-only', 'esm-extra-x']);
     expect((await loadPlugins([{ module: '@acme/esm-only-plugin', options: undefined }], root)).map((p) => p.name)).toEqual(['esm-only']);
+    // A file where a package's directory would be is no package: the search goes on above it.
+    writeTree(root, { 'sub/node_modules/esm-only-plugin': '' });
+    expect((await loadPlugins([{ module: 'esm-only-plugin', options: undefined }], join(root, 'sub'))).map((p) => p.name)).toEqual(['esm-only']);
     await expect(loadPlugins([{ module: 'esm-only-plugin/missing', options: undefined }], root)).rejects.toThrow(
       'esm-only-plugin/missing: could not be loaded: esm-only-plugin exports no "./missing" for import',
     );
+    // A package.json that cannot be read as JSON is reported as that, not searched past.
     writeTree(root, { 'node_modules/broken/package.json': '{' });
-    await expect(loadPlugins([{ module: 'broken', options: undefined }], root)).rejects.toThrow('broken: could not be loaded');
+    await expect(loadPlugins([{ module: 'broken', options: undefined }], root)).rejects.toThrow(/^broken: could not be loaded: .* in JSON at /);
     await expect(loadPlugins([{ module: 'no-such-plugin-anywhere', options: undefined }], root)).rejects.toThrow(
       "no-such-plugin-anywhere: could not be loaded: Cannot find module 'no-such-plugin-anywhere'",
     );
@@ -418,6 +513,14 @@ describe('plugins', () => {
     expect(exportsTarget({ '.': ['lib/bad.js', './good.js'] }, '.')).toBe('./good.js');
     expect(exportsTarget({ '.': [{ require: './r.cjs' }] }, '.')).toBeNull();
     expect(exportsTarget({ '.': './i.js', import: './x.js' }, '.')).toBeNull();
+    expect(exportsTarget({ 'module-sync': './m.js', default: './d.js' }, '.')).toBe('./m.js');
+    // A target that is no path, list or map refuses the subpath, as Node does: it is not passed over for the next condition.
+    expect(exportsTarget({ import: 5, default: './d.js' }, '.')).toBeNull();
+    // A key with no star matches only itself.
+    expect(exportsTarget({ './a': './a.js' }, './x./a')).toBeNull();
+    // The longer prefix wins over the longer key, in either order.
+    expect(exportsTarget({ './ab*': './long/*.js', './a*xyz': './short/*.js' }, './abxyz')).toBe('./long/xyz.js');
+    expect(exportsTarget({ './a*xyz': './short/*.js', './ab*': './long/*.js' }, './abxyz')).toBe('./long/xyz.js');
     const map = { '.': './i.js', './a': { import: './a.js' }, './p/*': './dist/p/*.js', './p/x/*': './x/*.js', './hidden/*': null, './raw': './raw*.js' };
     expect(exportsTarget(map, '.')).toBe('./i.js');
     expect(exportsTarget(map, './a')).toBe('./a.js');
@@ -464,7 +567,10 @@ describe('plugins', () => {
       'none.mjs': 'export const other = 1;',
       'dup.mjs': "export default { name: 'dup', rules: [] };",
     });
-    await expect(loadPlugins([{ module: './gone.mjs', options: undefined }], root)).rejects.toThrow('./gone.mjs: could not be loaded');
+    // A path stands for a file under the root, and the refusal names that file.
+    await expect(loadPlugins([{ module: './gone.mjs', options: undefined }], root)).rejects.toThrow(
+      /^\.\/gone\.mjs: could not be loaded: Cannot find module '[^']*plugins-bad-[^']*[\\/]gone\.mjs'/,
+    );
     await expect(loadPlugins([{ module: './none.mjs', options: undefined }], root)).rejects.toThrow('does not export a plugin');
     await expect(
       loadPlugins(
@@ -474,7 +580,7 @@ describe('plugins', () => {
         ],
         root,
       ),
-    ).rejects.toThrow('two plugins are named "dup"');
+    ).rejects.toThrow(new ConfigError('plugins', ['two plugins are named "dup"']));
   });
 
   it('checks the shape of what a module exports', () => {
@@ -482,6 +588,15 @@ describe('plugins', () => {
     expect(() => asPlugin({ name: 'bad name', rules: {} }, 'm', undefined)).toThrow('"name" must be a plain identifier; "rules" must be a list');
     const bad = [{ id: 'Upper', description: 'd', severity: 'note', check: () => [] }, { id: 'ok', description: 'd', severity: 'loud', check: () => [] }, 'x'];
     expect(() => asPlugin({ name: 'p', rules: bad }, 'm', undefined)).toThrow(/rules\[0\].*rules\[1\].*rules\[2\]/);
+    // Each part of a rule is needed, and each of the four severities is one.
+    const rule = { id: 'ok', description: 'd', severity: 'note', check: (): never[] => [] };
+    const lacking = [null, undefined, { ...rule, id: undefined }, { ...rule, id: 5 }, { ...rule, id: 'two words' }, { ...rule, description: undefined }, { ...rule, severity: undefined }, { ...rule, check: undefined }];
+    expect(() => asPlugin({ name: 'p', rules: lacking }, 'm', undefined)).toThrow(
+      new ConfigError('m', lacking.map((_, i) => `rules[${i}] needs a lower-case "id", a "description", a "severity" and a "check" function`)),
+    );
+    expect(asPlugin({ name: 'p', rules: ['off', 'note', 'warning', 'error'].map((severity) => ({ ...rule, severity })) }, 'm', undefined).rules).toHaveLength(4);
+    expect(() => asPlugin({ rules: [] }, 'm', undefined)).toThrow(new ConfigError('m', ['"name" must be a plain identifier']));
+    expect(() => asPlugin({ name: 5, rules: [] }, 'm', undefined)).toThrow(new ConfigError('m', ['"name" must be a plain identifier']));
     expect(asPlugin({ name: '@scope/p', rules: [] }, 'm', 2)).toEqual({ name: '@scope/p', rules: [], options: 2 });
     expect('waive' in asPlugin({ name: 'p', rules: [] }, 'm', undefined)).toBe(false);
     const waive = (): never[] => [];
@@ -495,7 +610,7 @@ describe('plugins', () => {
     // A hook that falls off its end has found nothing to waive.
     expect(asWaivers(undefined, 'p')).toEqual([]);
     const refusal = new ConfigError('plugin "p"', ['"waive" must return a list of { rule, path, reason }, each a string']);
-    for (const answer of [null, {}, [null], ['x'], [{ rule: 'r', path: 'a' }], [{ rule: 'r', path: 1, reason: 'x' }], [{ rule: 1, path: 'a', reason: 'x' }]]) {
+    for (const answer of [null, {}, [null], [undefined], ['x'], [{ rule: 'r', path: 'a' }], [{ rule: 'r', path: 1, reason: 'x' }], [{ rule: 1, path: 'a', reason: 'x' }]]) {
       expect(() => asWaivers(answer, 'p'), JSON.stringify(answer)).toThrow(refusal);
     }
   });
@@ -570,6 +685,30 @@ describe('plugins', () => {
     await expect(rejecting.planArchive('1', { commit: 'HEAD', date: '2026-09-26' })).rejects.toThrow('"waive" failed: down');
     const odd = await engineWith(() => [{ rule: 'protected-file' }] as never);
     await expect(odd.planArchive('1', { commit: 'HEAD', date: '2026-09-26' })).rejects.toThrow('"waive" must return a list');
+  });
+
+  it('ignores a waiver for a refusal that is not a plugin\'s to lift, with a warning that refuses under strict as any does', async () => {
+    const git: Git = {
+      commit: () => Promise.resolve({ sha: '1234567890ab', author: 'A', date: '' }),
+      mergeBase: () => Promise.resolve(null),
+      changes: () => Promise.resolve([{ path: 'src/a.ts', insertions: 1, deletions: 0 }]),
+      dirty: () => Promise.resolve([]),
+      files: () => Promise.resolve([]),
+      remoteUrl: () => Promise.resolve(null),
+    };
+    const reaching: Plugin = { name: 'reaching', rules: [], waive: () => [{ rule: 'open-task', path: 'x', reason: 'r' }] };
+    const fs = new MemoryFileSystem({ 'briefs/001_a.md': goodBrief({ protectedFiles: '[src/a.ts]' }) });
+    const engine = new BriefEngine({ root: '/v', config: DEFAULT_CONFIG, configFile: null, fs, git, plugins: [reaching] });
+    await engine.load();
+    const lenient = await engine.planArchive('1', { commit: 'HEAD', date: '2026-09-26' });
+    expect(lenient.blocking.map((f) => [f.rule, f.severity])).toEqual([['protected-file', 'error']]);
+    expect(lenient.warnings.map((f) => [f.rule, f.severity])).toEqual([['waiver-ignored', 'warning']]);
+    const strict = await engine.planArchive('1', { commit: 'HEAD', date: '2026-09-26', strict: true });
+    expect(strict.blocking.map((f) => [f.rule, f.severity])).toEqual([
+      ['protected-file', 'error'],
+      ['waiver-ignored', 'error'],
+    ]);
+    expect(strict.warnings).toEqual([]);
   });
 
   describe('a waive hook that writes to what it is handed', () => {
