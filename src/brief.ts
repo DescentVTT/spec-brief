@@ -4,7 +4,7 @@
  */
 
 import type { Config } from './config.js';
-import { findEntry, isNull, keyName, readFrontMatter, type FrontMatter, type YamlValue } from './frontmatter.js';
+import { findEntry, isNull, keyName, readFrontMatter, type FrontMatter, type FrontMatterEntry, type YamlValue } from './frontmatter.js';
 import { scan, sectionsOf, titleOf, type Scan, type Section, type TaskItem } from './markdown.js';
 import { splitLines, stripBom } from './text.js';
 import type { Phase, Status } from './types.js';
@@ -105,7 +105,8 @@ export function parseBrief(file: string, text: string, config: Config, phase: Ph
   const content = stripBom(text);
   const lines = splitLines(content);
   const frontMatter = readFrontMatter(lines);
-  const bodyStart = frontMatter === null || frontMatter.close < 0 ? 0 : frontMatter.close + 1;
+  // A block never closed has `close` -1: the body starts at the top, as with no block.
+  const bodyStart = frontMatter === null ? 0 : frontMatter.close + 1;
   const scanned = scan(lines);
   const problems: FieldProblem[] = [];
   const name = file.slice(file.lastIndexOf('/') + 1);
@@ -133,9 +134,10 @@ export function parseBrief(file: string, text: string, config: Config, phase: Ph
 
   const waveText = text1('wave');
   let wave: number | null = null;
-  const waveEntry = findEntry(frontMatter, 'wave');
-  if (waveText !== null && waveEntry !== undefined) {
-    const quoted = waveEntry.value.kind === 'scalar' && waveEntry.value.scalar.quoted;
+  if (waveText !== null) {
+    // Text was read, so there is an entry, and its value is a scalar.
+    const waveEntry = findEntry(frontMatter, 'wave') as FrontMatterEntry;
+    const { quoted } = (waveEntry.value as Extract<YamlValue, { kind: 'scalar' }>).scalar;
     if (!quoted && /^\d{1,9}$/.test(waveText)) wave = Number(waveText);
     else problems.push({ field: 'wave', line: waveEntry.line, message: `"wave" must be a whole number, not "${waveText}"` });
   }
@@ -153,8 +155,9 @@ export function parseBrief(file: string, text: string, config: Config, phase: Ph
   let banner: Brief['banner'] = null;
   const open = lines.findIndex((_, i) => i >= bodyStart && marker(i, BANNER_OPEN));
   if (open >= 0) {
+    // The opening line is no closing marker, so the search could start on it and find the same.
     const close = lines.findIndex((_, i) => i > open && marker(i, BANNER_CLOSE));
-    if (close > open) banner = { start: open, end: close + 1 };
+    if (close !== -1) banner = { start: open, end: close + 1 };
   }
 
   return {
