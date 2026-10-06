@@ -46,15 +46,16 @@ export function idKey(id: string): string {
 /** Briefs an id, a file name or a path names. More than one is an ambiguity the caller reports. */
 export function findBriefs(corpus: Corpus, reference: string): Brief[] {
   const key = idKey(reference.trim());
+  // The null test is for the types: a missing id is no key, and equals none.
   const byId = corpus.briefs.filter((b) => b.id !== null && idKey(b.id) === key);
   if (byId.length > 0) return byId;
-  let path: string;
   try {
-    path = normalisePath(reference);
+    const path = normalisePath(reference);
+    return corpus.briefs.filter((b) => b.file === path || b.name === path);
   } catch {
+    // A path that leaves the repository names no brief in it.
     return [];
   }
-  return corpus.briefs.filter((b) => b.file === path || b.name === path);
 }
 
 /** The brief a dependency names, preferring a live one when an id is ambiguous. */
@@ -163,6 +164,7 @@ export function dependencyCycles(corpus: Corpus): Brief[][] {
 
   const index = new Map<Brief, number>();
   const low = new Map<Brief, number>();
+  // A component is popped down to the brief it started from, so nothing under that brief is ever read.
   const stack: Brief[] = [];
   const onStack = new Set<Brief>();
   const components: Brief[][] = [];
@@ -175,7 +177,7 @@ export function dependencyCycles(corpus: Corpus): Brief[][] {
     counter += 1;
     stack.push(v);
     onStack.add(v);
-    for (const w of edges.get(v) ?? []) {
+    for (const w of edges.get(v) as Brief[]) {
       if (!index.has(w)) {
         connect(w);
         low.set(v, Math.min(low.get(v) as number, low.get(w) as number));
@@ -194,12 +196,12 @@ export function dependencyCycles(corpus: Corpus): Brief[][] {
       if (component.length > 1) components.push(component);
     }
   };
+  // Visited again, a brief would be a component of one, which is no cycle: the test saves the visit.
   for (const brief of nodes) if (!index.has(brief)) connect(brief);
 
   return components.map((component) => {
-    const members = new Set(component);
     const start = [...component].sort((a, b) => (a.file < b.file ? -1 : 1))[0] as Brief;
-    return cyclePath(start, members, edges);
+    return cyclePath(start, edges);
   });
 }
 
@@ -211,17 +213,24 @@ export function cycleSubject(cycle: readonly Brief[]): string {
   return [...new Set(cycle.map((b) => b.id ?? b.name))].sort().join(', ');
 }
 
-/** A path from `start` back to itself inside one component, found breadth-first. */
-function cyclePath(start: Brief, members: ReadonlySet<Brief>, edges: ReadonlyMap<Brief, Brief[]>): Brief[] {
+/**
+ * The shortest path from a brief in a cycle back to itself, found
+ * breadth-first. Every brief on a way back is in the start's component, and
+ * no brief the search reaches outside the component leads back into it, so
+ * the search need not be told which briefs those are: the others are visited
+ * and lead nowhere.
+ */
+function cyclePath(start: Brief, edges: ReadonlyMap<Brief, Brief[]>): Brief[] {
   const previous = new Map<Brief, Brief>();
   const queue: Brief[] = [start];
-  for (let head = 0; head < queue.length; head += 1) {
+  // Ends by construction: a component of two or more always leads back to its start.
+  for (let head = 0; ; head += 1) {
     const node = queue[head] as Brief;
-    for (const next of edges.get(node) ?? []) {
-      if (!members.has(next)) continue;
+    for (const next of edges.get(node) as Brief[]) {
       if (next === start) {
         const path: Brief[] = [start];
-        for (let at: Brief | undefined = node; at !== undefined && at !== start; at = previous.get(at)) path.splice(1, 0, at);
+        // Every brief queued was reached from the start, so the walk back ends there.
+        for (let at = node; at !== start; at = previous.get(at) as Brief) path.splice(1, 0, at);
         return [...path, start];
       }
       if (!previous.has(next)) {
@@ -230,6 +239,4 @@ function cyclePath(start: Brief, members: ReadonlySet<Brief>, edges: ReadonlyMap
       }
     }
   }
-  /* v8 ignore next -- a component of two or more always leads back to its start. */
-  return [start, start];
 }
