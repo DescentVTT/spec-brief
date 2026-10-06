@@ -94,9 +94,10 @@ function onlyPlaceholder(text: string, word: string): boolean {
 }
 
 function isPlaceholder(line: string, placeholders: readonly string[]): boolean {
+  // A box is one where the item's text starts; the space after it goes with the trim.
   const text = line
     .replace(/^\s*(?:[-*+]|\d{1,9}[.)])\s+/, '')
-    .replace(/^\[[ xX]\]\s*/, '')
+    .replace(/^\[[ xX]\]/, '')
     .replace(/[*_]/g, '')
     .trim();
   if (text === '') return true;
@@ -309,6 +310,7 @@ export const RULES: readonly Rule[] = [
     severity: 'error',
     description: 'No two briefs share an id, live or archived.',
     check: ({ brief, shared }) => {
+      // No group is keyed by a missing id, so this check is for the type alone.
       if (brief.id === null) return [];
       const group = shared.duplicates.get(idKey(brief.id));
       if (group === undefined || group[0] === brief) return [];
@@ -429,6 +431,7 @@ export const RULES: readonly Rule[] = [
         .flatMap((rule) =>
           sectionsFilling(brief, rule)
             .slice(0, 1)
+            // Neither bound is a task's line: one is this heading, the other the next or the end of the brief.
             .filter((s) => !brief.tasks.some((t) => t.line > s.heading.line && t.line < s.end))
             .map((s) => ({
               line: at(s.heading.line),
@@ -489,6 +492,7 @@ export const RULES: readonly Rule[] = [
     check: live(({ brief, corpus }) =>
       brief.dependsOn.flatMap((dependency) => {
         const line = at(lineOfField(brief, 'dependsOn'));
+        // A missing id is the key of no dependency, so the null check is for the type alone.
         if (brief.id !== null && idKey(dependency) === idKey(brief.id)) {
           return [{ line, message: 'depends on itself', subject: dependency }];
         }
