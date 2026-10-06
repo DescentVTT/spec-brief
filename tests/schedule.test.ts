@@ -718,28 +718,34 @@ describe('the tree a witness is read from', () => {
     // Brief n writes its own directory and a file of the next one's, so it
     // meets the next, and the tree is read for a file both write. Each
     // pattern that met another was asked about every file of the tree.
-    const tree = (count: number): string[] => Array.from({ length: count * 400 }, (_, n) => `src/m${Math.floor(n / 400)}/f${n % 400}.ts`);
-    const run = (count: number) => {
+    const tree = (count: number, each: number): string[] => Array.from({ length: count * each }, (_, n) => `src/m${Math.floor(n / each)}/f${n % each}.ts`);
+    const run = (count: number, each: number) => {
       const corpus = corpusOf(
         Object.fromEntries(Array.from({ length: count }, (_, n) => [B(n + 1), goodBrief({ wave: '1', affectedFiles: `[src/m${n}/**, src/m${n + 1}/f7.ts]` })])),
       );
-      const files = tree(count);
+      const files = tree(count, each);
       // A copy for each run, so that each reads its tree afresh, as a run of the command does.
       return () => [collisions(corpus, { repoFiles: [...files] }), schedule(corpus, { repoFiles: [...files] })] as const;
     };
-    const small = run(10);
-    const large = run(40);
-    const [matrix, waves] = large();
+    const [matrix, waves] = run(40, 400)();
     const met = matrix.waves.flatMap((w) => w.collisions);
     expect(met).toHaveLength(39);
     expect(met[0]?.overlaps).toEqual([{ patterns: ['src/m1/f7.ts', 'src/m1/**'], witness: 'src/m1/f7.ts', inTree: true }]);
     expect(waves.placements.map((p) => p.proposed)).toEqual(Array.from({ length: 40 }, (_, n) => 1 + (n % 2)));
     if (instrumented()) return;
-    // Four of ten briefs over 4,000 files against one of forty over 16,000:
+    // Four of ten briefs over 16,000 files against one of forty over 64,000:
     // work that grows with patterns times files takes four times as long on
     // the larger. Twice linear is allowed, and 100 ms for noise. On the
     // machine this was written on, the larger took 2.8 s against 1.4 s
-    // allowed before, and after, 0.2 s against the four smaller's 0.14 s.
+    // allowed before, over a quarter of these trees.
+    //
+    // The pairs of briefs a matrix compares grow with the square of the
+    // briefs, cheaply, whatever the tree holds. Over 400 files a directory
+    // that share put the larger at 1.5 to 2.0 times the four smaller, on the
+    // bound, and a hosted runner once took 585 ms against 550 allowed. Over
+    // 1,600 the tree is most of the work and the larger takes 1.3 times.
+    const small = run(10, 1600);
+    const large = run(40, 1600);
     const [fourSmall, oneLarge] = (await fastestInTurn(
       3,
       () => {
