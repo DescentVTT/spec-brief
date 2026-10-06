@@ -191,8 +191,11 @@ out, 45 survived and 3 without coverage; 98.72% with every timeout lost. Of
 the 339, 197 are the same mutant at the same text and detected there, 109
 are gone with their text, and 33 stand where they stood; the 48 the branch
 leaves are the equivalent ones, each commented. The core sweep of the same
-commit read 99.38% over 5,286, with 30 survived. The gate stays at 93 until
-main has been measured, and then moves up under that worst case.
+commit read 99.38% over 5,286, with 30 survived. The gate stayed at 93 until
+main had been measured: its sweep of 9670753 (run 37541947048) read 99.31%
+over 6,941 and, for the core, 99.38% over 5,286 - 98.73% and 98.68% with
+every timeout lost. **Both gates are now `break: 97`**, under that worst
+case, and move only up.
 
 Reading them was a review again, and found what no test had:
 
