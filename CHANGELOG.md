@@ -11,56 +11,36 @@ release that can turn a run red. This is the family's policy, recorded in
 releases up to 0.2.7 came before it, and several of their patches changed
 what a run reports.
 
-## Unreleased
+## 0.5.0
+
+Five defects a reading of every surviving mutant found, none of which a test
+had held: names every JavaScript object answers to, a root directory named
+with two leading dots, and three in what `matrix` and `archive` show.
 
 ### Changed
 
-- **A root whose directory is named with two leading dots keeps git.** A
-  configuration in a directory such as `..drafts/` inside the work tree was
-  taken for one outside it, and every command there ran without git:
-  `archive` skipped its dirty-tree check and reported the scope as unmeasured
-  "without git". It is measured there as anywhere else now, so an archival
-  that passed can be refused. Upgrading: commit the work or pass
-  `--allow-dirty`, and name the round with `--commit` or `--base`.
+- A root whose directory name starts with two dots, such as `..drafts/`,
+  keeps git: it was taken for a path outside the work tree, so `archive`
+  skipped its dirty-tree check there. Upgrading: an archival that passed can
+  be refused; commit the work or pass `--allow-dirty`, and name the round
+  with `--commit` or `--base`.
 
 ### Fixed
 
-- A command, a brief type, a configuration key or a template placeholder
-  named as something every JavaScript object answers to - `constructor`,
-  `toString`, `__proto__` - is read as the unknown name it is.
-  `spec-brief constructor` ended on a stack trace with exit 1, and now says
-  `"constructor" is not a command` with exit 2. A brief with
-  `type: constructor` stopped `lint` for every brief with
-  `unexpected error: TypeError: typed is not iterable`, and is now an
-  `unknown-type` finding beside the others; `new --type toString` is refused
-  by name. A configuration key `toString` was reported as
-  `must be undefined`, and is now `is not a known key`. `{constructor}` in a
-  brief template is left as written, where the new brief was given a
-  function's source.
-- `matrix` draws its grid by brief, not by id. Two live briefs that share an
-  id, which `lint` reports as `duplicate-id`, are two rows under one label,
-  and the grid marked a pair by its labels: where the two collide it showed
-  `·`, above the line that says they collide, and where one of them collides
-  with a third brief it marked the other as well. The findings,
-  `--format json` and the exit code were right and are unchanged.
-- `matrix` marks in its grid only what the run reports. With
-  `shared-directory` off, as it is unless a configuration turns it on, two
-  briefs writing into one directory were still marked `~`, over a line saying
-  both write into it, though no finding was reported and the exit code said
-  nothing; in a repository whose briefs all write under `src/` that was a
-  mark on every pair. They are `·` now, and `~` once the rule is on. The
-  same holds for the other rules of the matrix: `collision`,
-  `collision-undecided` or `unscoped` turned off marks nothing either.
-  `--format json` is unchanged: it lists every pair the comparison found
-  under `waves`, beside the `findings` the run reports.
-- `archive` and `unarchive` refuse a brief whose banner stands on the first
-  line of the file, above front matter they cannot write into. A banner there
-  hides the block under it, so the brief is read as having none; for TOML,
-  or a block never closed, the command ended with
-  `unexpected error: Error: cannot edit TOML front matter` and a stack trace,
-  `--dry-run` included. It is now the `front-matter` refusal any such block
-  gets, with its hint. A YAML block under such a banner is written into, as
-  it was.
+- A command, brief type, configuration key or template placeholder named
+  `constructor`, `toString` or `__proto__` is the unknown name it is:
+  `spec-brief constructor` is "not a command" with exit 2 where it was a
+  stack trace with exit 1, `type: constructor` is an `unknown-type` finding
+  where it stopped `lint` for every brief, and `{constructor}` in a
+  template is left as written.
+- `matrix` draws its grid by brief, so two briefs that share an id are two
+  rows marked each for itself; the findings and exit code were already right.
+- `matrix` marks in its grid only what the run reports: with
+  `shared-directory` off, as by default, two briefs writing into one
+  directory are no longer marked `~`. `--format json` is unchanged.
+- `archive` and `unarchive` refuse a brief whose banner on the first line
+  hides TOML or unclosed front matter, with the `front-matter` finding,
+  where they ended on an unexpected error.
 
 ## 0.4.1
 
