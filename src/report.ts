@@ -42,18 +42,18 @@ export interface Style {
   readonly color: boolean;
 }
 
-const CODES: Readonly<Record<string, readonly [number, number]>> = {
+/** The SGR code that turns each colour on, and the one that turns it off again. */
+const CODES = {
   red: [31, 39],
   yellow: [33, 39],
   cyan: [36, 39],
-  green: [32, 39],
   dim: [2, 22],
   bold: [1, 22],
-};
+} as const;
 
 export function paint(style: Style, color: keyof typeof CODES, text: string): string {
-  const code = CODES[color];
-  return style.color && code !== undefined ? `\u001b[${code[0]}m${text}\u001b[${code[1]}m` : text;
+  const [on, off] = CODES[color];
+  return style.color ? `\u001b[${on}m${text}\u001b[${off}m` : text;
 }
 
 const SEVERITY_COLOR: Readonly<Record<Severity, keyof typeof CODES>> = { error: 'red', warning: 'yellow', note: 'cyan' };
@@ -272,7 +272,8 @@ export function titleWithoutId(title: string, id: string | null): string {
   const text = title.trimStart();
   // An id of digits is compared by value, so the title's own leading digits
   // are the candidate. A title with none has `''`, which no id's key equals;
-  // any other text in its place fails `startsWith` and answers the same.
+  // any other text in its place, digits found further in included, fails
+  // `startsWith` and answers the same.
   const lead = /^\d+$/.test(id) ? (/^\d+/.exec(text)?.[0] ?? '') : id;
   if (!text.startsWith(lead) || idKey(lead) !== idKey(id)) return title;
   const separator = ID_SEPARATOR.exec(text.slice(lead.length));
@@ -302,10 +303,9 @@ function padStart(text: string, width: number): string {
 function table(header: readonly string[], rows: readonly (readonly string[])[]): string[] {
   const all = [header, ...rows];
   const widths = header.map((_, c) => Math.max(...all.map((r) => displayWidth(r[c] as string))));
-  // Padding the last cell would change nothing: trimEnd takes it off again.
   return all.map((r) =>
     r
-      .map((cell, c) => (c === r.length - 1 ? cell : padEnd(cell, widths[c] as number)))
+      .map((cell, c) => padEnd(cell, widths[c] as number))
       .join('  ')
       .trimEnd(),
   );

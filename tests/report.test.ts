@@ -20,6 +20,7 @@ import {
   prettyPlan,
   prettySchedule,
   sarif,
+  scheduleJson,
   sectionsJson,
   summaryLine,
   titleWithoutId,
@@ -48,6 +49,24 @@ describe('pretty findings', () => {
     expect(paint({ color: true }, 'red', 'x')).toBe(`${esc}[31mx${esc}[39m`);
     expect(paint({ color: true }, 'bold', 'x')).toBe(`${esc}[1mx${esc}[22m`);
     expect(paint(plainStyle, 'red', 'x')).toBe('x');
+  });
+
+  it('paints the file bold, the severity in its colour, and the rule and the hint dim', () => {
+    const esc = String.fromCharCode(27);
+    const sgr = (on: number, off: number, text: string): string => `${esc}[${on}m${text}${esc}[${off}m`;
+    const text = prettyFindings(
+      [finding({ line: 3, hint: 'do this' }), finding({ file: 'b.md', severity: 'warning', rule: 'w' }), finding({ file: 'b.md', line: 2, severity: 'note', rule: 'n' })],
+      { color: true },
+    );
+    expect(text.split('\n')).toEqual([
+      sgr(1, 22, 'a.md'),
+      `  3  ${sgr(31, 39, 'error  ')}  m  ${sgr(2, 22, 'r')}`,
+      `${' '.repeat(14)}${sgr(2, 22, 'do this')}`,
+      '',
+      sgr(1, 22, 'b.md'),
+      `  1  ${sgr(33, 39, 'warning')}  m  ${sgr(2, 22, 'w')}`,
+      `  2  ${sgr(36, 39, 'note   ')}  m  ${sgr(2, 22, 'n')}`,
+    ]);
   });
 
   it('counts in the singular and the plural', () => {
@@ -413,6 +432,66 @@ describe('lists, matrices and plans', () => {
       '  X 001 "src/**" and 001 "src/a/x.ts" both cover src/a/x.ts',
       '  X 001 "src/**" and 002 "src/b/y.ts" both cover src/b/y.ts',
     ]);
+  });
+
+  it('lists under the waves the briefs in none: with no wave, waiting, and deferred, each line dim where it is painted', () => {
+    const esc = String.fromCharCode(27);
+    const dim = (text: string): string => `${esc}[2m${text}${esc}[22m`;
+    const parked = corpusOf({
+      'briefs/001_a.md': goodBrief({ wave: '1', affectedFiles: '[a]' }),
+      'briefs/002_b.md': goodBrief({ affectedFiles: '[b]' }),
+      'briefs/003_c.md': goodBrief({ affectedFiles: '[c]' }),
+      'briefs/004_d.md': goodBrief({ status: 'deferred', trigger: 'when the second tenant signs' }),
+      'briefs/005_e.md': goodBrief({ wave: '1', dependsOn: '[004]' }),
+      'briefs/006_f.md': goodBrief({ wave: '1', dependsOn: '[005]' }),
+    });
+    expect(prettyMatrix(collisions(parked), { color: true }).split('\n')).toEqual([
+      `${esc}[1mwave 1 · 1 brief${esc}[22m`,
+      '       001',
+      '  001    ·',
+      '',
+      dim('no wave: 002, 003'),
+      `${dim('waits:')} 005 on 004, which is deferred`,
+      `${dim('waits:')} 006 on 005, which waits on deferred work`,
+      dim('deferred: 004'),
+    ]);
+  });
+
+  it('says every reason a declared wave does not hold, to a person and to a machine', () => {
+    const crowded = corpusOf({
+      'briefs/001_x.md': goodBrief({ affectedFiles: '[a/**]', wave: '1' }),
+      'briefs/002_x.md': goodBrief({ affectedFiles: '[b/**]', wave: '2', dependsOn: '[1]' }),
+      // In the wave of the brief it depends on, and writing a file that brief writes.
+      'briefs/003_x.md': goodBrief({ affectedFiles: '[b/x, a/y]', wave: '1', dependsOn: '[1]' }),
+    });
+    expect(prettySchedule(schedule(crowded), null, plainStyle).split('\n')).toEqual([
+      'wave 1 · 1 brief',
+      '  001  A brief',
+      'wave 2 · 1 brief',
+      '  002  A brief',
+      'wave 3 · 1 brief',
+      '  003  A brief  moves from wave 1',
+      '         wave 1 does not hold: it depends on 001, in wave 1; 001 there also writes a/y',
+      '         after 001, in wave 1',
+      '         not wave 2, where 002 also writes b/x ("b/x" and "b/**")',
+      '',
+      '1 brief would move; "spec-brief schedule --write" writes the waves',
+    ]);
+    const breaches = (corpus: ReturnType<typeof corpusOf>): unknown[] => (scheduleJson(schedule(corpus))['briefs'] as { breaches: unknown }[]).map((b) => b.breaches);
+    expect(breaches(crowded)).toEqual([
+      [],
+      [],
+      [
+        { reason: 'dependency', brief: '001', wave: 1 },
+        { reason: 'collision', brief: '001', overlaps: [{ patterns: ['a/y', 'a/**'], witness: 'a/y', inTree: null }] },
+      ],
+    ]);
+    // Moved by hand past the brief that depends on it: each breaks the other's wave.
+    const late = corpusOf({
+      'briefs/001_x.md': goodBrief({ affectedFiles: '[a]', wave: '3' }),
+      'briefs/002_x.md': goodBrief({ affectedFiles: '[b]', wave: '2', dependsOn: '[1]' }),
+    });
+    expect(breaches(late)).toEqual([[{ reason: 'dependent', brief: '002', wave: 2 }], [{ reason: 'dependency', brief: '001', wave: 3 }]]);
   });
 
   it('tells a dry run from a real one, and prints the banner only on a dry run', () => {
