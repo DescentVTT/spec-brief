@@ -66,7 +66,8 @@ function exportTarget(value: unknown, match: string | null): string | null | und
  * longest prefix, and of those the longest key.
  */
 export function exportsTarget(exports: unknown, subpath: string): string | null {
-  const keys = typeof exports === 'object' && exports !== null && !Array.isArray(exports) ? Object.keys(exports) : [];
+  // Only a map of subpaths has a key that starts with a dot: a path's and a list's keys are their indices.
+  const keys = Object.keys(Object(exports) as object);
   const dotted = keys.filter((key) => key.startsWith('.'));
   if (dotted.length === 0) return subpath === '.' ? (exportTarget(exports, null) ?? null) : null;
   // Subpaths beside conditions is a package Node refuses to read.
@@ -76,9 +77,10 @@ export function exportsTarget(exports: unknown, subpath: string): string | null 
   let best: { readonly key: string; readonly prefix: number; readonly match: string } | undefined;
   for (const key of dotted) {
     const star = key.indexOf('*');
-    if (star < 0 || key.includes('*', star + 1)) continue;
+    if (star === -1 || key.includes('*', star + 1)) continue;
     const suffix = key.slice(star + 1);
     if (subpath.length < key.length || !subpath.startsWith(key.slice(0, star)) || !subpath.endsWith(suffix)) continue;
+    // Two keys of one prefix and one length that both match are one key, so the lengths never tie.
     if (best === undefined || star > best.prefix || (star === best.prefix && key.length > best.key.length)) {
       best = { key, prefix: star, match: subpath.slice(star, subpath.length - suffix.length) };
     }
@@ -107,10 +109,12 @@ async function manifest(path: string): Promise<Record<string, unknown> | undefin
  */
 async function resolvePackage(specifier: string, root: string): Promise<string> {
   const slash = specifier.indexOf('/', specifier.startsWith('@') ? specifier.indexOf('/') + 1 : 0);
-  const name = slash < 0 ? specifier : specifier.slice(0, slash);
-  const subpath = slash < 0 ? '.' : `.${specifier.slice(slash)}`;
+  const name = slash === -1 ? specifier : specifier.slice(0, slash);
+  const subpath = slash === -1 ? '.' : `.${specifier.slice(slash)}`;
   let directory = root;
-  // Bounded by the depth of the path: each pass moves one directory up.
+  // Bounded by the depth of the path: each pass moves one directory up, and
+  // the search stops at the top, so no path reaches the bound and one pass
+  // more or fewer of it is the same search.
   for (let depth = 0; depth < 256; depth += 1) {
     const packageDirectory = join(directory, 'node_modules', name);
     const found = await manifest(join(packageDirectory, 'package.json'));
@@ -121,6 +125,7 @@ async function resolvePackage(specifier: string, root: string): Promise<string> 
       return join(packageDirectory, target);
     }
     const parent = dirname(directory);
+    // Stopping at the top saves asking it again until the bound: the answer is the same.
     if (parent === directory) break;
     directory = parent;
   }
@@ -139,8 +144,7 @@ function isRule(value: unknown): value is Rule {
     typeof rule['id'] === 'string' &&
     /^[a-z0-9][a-z0-9-]*$/.test(rule['id']) &&
     typeof rule['description'] === 'string' &&
-    typeof rule['severity'] === 'string' &&
-    SEVERITIES.has(rule['severity']) &&
+    SEVERITIES.has(rule['severity'] as string) &&
     typeof rule['check'] === 'function'
   );
 }

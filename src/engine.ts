@@ -10,7 +10,7 @@
  */
 
 import { access } from 'node:fs/promises';
-import { dirname, relative, resolve, sep } from 'node:path';
+import { basename, dirname, relative, resolve, sep } from 'node:path';
 
 import { applyPlan } from './apply.js';
 import {
@@ -63,7 +63,7 @@ export interface OpenOptions {
   /** Where discovery starts. Defaults to the process's directory. */
   readonly cwd?: string;
   /** An explicit configuration file; discovery is skipped. */
-  readonly config?: string;
+  readonly config?: string | undefined;
   /** Use the defaults even where a configuration file exists. */
   readonly noConfig?: boolean;
   /** `null` runs without git. Defaults to git when the root is inside a working tree. */
@@ -99,6 +99,8 @@ async function exists(path: string): Promise<boolean> {
     await access(path);
     return true;
   } catch {
+    // Absent, or not to be reached: the search goes on either way. An empty
+    // catch would answer `undefined`, which the search reads the same.
     return false;
   }
 }
@@ -109,6 +111,7 @@ async function exists(path: string): Promise<boolean> {
  */
 export function today(env: Readonly<Record<string, string | undefined>> = process.env): string {
   const epoch = env['SOURCE_DATE_EPOCH'];
+  // The check for a variable that is not set is the compiler's: unset, it would read as "undefined", which is no number.
   const when = epoch !== undefined && /^\d+$/.test(epoch) ? new Date(Number(epoch) * 1000) : new Date();
   return when.toISOString().slice(0, 10);
 }
@@ -130,6 +133,9 @@ function frozenCopy<T>(value: T): T {
 }
 
 export function isDate(text: string): boolean {
+  // The shape keeps out the one other text that survives the round trip
+  // below: a year past 9999 with a month, "+010000-01". Its anchors are for
+  // the reader, since nothing longer than a date comes back as it went in.
   if (!/^\d{4}-\d{2}-\d{2}$/.test(text)) return false;
   const parsed = new Date(`${text}T00:00:00Z`);
   return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === text;
@@ -143,7 +149,8 @@ export class BriefEngine {
   readonly git: Git | null;
   private plugins: readonly Plugin[] | undefined;
   private loaded: Corpus | undefined;
-  private missingBriefs = false;
+  /** Known once the briefs are read, which every command does before it asks. */
+  private missingBriefs: boolean | undefined;
 
   constructor(setup: EngineSetup) {
     this.root = setup.root;
@@ -169,9 +176,7 @@ export class BriefEngine {
     const root = configPath === undefined ? (toplevel ?? cwd) : dirname(configPath);
     let config = DEFAULT_CONFIG;
     if (configPath !== undefined) {
-      const fs = new NodeFileSystem(dirname(configPath));
-      const name = configPath.slice(dirname(configPath).length + 1);
-      const text = await fs.read(name);
+      const text = await new NodeFileSystem(root).read(basename(configPath));
       if (text === null) throw new EngineError('not-found', `${configPath} does not exist`);
       config = parseConfig(text, relative(cwd, configPath));
     }
@@ -182,7 +187,8 @@ export class BriefEngine {
     const engine = new BriefEngine({
       root,
       config,
-      configFile: configPath === undefined ? null : relative(root, configPath).split(sep).join('/'),
+      // The root is the configuration's directory, so its path from there is its name.
+      configFile: configPath === undefined ? null : basename(configPath),
       fs: options.fs ?? new NodeFileSystem(root),
       git: options.git === undefined ? (inTree ? new NodeGit(root) : null) : options.git,
     });
@@ -205,15 +211,15 @@ export class BriefEngine {
     const read = async (directory: string, phase: Phase): Promise<boolean> => {
       const dir = normalisePath(directory);
       const names = await this.fs.list(dir);
-      for (const name of names ?? []) {
+      if (names === null) return false;
+      for (const name of names) {
         if (!isBrief(name)) continue;
         const path = dir === '' ? name : `${dir}/${name}`;
         const text = await this.fs.read(path);
         // A file listed a moment ago and gone now was removed under the run; there is nothing to read.
-        /* v8 ignore next */
         if (text !== null) files.push({ path, text, phase });
       }
-      return names !== null;
+      return true;
     };
     this.missingBriefs = !(await read(this.config.briefs, 'live'));
     await read(this.config.archive, 'archived');
@@ -334,9 +340,9 @@ export class BriefEngine {
         // diff would pass every scope check without measuring one.
         if (from === commit.sha) unmeasured = { reason: 'merged', base: base as string, commit: commit.sha };
         else changes = await git.changes(from, commit.sha);
-      } else {
-        unmeasured = { reason: 'revision' };
       }
+      // With neither a commit nor a base, nothing was read, and the planner
+      // says so itself of a request that brings no changes and no reason.
       dirty = await git.dirty();
     } else {
       unmeasured = { reason: 'git' };
