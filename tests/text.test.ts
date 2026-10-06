@@ -49,6 +49,11 @@ describe('section names', () => {
     expect(normaliseLabel('  Not   `empowered`  ')).toBe('not empowered');
     expect(normaliseLabel('1.2) Report')).toBe('report');
     expect(normaliseLabel(`${String.fromCharCode(0x201c)}Quoted${String.fromCharCode(0x201d)}`)).toBe('"quoted"');
+    // A number of several parts, each of several digits, and any run of spaces after it.
+    expect(normaliseLabel('2.10 Report')).toBe('report');
+    expect(normaliseLabel('12.3.45.   Report')).toBe('report');
+    // A number with no name after it is the name.
+    expect(normaliseLabel('2026')).toBe('2026');
   });
 
   it('matches a name followed by a separator and a qualifier, and nothing longer', () => {
@@ -57,6 +62,8 @@ describe('section names', () => {
     expect(labelMatches(`Deliverables ${String.fromCharCode(0x2013)} two`, 'Deliverables')).toBe(true);
     expect(labelMatches('Mission: the short version', 'Mission')).toBe(true);
     expect(labelMatches('Report - final', 'Report')).toBe(true);
+    // Runs of spaces are one space before the heading is compared.
+    expect(labelMatches('Report   -   final', 'Report')).toBe(true);
     expect(labelMatches('Reporting', 'Report')).toBe(false);
     expect(labelMatches('Report-final', 'Report')).toBe(false);
     expect(labelMatches('Missionary', 'Mission')).toBe(false);
@@ -71,6 +78,8 @@ describe('slugify', () => {
     expect(slugify('Two injections: F-46!')).toBe('two-injections-f-46');
     expect(slugify(`Caf${String.fromCharCode(0xe9)} au lait`)).toBe('cafe-au-lait');
     expect(slugify('---')).toBe('');
+    // A run of anything else is one hyphen, and none opens or closes the slug.
+    expect(slugify('  ((Split))  it!!  ')).toBe('split-it');
   });
 
   it('cuts a long title at a word break', () => {

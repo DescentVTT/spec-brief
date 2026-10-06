@@ -67,7 +67,7 @@ export function normaliseLabel(label: string): string {
     .replace(/[\u2018\u2019\u201b\u2032\u00b4]/g, "'")
     .replace(/[\u201c\u201d\u201f\u2033]/g, '"')
     .replace(/[*_`]/g, '')
-    .replace(/^\s*\d+(?:\.\d+)*[.)]?\s+/, '')
+    .replace(/^\s*\d+(?:\.\d+)*[.)]?\s/, '')
     .replace(/\s*:\s*$/, '')
     .replace(/\s+/g, ' ')
     .trim()
@@ -85,8 +85,9 @@ export function labelMatches(heading: string, name: string): boolean {
   if (n.length === 0) return false;
   if (h === n) return true;
   if (!h.startsWith(n)) return false;
+  // Normalised, so whitespace is single spaces.
   const rest = h.slice(n.length);
-  return /^(?:\s*[:(\u2014\u2013]|\s+-\s)/.test(rest);
+  return /^(?:\s*[:(\u2014\u2013]|\s-\s)/.test(rest);
 }
 
 /**
@@ -99,13 +100,13 @@ export function slugify(title: string, maxLength = 80): string {
     .replace(/[\u0300-\u036f]/g, '')
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '');
+    .replace(/^-|-$/g, '');
   if (slug.length <= maxLength) return slug;
   const cut = slug.slice(0, maxLength);
   // A cut that lands on a break keeps its last word whole.
   if (slug.charAt(maxLength) === '-') return cut;
   const lastBreak = cut.lastIndexOf('-');
-  return lastBreak > 0 ? cut.slice(0, lastBreak) : cut;
+  return lastBreak === -1 ? cut : cut.slice(0, lastBreak);
 }
 
 /** `a`, `a and b`, `a, b and c`. */
