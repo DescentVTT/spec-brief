@@ -278,12 +278,24 @@ describe('sections', () => {
       ['- [ ] 待確認', false],
       ['待定：等廠商回覆', false],
       ['TBD：later', false],
+      // Indented, or after a marker and more than one space, a placeholder and an empty box are what they were.
+      ['  TBD', true],
+      ['-  [ ]', true],
+      ['-   [x] TBD', true],
+      // A box is one where the item's text starts: after a word it is that word's bracket, as the stop in TODO.md is its stop.
+      ['TODO[x]', false],
     ];
     for (const [line, expected] of cases) {
       const text = goodBrief().replace('The tree is better.', line);
       const hit = (await findings({ [A]: text })).some((f) => f.rule === 'placeholder');
       expect(hit, line).toBe(expected);
     }
+  });
+
+  it('counts as a section\'s content what is under its heading, not the line above it', async () => {
+    // Prose that runs up to the next heading with no empty line between is the section's it is in.
+    const text = goodBrief().replace('The tree is better.\n\n## Negative Scope\n\n- Nothing else changes.\n', 'The tree is better.\n## Negative Scope\n');
+    expect((await findings({ [A]: text })).map((f) => [f.rule, f.line, f.message])).toEqual([['empty-section', 10, 'the "Negative Scope" section is empty']]);
   });
 
   it('requires a task item in a checklist section, leniently in a draft', async () => {
@@ -309,6 +321,16 @@ describe('sections', () => {
     expect(await findings({ [A]: goodBrief() }, missingSection)).toEqual([]);
   });
 
+  it('looks for the text under the heading, line by line', async () => {
+    // The heading names the section and is not what it says.
+    const named = config({ sections: [{ name: 'Intent', mustContain: ['Intent'] }] });
+    expect((await findings({ [A]: goodBrief() }, named)).map((f) => [f.rule, f.line, f.message])).toEqual([['must-contain', 7, 'the "Intent" section must contain "Intent"']]);
+    // Two lines are not run together into a word neither holds.
+    const word = config({ sections: [{ name: 'Intent', mustContain: ['signoff'] }] });
+    const broken = goodBrief().replace('The tree is better.', 'Wait for the sign\noff of the owner.');
+    expect((await findings({ [A]: broken }, word)).map((f) => f.message)).toEqual(['the "Intent" section must contain "signoff"']);
+  });
+
   it('checks order only when asked, and names the order', async () => {
     const swapped = goodBrief().replace('## Intent\n\nThe tree is better.\n\n## Negative Scope\n\n- Nothing else changes.', '## Negative Scope\n\n- Nothing else changes.\n\n## Intent\n\nThe tree is better.');
     expect(await findings({ [A]: swapped })).toEqual([]);
@@ -318,9 +340,20 @@ describe('sections', () => {
     expect(await findings({ [A]: goodBrief() }, config({ sectionOrder: true }))).toEqual([]);
   });
 
+  it('finds a heading that fills two rules in order with itself', async () => {
+    // A type that says more about a section every brief carries: one heading, asked about twice.
+    const cfg = config({ sectionOrder: true, types: { feature: { sections: [{ name: 'Invariants', checklist: true, mustContain: ['tests'] }] } } });
+    expect(await findings({ [A]: goodBrief({ type: 'feature' }) }, cfg)).toEqual([]);
+  });
+
   it('warns on a repeated section and checks the first one only', async () => {
     const text = `${goodBrief()}\n## Intent\n\n`;
     expect((await findings({ [A]: text })).map((f) => [f.rule, f.severity])).toEqual([['duplicate-section', 'warning']]);
+    // Unwritten, or a checklist with no box, the second is still only a second.
+    const placeholder = `${goodBrief()}\n## Intent\n\nTBD\n`;
+    expect((await findings({ [A]: placeholder })).map((f) => [f.rule, f.line])).toEqual([['duplicate-section', 19]]);
+    const unboxed = `${goodBrief()}\n## Invariants\n\nno boxes\n`;
+    expect((await findings({ [A]: unboxed })).map((f) => [f.rule, f.line])).toEqual([['duplicate-section', 19]]);
   });
 
   it('adds the sections of a declared type, and reports an unknown type', async () => {
@@ -328,6 +361,13 @@ describe('sections', () => {
     expect((await findings({ [A]: goodBrief({ type: 'epic' }) }))[0]?.hint).toBe('use one of "feature", "defect", "refactor", "chore"');
     expect((await findings({ [A]: goodBrief({ type: 'epic' }) }, config({ types: {} })))[0]?.hint).toBe('the configuration defines no types');
     expect(await findings({ [A]: goodBrief({ type: 'chore' }) })).toEqual([]);
+  });
+
+  it('adds no type\'s sections to a brief that declares no type, whatever a type is called', async () => {
+    // YAML reads "type: null" as no type, so no brief can ask for a type of that name.
+    const cfg = config({ types: { null: { sections: ['Rollback'] } } });
+    expect(await findings({ [A]: goodBrief() }, cfg)).toEqual([]);
+    expect(await findings({ [A]: goodBrief({ type: 'null' }) }, cfg)).toEqual([]);
   });
 
   it('holds archived briefs to identity and freeze, not to structure', async () => {
@@ -396,6 +436,8 @@ describe('dependencies and waves', () => {
     expect(await findings({ [A]: goodBrief({ wave: '1', dependsOn: '[002]' }), 'briefs/archive/002_b.md': goodBrief({ status: 'archived', wave: '3' }) })).toEqual([]);
     expect(await findings({ [A]: goodBrief({ dependsOn: '[002]' }), [B]: goodBrief({ wave: '3' }) })).toEqual([]);
     expect(await findings({ [A]: goodBrief({ wave: '1', dependsOn: '[002]' }), [B]: goodBrief() })).toEqual([]);
+    // A dependency with no wave is in none to be before or after, wave 0 as any other.
+    expect(await findings({ [A]: goodBrief({ wave: '0', dependsOn: '[002]' }), [B]: goodBrief() })).toEqual([]);
   });
 });
 
