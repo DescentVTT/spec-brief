@@ -87,6 +87,7 @@ function matrix(wave: number | null, briefs: readonly Brief[], scopes: ReadonlyM
   const undecided: UndecidedPair[] = [];
   const shared: SharedDirectory[] = [];
   const scoped = briefs.map((brief) => scopes.get(brief) as Scope);
+  // One past the end there is no later brief to pair with, so the bound could be one further.
   for (let i = 0; i < scoped.length; i += 1) {
     for (let j = i + 1; j < scoped.length; j += 1) {
       const left = scoped[i] as Scope;

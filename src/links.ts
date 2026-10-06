@@ -44,7 +44,7 @@ export function isInside(path: string, directory: string): boolean {
 
 export function dirOf(path: string): string {
   const slash = path.lastIndexOf('/');
-  return slash < 0 ? '' : path.slice(0, slash);
+  return slash === -1 ? '' : path.slice(0, slash);
 }
 
 function parts(path: string): string[] {
@@ -70,6 +70,7 @@ export function relativePath(fromDirectory: string, to: string): string {
   const from = parts(fromDirectory);
   const target = parts(to);
   let common = 0;
+  // One step past the end compares nothing with what is left of the target, and the slices below come out the same.
   while (common < from.length && from[common] === target[common]) common += 1;
   const up = from.slice(common).map(() => '..');
   const rest = target.slice(common);

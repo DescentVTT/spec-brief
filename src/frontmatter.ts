@@ -53,5 +53,5 @@ export function setEntryKeepingComment(lines: readonly string[], frontMatter: Fr
 
 /** Front matter an edit can be written into: YAML, and closed. */
 export function editable(frontMatter: FrontMatter): boolean {
-  return frontMatter.kind === 'yaml' && frontMatter.close >= 0;
+  return frontMatter.kind === 'yaml' && frontMatter.close !== -1;
 }
