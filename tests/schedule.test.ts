@@ -455,6 +455,48 @@ describe('the edges of the schedule', () => {
     );
   });
 
+  it('breaks a declared wave on a dependency in it or later and a dependent in it or earlier, and on neither without a wave of its own', () => {
+    const judged = (files: Record<string, string>): unknown[] =>
+      schedule(corpusOf(files)).placements.map((p) => [p.brief.id, p.declared, p.proposed, p.breaches.map((b) => [b.reason, b.brief.id, 'wave' in b ? b.wave : null])]);
+    const a = (wave: string | null, dependsOn?: string): string => goodBrief({ affectedFiles: '[a]', ...(wave === null ? {} : { wave }), ...(dependsOn === undefined ? {} : { dependsOn }) });
+    const b = (wave: string | null, dependsOn?: string): string => a(wave, dependsOn).replace('[a]', '[b]');
+    const c = (wave: string | null, dependsOn?: string): string => a(wave, dependsOn).replace('[a]', '[c]');
+    // A dependency in an earlier wave: the later wave is the person's to keep.
+    expect(judged({ [B(1)]: a('1'), [B(2)]: b('5', '[1]') })).toEqual([
+      ['001', 1, 1, []],
+      ['002', 5, 2, []],
+    ]);
+    // A dependency that declares no wave is in none, wave 0 included.
+    expect(judged({ [B(1)]: a(null), [B(2)]: b('0', '[1]') })).toEqual([
+      ['001', null, 0, []],
+      ['002', 0, 1, []],
+    ]);
+    // A dependent in a later wave.
+    expect(judged({ [B(1)]: a('3'), [B(2)]: b('4', '[1]'), [B(3)]: c('1') })).toEqual([
+      ['001', 3, 1, []],
+      ['002', 4, 2, []],
+      ['003', 1, 1, []],
+    ]);
+    // A dependent that declares no wave, which has none to judge either.
+    expect(judged({ [B(1)]: a('3'), [B(2)]: b(null, '[1]'), [B(3)]: c('1') })).toEqual([
+      ['001', 3, 1, []],
+      ['002', null, 2, []],
+      ['003', 1, 1, []],
+    ]);
+    // A dependent in the same wave.
+    expect(judged({ [B(1)]: a('2'), [B(2)]: b('2', '[1]'), [B(3)]: c('1') })).toEqual([
+      ['001', 2, 1, [['dependent', '002', 2]]],
+      ['002', 2, 2, []],
+      ['003', 1, 1, []],
+    ]);
+    // Dependents are named by id, as everything is, where the paths run the other way.
+    expect(judged({ 'briefs/1_x.md': a('5'), 'briefs/9_x.md': b('2', '[1]'), 'briefs/10_x.md': c('3', '[1]') })).toEqual([
+      ['1', 5, 2, [['dependent', '9', 2], ['dependent', '10', 3]]],
+      ['9', 2, 3, [['dependency', '1', 5]]],
+      ['10', 3, 3, []],
+    ]);
+  });
+
   it('writes a wave into an empty brief, keeping the empty line it had', () => {
     const corpus = corpusOf({ [B(1)]: '' }, config({ status: { field: null } }));
     expect(planWaves(schedule(corpus)).ops.map((op) => (op.kind === 'write' ? op.content : ''))).toEqual(['---\nwave: 1\n---\n\n']);

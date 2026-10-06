@@ -114,10 +114,10 @@ function clash(own: Scope, wave: number, here: readonly Scope[], budget: number,
 interface Judge {
   /** The briefs the matrix compares: none deferred, none waiting on deferred work. */
   readonly compared: readonly Brief[];
-  /** Every live brief's live dependencies, and the live briefs that depend on each, by id. */
+  /** Every live brief's live dependencies, the briefs in the order of their ids. */
   readonly dependencies: ReadonlyMap<Brief, readonly Brief[]>;
-  readonly dependents: ReadonlyMap<Brief, readonly Brief[]>;
-  readonly scope: (b: Brief) => Scope;
+  /** The scope of every brief the schedule places or compares. */
+  readonly scopes: ReadonlyMap<Brief, Scope>;
   readonly budget: number;
   readonly files: readonly string[] | null;
 }
@@ -133,12 +133,12 @@ function breachesOf(brief: Brief, wave: number, judge: Judge): Breach[] {
   for (const dependency of judge.dependencies.get(brief) as Brief[]) {
     if (dependency.wave !== null && dependency.wave >= wave) out.push({ reason: 'dependency', brief: dependency, wave: dependency.wave });
   }
-  for (const other of judge.dependents.get(brief) ?? []) {
-    if (other.wave !== null && other.wave <= wave) out.push({ reason: 'dependent', brief: other, wave: other.wave });
+  for (const [other, needs] of judge.dependencies) {
+    if (other.wave !== null && other.wave <= wave && needs.includes(brief)) out.push({ reason: 'dependent', brief: other, wave: other.wave });
   }
   for (const other of judge.compared) {
     if (other === brief || other.wave !== wave) continue;
-    const overlaps = meet(judge.scope(brief), judge.scope(other), judge.budget, judge.files).overlaps;
+    const overlaps = meet(judge.scopes.get(brief) as Scope, judge.scopes.get(other) as Scope, judge.budget, judge.files).overlaps;
     if (overlaps.length > 0) out.push({ reason: 'collision', brief: other, overlaps });
   }
   return out;
@@ -150,23 +150,14 @@ export function schedule(corpus: Corpus, options: ScheduleOptions = {}): Schedul
   const budget = options.budget ?? WITNESS_BUDGET;
   const deferred = corpus.live.filter((b) => b.status === 'deferred').sort(byId);
   const briefs = corpus.live.filter((b) => b.status !== 'deferred').sort(byId);
-  const dependencies = new Map(briefs.map((b) => [b, liveDependencies(corpus, b)]));
+  // Of deferred briefs too: lint's wave-order reads every live brief's wave.
+  // In the order of the ids, which is the order a brief's dependents are named in.
+  const dependencies = new Map([...corpus.live].sort(byId).map((b) => [b, liveDependencies(corpus, b)]));
   const declared = briefs.flatMap((b) => (b.wave === null ? [] : [b.wave]));
   const first = declared.length === 0 ? 1 : Math.min(...declared);
-  const scopes = new Map<Brief, Scope>();
-  const scope = (b: Brief): Scope => {
-    const known = scopes.get(b) ?? scopeOf(b, reading);
-    scopes.set(b, known);
-    return known;
-  };
+  const scopes = new Map(briefs.map((b) => [b, scopeOf(b, reading)]));
   const waiting = new Set(waitingOnDeferred(corpus).map((w) => w.brief));
-  // Deferred briefs too: lint's wave-order reads every live brief's wave.
-  const everyDependency = new Map(corpus.live.map((b) => [b, liveDependencies(corpus, b)]));
-  const dependents = new Map<Brief, Brief[]>();
-  for (const b of [...corpus.live].sort(byId)) {
-    for (const d of everyDependency.get(b) as Brief[]) dependents.set(d, [...(dependents.get(d) ?? []), b]);
-  }
-  const judge: Judge = { compared: briefs.filter((b) => !waiting.has(b)), dependencies: everyDependency, dependents, scope, budget, files };
+  const judge: Judge = { compared: briefs.filter((b) => !waiting.has(b)), dependencies, scopes, budget, files };
 
   const waveOf = new Map<Brief, number>();
   const occupants = new Map<number, Scope[]>();
@@ -183,7 +174,7 @@ export function schedule(corpus: Corpus, options: ScheduleOptions = {}): Schedul
       const wave = waveOf.get(dependency) as number;
       if (after === null || wave > after.wave) after = { brief: dependency, wave };
     }
-    const own = scope(next);
+    const own = scopes.get(next) as Scope;
     const passed: Passed[] = [];
     let wave = after === null ? first : after.wave + 1;
     // Ends by construction: a wave past every occupied one is empty, and an empty wave takes anyone.
@@ -330,7 +321,7 @@ export function planWaves(s: Schedule): WavePlan {
   for (const p of moves(s)) {
     const { brief } = p;
     if (brief.frontMatter !== null && !editable(brief.frontMatter)) {
-      const open = brief.frontMatter.close < 0;
+      const open = brief.frontMatter.close === -1;
       refused.push({
         rule: 'front-matter',
         severity: 'error',
