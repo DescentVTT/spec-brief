@@ -74,6 +74,20 @@ describe('the schema language', () => {
     expect(validate({ type: 'anyOf', options: [] }, 1)).toEqual(['the configuration must be ']);
   });
 
+  it('names every option when the value is of no option\'s kind, an integer among them', () => {
+    const schema: Schema = { type: 'anyOf', options: [{ type: 'string' }, { type: 'integer' }] };
+    expect(validate(schema, true)).toEqual(['the configuration must be a string or an integer']);
+    // Of an option's kind, the value is held to that option.
+    expect(validate(schema, 1.5)).toEqual(['the configuration must be an integer']);
+    expect(validate(schema, 2)).toEqual([]);
+  });
+
+  it('lets a nullable string be null, whatever else is asked of a string', () => {
+    expect(validate({ type: 'string', nullable: true, minLength: 1 }, null)).toEqual([]);
+    expect(validate({ type: 'string', nullable: true, enum: ['a'] }, null)).toEqual([]);
+    expect(validate({ type: 'string', nullable: true, minLength: 1 }, '')).toEqual(['the configuration must not be empty']);
+  });
+
   it('suggests only near misses', () => {
     expect(closest('satus', ['status', 'wave'])).toBe('status');
     expect(closest('dependson', ['dependsOn'])).toBe('dependsOn');
@@ -108,6 +122,14 @@ describe('the schema language', () => {
     expect(toJsonSchema({ type: 'map', values: { type: 'any' } })).toEqual({ type: 'object', additionalProperties: {} });
     expect(toJsonSchema({ type: 'anyOf', options: [{ type: 'string' }] })).toEqual({ anyOf: [{ type: 'string' }] });
     expect(toJsonSchema({ type: 'array', items: { type: 'string' } })).toEqual({ type: 'array', items: { type: 'string' } });
+  });
+
+  it('renders no key for what a schema does not say', () => {
+    // A key that holds nothing is still a key to a reader that lists them, and JSON Schema has no word for it.
+    expect(toJsonSchema({ type: 'string' })).toStrictEqual({ type: 'string' });
+    expect(toJsonSchema({ type: 'integer' })).toStrictEqual({ type: 'integer' });
+    expect(toJsonSchema({ type: 'integer', maximum: 3 })).toStrictEqual({ type: 'integer', maximum: 3 });
+    expect(toJsonSchema({ type: 'integer', minimum: 0 })).toStrictEqual({ type: 'integer', minimum: 0 });
   });
 });
 

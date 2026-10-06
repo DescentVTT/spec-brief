@@ -705,6 +705,11 @@ describe('the schema language', () => {
     expect(validate({ type: 'string', minLength: 2 }, 'ab')).toEqual([]);
     expect(validate({ type: 'string', minLength: 2 }, 'a')).toEqual(['the configuration must not be empty']);
     expect(validate({ type: 'string', enum: ['a'] }, 'a')).toEqual([]);
+    // A bound of zero is a bound, and no bound is none.
+    expect(validate({ type: 'integer', minimum: 0 }, -1)).toEqual(['the configuration must be at least 0']);
+    expect(validate({ type: 'integer', maximum: 0 }, 1)).toEqual(['the configuration must be at most 0']);
+    expect(validate({ type: 'integer' }, -5)).toEqual([]);
+    expect(validate({ type: 'string' }, '')).toEqual([]);
   });
 
   it('suggests a key an edit away at every position', () => {
