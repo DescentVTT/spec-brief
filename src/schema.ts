@@ -99,14 +99,14 @@ export function validate(schema: Schema, value: unknown, path = ''): string[] {
       if (schema.enum !== undefined && !schema.enum.includes(value)) {
         return [`${where} must be one of ${schema.enum.map((e) => `"${e}"`).join(', ')}, not "${value}"`];
       }
-      if (schema.minLength !== undefined && value.length < schema.minLength) return [`${where} must not be empty`];
+      if (value.length < (schema.minLength ?? 0)) return [`${where} must not be empty`];
       return [];
     }
     case 'integer': {
       const number = value as number;
       if (!Number.isInteger(number)) return [`${where} must be an integer`];
-      if (schema.minimum !== undefined && number < schema.minimum) return [`${where} must be at least ${schema.minimum}`];
-      if (schema.maximum !== undefined && number > schema.maximum) return [`${where} must be at most ${schema.maximum}`];
+      if (number < (schema.minimum ?? -Infinity)) return [`${where} must be at least ${schema.minimum}`];
+      if (number > (schema.maximum ?? Infinity)) return [`${where} must be at most ${schema.maximum}`];
       return [];
     }
     case 'array':
@@ -135,14 +135,10 @@ export function validate(schema: Schema, value: unknown, path = ''): string[] {
         validate(schema.values, item, at(path, key)),
       );
     case 'anyOf': {
-      const candidates = schema.options.filter((option) => accepts(option, kindOf(value)));
-      let first: string[] | undefined;
-      for (const option of candidates) {
-        const problems = validate(option, value, path);
-        if (problems.length === 0) return [];
-        first ??= problems;
-      }
-      return first ?? [];
+      // Some option accepts the value's kind, or the check above would have answered: there is a first.
+      const kind = kindOf(value);
+      const problems = schema.options.filter((option) => accepts(option, kind)).map((option) => validate(option, value, path));
+      return problems.some((found) => found.length === 0) ? [] : (problems[0] as string[]);
     }
     case 'boolean':
     case 'any':
