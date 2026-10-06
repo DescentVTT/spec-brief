@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 
 import { planArchive, planUnarchive, type Plan } from '../src/archive.js';
 import { BANNER_CLOSE, BANNER_OPEN } from '../src/brief.js';
@@ -337,7 +337,12 @@ describe('dispositions, after 0.1.0', () => {
 });
 
 describe('links with rewriting off, after 0.1.0', () => {
-  const off = config({ archiving: { rewriteLinks: false } });
+  // Built for each test: resolved as the file loads, the configuration's code
+  // would be measured against the whole suite and not the tests that use it.
+  let off: ReturnType<typeof config>;
+  beforeEach(() => {
+    off = config({ archiving: { rewriteLinks: false } });
+  });
   const STALE =
     'warning stale-link: links on 2 line(s) of other live briefs will stop resolving when it moves: briefs/002_b.md:19, briefs/003_c.md:19' +
     ' | turn "archiving.rewriteLinks" on to have them rewritten, or fix them by hand';
