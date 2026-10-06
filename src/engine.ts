@@ -175,7 +175,10 @@ export class BriefEngine {
       if (text === null) throw new EngineError('not-found', `${configPath} does not exist`);
       config = parseConfig(text, relative(cwd, configPath));
     }
-    const inTree = toplevel !== null && !relative(toplevel, root).startsWith('..');
+    // Outside the work tree is its parent or a path through it, "..", "../x":
+    // a directory inside it may itself be named "..drafts".
+    const fromTop = toplevel === null ? null : relative(toplevel, root);
+    const inTree = fromTop !== null && fromTop !== '..' && !fromTop.startsWith(`..${sep}`);
     const engine = new BriefEngine({
       root,
       config,
