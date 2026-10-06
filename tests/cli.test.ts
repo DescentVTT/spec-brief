@@ -81,6 +81,14 @@ describe('help, version and usage errors', () => {
     expect((await run(cwd, ['list', '--format', 'sarif'])).err).toBe('spec-brief: --format for list is one of pretty, json, not "sarif"\n');
   });
 
+  it('exits 2 for a command named as something every object answers to', async () => {
+    // The commands were looked up in an object, which answers to these too:
+    // each passed for a command, and the run ended on a stack trace with exit 1.
+    for (const name of ['constructor', 'toString', 'valueOf', 'hasOwnProperty', '__proto__']) {
+      expect(await run(cwd, [name]), name).toEqual({ code: EXIT_ERROR, out: '', err: `spec-brief: "${name}" is not a command; run spec-brief --help\n` });
+    }
+  });
+
   it('names the formats each command writes, and none it refuses', async () => {
     // The finding formats are lint's, matrix's and schedule's: the help once
     // offered all five under the options for every command.

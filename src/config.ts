@@ -351,6 +351,15 @@ export function resolveConfig(raw: unknown, file = 'configuration'): Config {
   return config;
 }
 
+/**
+ * The sections a brief type adds, or `undefined` for a type the configuration
+ * does not define. Its own keys only: every object answers to `constructor`
+ * and `toString`, and a brief may say either.
+ */
+export function typeSections(config: Config, type: string): readonly SectionRule[] | undefined {
+  return Object.hasOwn(config.types, type) ? config.types[type] : undefined;
+}
+
 /** The status words a repository uses, in lifecycle order. */
 export function statusWords(config: Config): string[] {
   const { draft, active, deferred, archived } = config.status;

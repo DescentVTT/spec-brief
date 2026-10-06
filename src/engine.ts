@@ -26,7 +26,7 @@ import {
 } from './archive.js';
 import type { Brief } from './brief.js';
 import { collisionFindings, collisions, type CollisionOptions, type CollisionReport } from './collisions.js';
-import { type Config, ConfigError, DEFAULT_CONFIG, locateConfig, parseConfig } from './config.js';
+import { type Config, ConfigError, DEFAULT_CONFIG, locateConfig, parseConfig, typeSections } from './config.js';
 import { buildCorpus, type Corpus, findBriefs, isReady, pendingDependencies, type SourceFile } from './corpus.js';
 import { canonicalPath, type FileSystem, NodeFileSystem } from './fs.js';
 import { type CommitInfo, type FileChange, type Git, NodeGit, pullRequestUrl } from './git.js';
@@ -418,7 +418,7 @@ export class BriefEngine {
       throw new EngineError('invalid', `"${id}" cannot be an id: no whitespace, slashes or "${this.config.id.separator}"`);
     }
     if (findBriefs(this.corpus, id).some((b) => b.id !== null)) throw new EngineError('exists', `the id "${id}" is taken`);
-    if (options.type !== undefined && this.config.types[options.type] === undefined) {
+    if (options.type !== undefined && typeSections(this.config, options.type) === undefined) {
       const names = Object.keys(this.config.types);
       throw new EngineError('invalid', `"${options.type}" is not a brief type here; use one of ${names.join(', ') || '(none)'}`);
     }

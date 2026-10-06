@@ -5,7 +5,7 @@
  * until somebody writes it.
  */
 
-import { type Config, DEFAULT_CONFIG, type SectionRule } from './config.js';
+import { type Config, DEFAULT_CONFIG, type SectionRule, typeSections } from './config.js';
 import type { Corpus } from './corpus.js';
 import { renderScalar } from './frontmatter.js';
 import { fillTemplate, slugify } from './text.js';
@@ -79,7 +79,7 @@ export function renderNewBrief(config: Config, brief: NewBrief, template: string
       status: config.status.draft ?? config.status.active,
     });
   }
-  const typed = brief.type === undefined ? [] : (config.types[brief.type] ?? []);
+  const typed = brief.type === undefined ? [] : (typeSections(config, brief.type) ?? []);
   const lines = [...frontMatter(config, brief), '', `# ${brief.id} \u2014 ${brief.title}`];
   for (const rule of [...config.sections, ...typed]) {
     lines.push('', `## ${rule.name}`, '', `<!-- ${hint(rule)} -->`);

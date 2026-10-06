@@ -113,9 +113,12 @@ export function inWords(items: readonly string[]): string {
   return items.length < 2 ? (items[0] ?? '') : `${items.slice(0, -1).join(', ')} and ${items[items.length - 1] as string}`;
 }
 
-/** Fills `{name}` holes. An unknown name is left as written. */
+/**
+ * Fills `{name}` holes. An unknown name is left as written, and a name every
+ * object answers to, `{constructor}`, is unknown unless it was given.
+ */
 export function fillTemplate(template: string, values: Readonly<Record<string, string>>): string {
-  return template.replace(/\{([A-Za-z]+)\}/g, (hole, name: string) => values[name] ?? hole);
+  return template.replace(/\{([A-Za-z]+)\}/g, (hole, name: string) => (Object.hasOwn(values, name) ? (values[name] as string) : hole));
 }
 
 /** The `{name}` holes a template line refers to. */

@@ -74,7 +74,12 @@ const GLOBAL: NonNullable<ParseArgsConfig['options']> = {
   version: { type: 'boolean', short: 'v' },
 };
 
-const COMMANDS: Readonly<Record<string, { options: NonNullable<ParseArgsConfig['options']>; formats: readonly Format[] }>> = {
+interface CommandSpec {
+  readonly options: NonNullable<ParseArgsConfig['options']>;
+  readonly formats: readonly Format[];
+}
+
+const TABLE: Readonly<Record<string, CommandSpec>> = {
   init: { options: { briefs: { type: 'string' }, archive: { type: 'string' } }, formats: ['pretty', 'json'] },
   new: {
     options: {
@@ -106,13 +111,20 @@ const COMMANDS: Readonly<Record<string, { options: NonNullable<ParseArgsConfig['
 };
 
 /**
+ * The commands by name, and nothing for a command line that names none. A map,
+ * because an object answers to more names than it was given: `constructor` and
+ * `toString` are no commands.
+ */
+const COMMANDS: ReadonlyMap<string | undefined, CommandSpec> = new Map(Object.entries(TABLE));
+
+/**
  * The formats each command writes, read from the table `main` checks a
  * `--format` against, so the help names no format a command refuses: the
  * finding formats are `lint`'s, `matrix`'s and `schedule`'s alone.
  */
 function formatsHelp(): string {
   const groups = new Map<string, string[]>();
-  for (const [command, spec] of Object.entries(COMMANDS)) {
+  for (const [command, spec] of Object.entries(TABLE)) {
     const formats = spec.formats.join(', ');
     groups.set(formats, [...(groups.get(formats) ?? []), command]);
   }
@@ -210,7 +222,7 @@ function commandOf(argv: readonly string[]): string | undefined {
 
 export function parse(argv: readonly string[]): Parsed {
   const command = commandOf(argv);
-  const spec = command === undefined ? undefined : COMMANDS[command];
+  const spec = COMMANDS.get(command);
   if (command !== undefined && spec === undefined) {
     throw new UsageError(`"${command}" is not a command; run spec-brief --help`);
   }
@@ -467,7 +479,7 @@ export async function main(argv: readonly string[] = process.argv.slice(2), io: 
     stdout.write(HELP);
     return command === undefined && !flag(values, 'help') ? EXIT_ERROR : EXIT_OK;
   }
-  const spec = COMMANDS[command] as (typeof COMMANDS)[string];
+  const spec = COMMANDS.get(command) as CommandSpec;
   const format = (text(values, 'format') ?? 'pretty') as Format;
   if (!spec.formats.includes(format)) {
     err(`--format for ${command} is one of ${spec.formats.join(', ')}, not "${format}"`);

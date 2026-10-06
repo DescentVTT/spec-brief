@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { planArchive, planUnarchive, type Plan } from '../src/archive.js';
 import { BANNER_CLOSE, BANNER_OPEN } from '../src/brief.js';
 import { collisionFindings, collisions } from '../src/collisions.js';
+import { ConfigError, resolveConfig, typeSections } from '../src/config.js';
 import { type Corpus, findBriefs } from '../src/corpus.js';
 import { BriefEngine } from '../src/engine.js';
 import { MemoryFileSystem } from '../src/fs.js';
@@ -10,8 +11,9 @@ import type { Git } from '../src/git.js';
 import { checkRuleIds, lint, ruleIds } from '../src/lint.js';
 import { scan } from '../src/markdown.js';
 import { matrixJson, prettyMatrix, scheduleJson } from '../src/report.js';
+import { renderNewBrief } from '../src/scaffold.js';
 import { breachReasons, reasons, schedule } from '../src/schedule.js';
-import { inWords } from '../src/text.js';
+import { fillTemplate, inWords } from '../src/text.js';
 import type { Finding } from '../src/types.js';
 import { brief, config, corpusOf, goodBrief } from './helpers.js';
 
@@ -533,5 +535,56 @@ describe('collisions, after 0.1.0', () => {
     });
     expect(inWords(['a/', 'b/'])).toBe('a/ and b/');
     expect(inWords([])).toBe('');
+  });
+});
+
+describe('a name every object answers to, after 0.4.1', () => {
+  // A table kept in an object answers to `constructor`, `toString` and
+  // `__proto__` as well as to its own keys. Read as a brief type, a
+  // configuration key or a template's placeholder, each was taken for one that
+  // was defined, and the run stopped on a stack trace or wrote a function's
+  // source into a brief.
+  const NAMES = ['constructor', 'toString', 'valueOf', 'hasOwnProperty', '__proto__'];
+
+  it('is not a brief type: lint reports it, and reports the briefs beside it', async () => {
+    for (const name of NAMES) {
+      const found = await lint(corpusOf({ [A]: goodBrief({ type: name }), [B]: goodBrief({ type: 'epic' }) }), { repoFiles: null });
+      expect(table(found), name).toEqual([
+        `${A}:3 error unknown-type: "${name}" is not a brief type here | use one of "feature", "defect", "refactor", "chore"`,
+        `${B}:3 error unknown-type: "epic" is not a brief type here | use one of "feature", "defect", "refactor", "chore"`,
+      ]);
+    }
+  });
+
+  it('is not a type a new brief can take, and a scaffold given one writes the common sections', async () => {
+    const fs = new MemoryFileSystem({});
+    const engine = new BriefEngine({ root: '/v', config: config(), configFile: null, fs, git: null, plugins: [] });
+    await engine.load();
+    for (const name of NAMES) {
+      await expect(engine.create({ title: 'x', type: name, date: DATE }), name).rejects.toThrow(
+        `"${name}" is not a brief type here; use one of feature, defect, refactor, chore`,
+      );
+      const untyped = renderNewBrief(config(), { id: '001', title: 'T', date: DATE }, null);
+      const typed = renderNewBrief(config(), { id: '001', title: 'T', date: DATE, type: name }, null);
+      expect(typed.replace(/^type: .*\n/m, ''), name).toBe(untyped);
+      expect(typed, name).toContain(name);
+    }
+    expect([...fs.files.keys()]).toEqual([]);
+  });
+
+  it('is not a key of the configuration, at any depth', () => {
+    for (const name of NAMES) {
+      expect(() => resolveConfig(JSON.parse(`{"${name}": 1}`)), name).toThrow(new ConfigError('configuration', [`"${name}" is not a known key`]));
+      expect(() => resolveConfig(JSON.parse(`{"status": {"${name}": 1}}`)), name).toThrow(new ConfigError('configuration', [`"status.${name}" is not a known key`]));
+    }
+    // A type may be called anything, and is then a type.
+    const typed = resolveConfig({ types: { constructor: { sections: ['Why'] } } });
+    expect(typeSections(typed, 'constructor')?.map((s) => s.name)).toEqual(['Why']);
+    expect(typeSections(typed, 'toString')).toBeUndefined();
+  });
+
+  it('is not a placeholder: a template that says it is left as written', () => {
+    expect(fillTemplate('{id}: {constructor} {toString} {__proto__} {title}', { id: '001', title: 'T' })).toBe('001: {constructor} {toString} {__proto__} T');
+    expect(fillTemplate('{constructor}', { constructor: 'given' })).toBe('given');
   });
 });
