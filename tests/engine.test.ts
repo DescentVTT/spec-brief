@@ -249,6 +249,21 @@ describe('opening a repository', () => {
     await expect(BriefEngine.open({ cwd: root, config: 'bad.json' })).rejects.toBeInstanceOf(ConfigError);
   });
 
+  it('leaves git out for a configuration beside the work tree, and keeps it in a directory inside it named with two dots', async () => {
+    // Outside is the parent, "..", or a path through it, "../conf". A
+    // directory inside the work tree may be called "..drafts": taken for a
+    // path out, it lost git, and archival there its dirty-tree and scope checks.
+    const root = dir('open-beside');
+    initRepo(join(root, 'repo'));
+    writeTree(root, { 'conf/c.json': '{}', 'repo/..drafts/.spec-brief.json': '{}', 'repo/..drafts/briefs/001_a.md': goodBrief() });
+    const beside = await BriefEngine.open({ cwd: join(root, 'repo'), config: '../conf/c.json' });
+    expect(beside.root).toBe(join(root, 'conf'));
+    expect(beside.git).toBeNull();
+    const inside = await BriefEngine.open({ cwd: join(root, 'repo', '..drafts') });
+    expect(inside.root).toBe(join(root, 'repo', '..drafts'));
+    expect(inside.git).not.toBeNull();
+  });
+
   it('runs without git outside a repository, walking the files instead', async () => {
     const root = dir('open-plain');
     writeTree(root, { '.spec-brief.json': '{}', 'briefs/001_a.md': goodBrief(), 'node_modules/x.js': '' });

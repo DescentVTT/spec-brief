@@ -13,6 +13,16 @@ what a run reports.
 
 ## Unreleased
 
+### Changed
+
+- **A root whose directory is named with two leading dots keeps git.** A
+  configuration in a directory such as `..drafts/` inside the work tree was
+  taken for one outside it, and every command there ran without git:
+  `archive` skipped its dirty-tree check and reported the scope as unmeasured
+  "without git". It is measured there as anywhere else now, so an archival
+  that passed can be refused. Upgrading: commit the work or pass
+  `--allow-dirty`, and name the round with `--commit` or `--base`.
+
 ### Fixed
 
 - A command, a brief type, a configuration key or a template placeholder
