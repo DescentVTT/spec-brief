@@ -163,51 +163,61 @@ export function undecidedFinding(severity: Severity, a: Brief, b: Brief, pattern
 }
 
 /**
+ * The report as the run tells it: what a rule that is off would have marked
+ * is left out. The findings are made from this and the matrix a terminal
+ * shows is drawn from it, so the two agree by construction: every mark in the
+ * grid, and every line beneath it, is a finding of the run. A rule that is
+ * off marks nothing, and `shared-directory` is off unless a repository turns
+ * it on (ADR-0005).
+ */
+export function reported(corpus: Corpus, report: CollisionReport): CollisionReport {
+  const on = (rule: string): boolean => configuredSeverity(corpus, rule) !== null;
+  const waves = report.waves.map((wave) => ({
+    ...wave,
+    collisions: on('collision') ? wave.collisions : [],
+    undecided: on('collision-undecided') ? wave.undecided : [],
+    shared: on('shared-directory') ? wave.shared : [],
+    unscoped: on('unscoped') ? wave.unscoped : [],
+  }));
+  return { ...report, waves };
+}
+
+/**
  * The report as findings. One pair of briefs is one finding, placed on the
  * later brief of the pair, which is usually the one still being written.
  */
 export function collisionFindings(corpus: Corpus, report: CollisionReport): Finding[] {
   const findings: Finding[] = [];
-  const collision = configuredSeverity(corpus, 'collision');
-  const undecided = configuredSeverity(corpus, 'collision-undecided');
-  const unscoped = configuredSeverity(corpus, 'unscoped');
-  const sharedDirectory = configuredSeverity(corpus, 'shared-directory');
-  for (const wave of report.waves) {
-    if (collision !== null) {
-      for (const c of wave.collisions) {
-        findings.push({
-          rule: 'collision',
-          severity: collision,
-          message: collisionMessage(c, wave.wave),
-          file: c.b.file,
-          line: lineOfField(c.b, 'affectedFiles') + 1,
-          brief: c.b.id ?? undefined,
-          hint: `run them in different waves, make one depend on the other, or narrow a scope`,
-          // The pair is the problem, whichever patterns meet and whatever file is named.
-          subject: label(c.a),
-        });
-      }
+  // Asked only of a rule with something left in the report told, which is a rule that is on.
+  const severity = (rule: string): Severity => configuredSeverity(corpus, rule) as Severity;
+  for (const wave of reported(corpus, report).waves) {
+    for (const c of wave.collisions) {
+      findings.push({
+        rule: 'collision',
+        severity: severity('collision'),
+        message: collisionMessage(c, wave.wave),
+        file: c.b.file,
+        line: lineOfField(c.b, 'affectedFiles') + 1,
+        brief: c.b.id ?? undefined,
+        hint: `run them in different waves, make one depend on the other, or narrow a scope`,
+        // The pair is the problem, whichever patterns meet and whatever file is named.
+        subject: label(c.a),
+      });
     }
-    if (undecided !== null) {
-      for (const u of wave.undecided) findings.push(undecidedFinding(undecided, u.a, u.b, u.patterns, wave.wave));
+    for (const u of wave.undecided) findings.push(undecidedFinding(severity('collision-undecided'), u.a, u.b, u.patterns, wave.wave));
+    for (const s of wave.shared) {
+      findings.push({
+        rule: 'shared-directory',
+        severity: severity('shared-directory'),
+        message: `writes into ${inWords(s.directories.map((d) => `${d}/`))}, as ${label(s.a)} does ${where(wave.wave)}`,
+        file: s.b.file,
+        line: lineOfField(s.b, 'affectedFiles') + 1,
+        brief: s.b.id ?? undefined,
+        hint: 'check that the two do not depend on one decision in that directory; if they do, order them',
+        subject: label(s.a),
+      });
     }
-    if (sharedDirectory !== null) {
-      for (const s of wave.shared) {
-        findings.push({
-          rule: 'shared-directory',
-          severity: sharedDirectory,
-          message: `writes into ${inWords(s.directories.map((d) => `${d}/`))}, as ${label(s.a)} does ${where(wave.wave)}`,
-          file: s.b.file,
-          line: lineOfField(s.b, 'affectedFiles') + 1,
-          brief: s.b.id ?? undefined,
-          hint: 'check that the two do not depend on one decision in that directory; if they do, order them',
-          subject: label(s.a),
-        });
-      }
-    }
-    if (unscoped !== null) {
-      for (const brief of wave.unscoped) findings.push(unscopedFinding(unscoped, brief, `the ${wave.briefs.length - 1} other brief(s) ${where(wave.wave)}`));
-    }
+    for (const brief of wave.unscoped) findings.push(unscopedFinding(severity('unscoped'), brief, `the ${wave.briefs.length - 1} other brief(s) ${where(wave.wave)}`));
   }
   return findings;
 }

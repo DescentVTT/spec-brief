@@ -136,6 +136,7 @@ Scopes are intersected as globs, not compared as strings: the two above share no
 - **One collision per pair of briefs**: two briefs whose scopes meet in several places are one collision, listing every pair of patterns that meets.
 - **Unscoped**: a brief with no scope is reported as unscoped rather than counted as safe.
 - **Undecided**: the search for a shared file has a budget; a pair it cannot decide within it is marked `?` and reported as `collision-undecided`, a warning, never as a collision and never as clean - unless the tree holds a file both patterns match and neither brief protects, which proves the collision.
+- **A mark is a finding**: the grid marks a pair, and a line beneath it says why, only for what the run reports, so a [rule](#rules) that is off marks nothing. `shared-directory` is off unless the configuration turns it on; on, two briefs that write into one directory without sharing a file are marked `~`. `--format json` lists every pair the comparison found under `waves`, and the `findings` the run reports beside them.
 
 ### `spec-brief schedule`
 
