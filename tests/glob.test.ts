@@ -556,6 +556,29 @@ describe('matching a list of files', () => {
     expect(filesMatching(glob('**'), [])).toEqual([]);
     expect(matchesAny(glob('**'), [])).toBe(false);
   });
+
+  it('asks a glob only about the files below one of its bases', () => {
+    // Asking every pattern about every file is what made a lint grow with
+    // patterns times files. The paths asked about are counted here, since a
+    // clock cannot be read under instrumentation.
+    const list = ['lib/a.ts', 'src/a.ts', 'src/b/c.ts', './src/./d.ts', 'src-x/f.ts', 'src.ts', 'src0/g.ts', 'src', 'a/src/k.ts'];
+    const asked = (pattern: string, ask: (glob: Glob, files: readonly string[]) => unknown): string[] => {
+      const parsed = glob(pattern);
+      const paths: string[] = [];
+      const match = (path: string): boolean => {
+        paths.push(path);
+        return parsed.compiled.match(path);
+      };
+      ask({ ...parsed, compiled: { ...parsed.compiled, match } }, list);
+      return paths;
+    };
+    expect(asked('src/**/*.md', filesMatching)).toEqual(['src/a.ts', 'src/b/c.ts', 'src/d.ts']);
+    expect(asked('src/**/*.md', matchesAny)).toEqual(['src/a.ts', 'src/b/c.ts', 'src/d.ts']);
+    expect(asked('{lib,a/src}/*.ts', filesMatching)).toEqual(['lib/a.ts', 'a/src/k.ts']);
+    expect(asked('nowhere/**', filesMatching)).toEqual([]);
+    // A pattern that can match at any depth has the root for a base, and is asked about every file.
+    expect(asked('**/*.md', filesMatching)).toEqual(['a/src/k.ts', 'lib/a.ts', 'src', 'src-x/f.ts', 'src.ts', 'src/a.ts', 'src/b/c.ts', 'src/d.ts', 'src0/g.ts']);
+  });
 });
 
 describe('the set questions', () => {

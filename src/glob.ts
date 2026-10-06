@@ -130,6 +130,7 @@ const indexes = new WeakMap<readonly string[], FileIndex>();
 /** The index of a list. Built once per list, which every pattern of a run shares, as {@link treeOf} is. */
 function indexOf(files: readonly string[]): FileIndex {
   const known = indexes.get(files);
+  // Only time is kept here: an index built again is the same index.
   if (known !== undefined) return known;
   const positions = new Map<string, number[]>();
   files.forEach((file, position) => {
@@ -271,6 +272,7 @@ export function writtenAlternatives(pattern: string): WrittenAlternative[] | nul
   let depth = 0;
   let open = 0;
   const stops: number[] = [];
+  // A step past the end reads `''`, which no branch acts on, so the bound could be one further.
   for (let i = 0; i < pattern.length; i += 1) {
     const ch = pattern.charAt(i);
     if (ch === '\\') {
