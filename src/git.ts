@@ -52,6 +52,7 @@ function run(cwd: string, args: readonly string[]): Promise<Run> {
     execFile(
       'git',
       ['-c', 'core.quotepath=off', ...args],
+      // windowsHide keeps a console window from flashing up on Windows; no other host has one to hide.
       { cwd, encoding: 'utf8', maxBuffer: 256 * 1024 * 1024, windowsHide: true },
       (error, stdout, stderr) => done({ ok: error === null, stdout, stderr }),
     );
@@ -72,7 +73,7 @@ function records(output: string): string[] {
 export function parseNumstat(output: string): FileChange[] {
   // `show --format=` leaves the empty header's newline in front of the first record.
   return records(output.replace(/^\n+/, '')).map((record) => {
-    const [added = '-', deleted = '-', ...path] = record.split('\t');
+    const [added, deleted, ...path] = record.split('\t') as [string, string, ...string[]];
     return {
       path: path.join('\t'),
       insertions: added === '-' ? null : Number(added),
@@ -125,7 +126,7 @@ export class NodeGit implements Git {
     if (!sha.ok) return null;
     const hash = sha.stdout.trim();
     const show = await run(this.cwd, ['show', '-s', '--format=%an%x00%aI', hash]);
-    const [author = '', date = ''] = show.stdout.trim().split('\0');
+    const [author, date] = show.stdout.trim().split('\0') as [string, string];
     return { sha: hash, author, date };
   }
 
@@ -153,7 +154,7 @@ export class NodeGit implements Git {
     const result = await run(this.cwd, ['status', '--porcelain=v1', '-z', '--untracked-files=all']);
     if (!result.ok) throw new Error(`git status failed: ${result.stderr.trim()}`);
     const prefix = await this.rootPrefix();
-    return parsePorcelain(result.stdout).map((path) => (prefix === '' ? path : relativePath(prefix, path)));
+    return parsePorcelain(result.stdout).map((path) => relativePath(prefix, path));
   }
 
   async files(): Promise<string[]> {
@@ -170,6 +171,7 @@ export class NodeGit implements Git {
 
 /** The web address of a pull request, for remotes on github.com. */
 export function pullRequestUrl(remote: string | null, number: number): string | null {
+  // Said for the reader and the compiler: no remote reads as the text "null", which is no address either.
   if (remote === null) return null;
   const match = /github\.com[:/]([^/\s]+)\/([^/\s]+?)(?:\.git)?\/?$/.exec(remote);
   if (!match) return null;

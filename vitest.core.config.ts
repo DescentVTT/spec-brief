@@ -18,6 +18,7 @@ export default defineConfig({
       'tests/cli.test.ts',
       'tests/engine.test.ts',
       'tests/io.test.ts',
+      'tests/io-faults.test.ts',
       'tests/source.test.ts',
       'tests/vendor.test.ts',
       '**/node_modules/**',

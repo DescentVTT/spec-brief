@@ -1,4 +1,5 @@
-import { existsSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { existsSync, readdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { afterAll, describe, expect, it } from 'vitest';
@@ -16,6 +17,9 @@ function dir(name: string): string {
 afterAll(() => {
   for (const d of made) rmSync(d, { recursive: true, force: true });
 });
+
+/** The directories a walk never enters, as the interface promises them. */
+const IGNORED = ['.git', '.hg', '.svn', 'node_modules', 'dist', 'build', 'coverage', 'target', '.venv', '__pycache__', '.stryker-tmp'];
 
 describe('the Node filesystem', () => {
   it('reads, writes atomically, lists, walks and removes', async () => {
@@ -57,6 +61,21 @@ describe('the Node filesystem', () => {
     await expect(fs.write('target', 'cannot replace a directory')).rejects.toThrow();
     expect(readdirSync(root).filter((n) => n.endsWith('.tmp'))).toEqual([]);
   });
+
+  it("never walks into build output or another tool's state, at the root or below it", async () => {
+    const files = Object.fromEntries(['src/dist.ts', ...IGNORED.flatMap((name) => [`${name}/x`, `pkg/${name}/y`])].map((path) => [path, '']));
+    const root = dir('fs-ignored');
+    writeTree(root, files);
+    expect(await new NodeFileSystem(root).walk()).toEqual(['src/dist.ts']);
+    expect(await new MemoryFileSystem(files).walk()).toEqual(['src/dist.ts']);
+  });
+
+  it('neither enters nor lists a link to a directory: one that leads back to the root would never end', async () => {
+    const root = dir('fs-link');
+    writeTree(root, { 'a.md': '', 'sub/b.md': '' });
+    symlinkSync(root, join(root, 'sub', 'loop'), 'junction');
+    expect(await new NodeFileSystem(root).walk()).toEqual(['a.md', 'sub/b.md']);
+  });
 });
 
 describe('the in-memory filesystem', () => {
@@ -75,6 +94,14 @@ describe('the in-memory filesystem', () => {
     await fs.remove('c.md');
     await expect(fs.remove('c.md')).rejects.toThrow('c.md does not exist');
     expect([...fs.files.keys()].sort()).toEqual(['a/b.md', 'd.md', 'node_modules/x']);
+  });
+
+  it('lists and walks in order whatever order it was filled in, and has a root when it holds nothing', async () => {
+    const fs = new MemoryFileSystem({ 'b.md': '', 'a.md': '', 'z/y.md': '', 'z/x.md': '' });
+    expect(await fs.list('')).toEqual(['a.md', 'b.md']);
+    expect(await fs.list('z')).toEqual(['x.md', 'y.md']);
+    expect(await fs.walk()).toEqual(['a.md', 'b.md', 'z/x.md', 'z/y.md']);
+    expect(await new MemoryFileSystem().list('')).toEqual([]);
   });
 
   it('fails exactly the operation a test chooses', async () => {
@@ -97,6 +124,9 @@ describe('git output', () => {
     ]);
     expect(parseNumstat('\n\n2\t2\tb\0')).toEqual([{ path: 'b', insertions: 2, deletions: 2 }]);
     expect(parseNumstat('')).toEqual([]);
+    // Only the newlines in front of the first record are the header's: a name may hold one.
+    expect(parseNumstat('\n\n-\t-\tb.bin\0')).toEqual([{ path: 'b.bin', insertions: null, deletions: null }]);
+    expect(parseNumstat('1\t0\twith\nnewline\0')).toEqual([{ path: 'with\nnewline', insertions: 1, deletions: 0 }]);
   });
 
   it('parses porcelain status, skipping the original path of a rename or copy', () => {
@@ -128,7 +158,7 @@ describe('real git', () => {
     const g = new NodeGit(root);
     expect(await NodeGit.toplevel(join(root))).toBe(root);
     const tip = await g.commit('HEAD');
-    expect(tip).toEqual({ sha: second, author: 'Tester', date: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/) });
+    expect(tip).toEqual({ sha: second, author: 'Tester', date: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:Z|[+-]\d{2}:\d{2})$/) });
     expect(await g.commit('no-such-ref')).toBeNull();
     await expect(g.commit('--output=x')).rejects.toThrow('is not a revision');
     await expect(g.commit(' ')).rejects.toThrow('is not a revision');
@@ -140,7 +170,9 @@ describe('real git', () => {
       { path: 'a.txt', insertions: 1, deletions: 0 },
       { path: 'c.txt', insertions: 1, deletions: 0 },
     ]);
-    await expect(g.changes('nothing', second)).rejects.toThrow('git could not diff');
+    // What git said, without the newline it ends on.
+    await expect(g.changes('nothing', second)).rejects.toThrow(new RegExp(`^git could not diff nothing\\.\\.${second}: fatal: [^]*\\S$`));
+    await expect(g.changes(null, 'nothing')).rejects.toThrow(/^git could not diff nothing\^\.\.nothing: fatal: [^]*\S$/);
     expect(await g.dirty()).toEqual(['dirty.txt']);
     expect((await g.files()).sort()).toEqual(['a.txt', 'b.bin', 'c.txt', 'dirty.txt']);
     expect(await g.remoteUrl('origin')).toBe('https://github.com/o/r.git');
@@ -168,5 +200,43 @@ describe('real git', () => {
     const g = new NodeGit(join(outside, 'does-not-exist'));
     await expect(g.dirty()).rejects.toThrow('git status failed');
     await expect(g.files()).rejects.toThrow('git ls-files failed');
+    // What git said, without the newline it ends on.
+    const plain = new NodeGit(outside);
+    await expect(plain.dirty()).rejects.toThrow(/^git status failed: fatal: not a git repository[^]*\S$/);
+    await expect(plain.files()).rejects.toThrow(/^git ls-files failed: fatal: not a git repository[^]*\S$/);
+  });
+
+  it('reads a commit with nothing to start from against its first parent: a merge, a tag that names one, the first of a history', async () => {
+    const root = dir('git-merge');
+    initRepo(root);
+    writeTree(root, { 'a.txt': 'one\n' });
+    commitAll(root, 'first');
+    const first = head(root);
+    git(root, 'checkout', '-q', '-b', 'side');
+    writeTree(root, { 'side.txt': 's\n' });
+    commitAll(root, 'side');
+    git(root, 'checkout', '-q', 'main');
+    writeTree(root, { 'main.txt': 'm\n' });
+    commitAll(root, 'main');
+    git(root, 'merge', '-q', '--no-ff', '-m', 'merge', 'side');
+    git(root, 'tag', '-a', '-m', 'the round', 'round-1');
+    const g = new NodeGit(root);
+    const merged = [{ path: 'side.txt', insertions: 1, deletions: 0 }];
+    expect(await g.changes(null, head(root))).toEqual(merged);
+    expect(await g.changes(null, 'round-1')).toEqual(merged);
+    expect(await g.changes(null, first)).toEqual([{ path: 'a.txt', insertions: 1, deletions: 0 }]);
+  });
+
+  it('lists a tree whose paths together pass a megabyte, which is where a process stops being read by default', async () => {
+    const root = dir('git-large');
+    initRepo(root);
+    // Entries in the index need no files: twelve thousand paths of a hundred characters.
+    const blob = execFileSync('git', ['hash-object', '-w', '--stdin'], { cwd: root, input: '', encoding: 'utf8' }).trim();
+    const paths = Array.from({ length: 12_000 }, (_, i) => `${'d'.repeat(90)}/${String(i).padStart(9, '0')}`);
+    execFileSync('git', ['update-index', '--index-info'], { cwd: root, input: paths.map((path) => `100644 ${blob}\t${path}\n`).join('') });
+    const listed = await new NodeGit(root).files();
+    expect(listed).toHaveLength(12_000);
+    expect(listed.join('\n').length).toBeGreaterThan(1024 * 1024);
+    expect(listed[11_999]).toBe(paths[11_999]);
   });
 });
