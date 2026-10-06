@@ -54,6 +54,7 @@ export interface LintOptions {
 const RANK: Readonly<Record<Severity, number>> = { note: 0, warning: 1, error: 2 };
 
 function lower(a: Severity, b: Severity): Severity {
+  // Equal ranks are one severity, so either is the answer.
   return RANK[a] <= RANK[b] ? a : b;
 }
 
@@ -125,7 +126,7 @@ export async function lint(corpus: Corpus, options: LintOptions = {}): Promise<F
         const configured = severity as Severity;
         findings.push({
           rule: id,
-          severity: result.severity === undefined ? configured : lower(result.severity, configured),
+          severity: lower(result.severity ?? configured, configured),
           message: result.message,
           file: brief.file,
           line: Math.max(1, Math.trunc(result.line)),
@@ -141,8 +142,7 @@ export async function lint(corpus: Corpus, options: LintOptions = {}): Promise<F
 
 /** Strings by code unit, which is the same order on every host and in every locale. */
 function order(a: string, b: string): number {
-  if (a === b) return 0;
-  return a < b ? -1 : 1;
+  return a < b ? -1 : a > b ? 1 : 0;
 }
 
 export function sortFindings(findings: readonly Finding[]): Finding[] {
