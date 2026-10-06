@@ -11,6 +11,23 @@ release that can turn a run red. This is the family's policy, recorded in
 releases up to 0.2.7 came before it, and several of their patches changed
 what a run reports.
 
+## Unreleased
+
+### Fixed
+
+- A command, a brief type, a configuration key or a template placeholder
+  named as something every JavaScript object answers to - `constructor`,
+  `toString`, `__proto__` - is read as the unknown name it is.
+  `spec-brief constructor` ended on a stack trace with exit 1, and now says
+  `"constructor" is not a command` with exit 2. A brief with
+  `type: constructor` stopped `lint` for every brief with
+  `unexpected error: TypeError: typed is not iterable`, and is now an
+  `unknown-type` finding beside the others; `new --type toString` is refused
+  by name. A configuration key `toString` was reported as
+  `must be undefined`, and is now `is not a known key`. `{constructor}` in a
+  brief template is left as written, where the new brief was given a
+  function's source.
+
 ## 0.4.1
 
 `lint`, `matrix`, `schedule` and `archive` over a large repository take time

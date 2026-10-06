@@ -116,7 +116,8 @@ export function validate(schema: Schema, value: unknown, path = ''): string[] {
       const known = Object.keys(schema.properties);
       const problems: string[] = [];
       for (const key of Object.keys(record)) {
-        const property = schema.properties[key];
+        // Its own keys only: `constructor` is on every object, and is no key of a configuration.
+        const property = Object.hasOwn(schema.properties, key) ? schema.properties[key] : undefined;
         if (property === undefined) {
           const guess = closest(key, known);
           problems.push(`"${at(path, key)}" is not a known key${guess === undefined ? '' : `; did you mean "${guess}"?`}`);

@@ -9,7 +9,7 @@
  */
 
 import { BUILT_IN_FIELDS, type Brief, knownFields, lineOfField } from './brief.js';
-import { type Config, type SectionRule, statusWords } from './config.js';
+import { type Config, type SectionRule, statusWords, typeSections } from './config.js';
 import { type Corpus, cycleSubject, dependencyCycles, duplicateIds, idKey, resolveDependency } from './corpus.js';
 import { findEntry } from './frontmatter.js';
 import { integrityOf } from './integrity.js';
@@ -68,7 +68,7 @@ const at = (line0: number): number => line0 + 1;
 
 /** The sections a brief must carry: the configured ones, then its type's. */
 export function sectionRules(brief: Brief, config: Config): SectionRule[] {
-  const typed = brief.type === null ? [] : (config.types[brief.type] ?? []);
+  const typed = brief.type === null ? [] : (typeSections(config, brief.type) ?? []);
   return [...config.sections, ...typed];
 }
 
@@ -334,7 +334,7 @@ export const RULES: readonly Rule[] = [
     severity: 'error',
     description: 'A declared type is one the configuration defines.',
     check: live(({ brief, config }) => {
-      if (brief.type === null || config.types[brief.type] !== undefined) return [];
+      if (brief.type === null || typeSections(config, brief.type) !== undefined) return [];
       const names = Object.keys(config.types);
       return [
         {
