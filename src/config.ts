@@ -432,7 +432,9 @@ export async function locateConfig(
   exists: (path: string) => Promise<boolean>,
 ): Promise<string | undefined> {
   let directory = start;
-  // Bounded by the depth of the path: each pass moves one directory up.
+  // Each pass moves one directory up, and no path is 256 deep: the bound is
+  // never met, however it is counted. It is there so that the loop ends by
+  // construction.
   for (let depth = 0; depth < 256; depth += 1) {
     const found: string[] = [];
     for (const name of CONFIG_FILES) {
@@ -444,6 +446,7 @@ export async function locateConfig(
     }
     if (found[0] !== undefined) return found[0];
     const parent = dirname(directory);
+    // The root is its own parent. Left to the bound, every pass after this one would ask the root again and hear the same.
     if (parent === directory) return undefined;
     directory = parent;
   }
@@ -464,14 +467,16 @@ export function configJsonSchema(): Record<string, unknown> {
 /** The configuration `init` writes: every default spelled out, so it can be edited rather than looked up. */
 export function initialConfig(briefs: string, archive: string): Record<string, unknown> {
   const d = DEFAULT_CONFIG;
+  // What the default sections say, and no more: each has a hint, and none
+  // requires text. A default that comes to say more fails the test that this
+  // file means the defaults.
   const sectionJson = (s: SectionRule): unknown => {
     const out: Record<string, unknown> = { name: s.name };
     if (s.aliases.length > 0) out['aliases'] = s.aliases;
-    if (s.mustContain.length > 0) out['mustContain'] = s.mustContain;
     if (s.checklist) out['checklist'] = true;
     if (s.optional) out['optional'] = true;
-    if (s.hint !== undefined) out['hint'] = s.hint;
-    return Object.keys(out).length === 1 ? s.name : out;
+    out['hint'] = s.hint;
+    return out;
   };
   return {
     $schema: SCHEMA_PATH,

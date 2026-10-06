@@ -224,8 +224,9 @@ describe('finding the file', () => {
     expect(await locateConfig(join('/r', 'a'), at([]))).toBeUndefined();
   });
 
-  it('refuses a directory holding both names', async () => {
-    await expect(locateConfig('/r', at([join('/r', '.spec-brief.json'), join('/r', 'spec-brief.json')]))).rejects.toThrow('keep one');
+  it('refuses a directory holding both names, naming it and them', async () => {
+    const both = locateConfig('/r', at([join('/r', '.spec-brief.json'), join('/r', 'spec-brief.json')]));
+    await expect(both).rejects.toHaveProperty('message', '/r: holds both .spec-brief.json and spec-brief.json; keep one');
   });
 });
 
