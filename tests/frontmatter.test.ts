@@ -278,6 +278,19 @@ describe('editing', () => {
     expect(setEntryKeepingComment(['# T'], null, 'wave', '1')).toEqual(['---', 'wave: 1', '---', '# T']);
   });
 
+  it('keeps nothing that is not a comment on the value\'s own line', () => {
+    const set = (...written: string[]): string[] => {
+      const lines = ['---', ...written, '---'];
+      return setEntryKeepingComment(lines, readFrontMatter(lines), 'wave', '3');
+    };
+    // A value continued on the next line is rewritten whole, the comment beside its first line with it.
+    expect(set('wave: 2 # was 1', '  and more')).toEqual(['---', 'wave: 3', '---']);
+    // Spaces left after a value are no comment.
+    expect(set('wave: 2   ')).toEqual(['---', 'wave: 3', '---']);
+    // Only spaces and tabs lead to a comment: a "#" after a no-break space is kept by nobody, whatever follows it.
+    expect(set(`wave: 2${String.fromCharCode(0xa0)}# was 1 # really`)).toEqual(['---', 'wave: 3', '---']);
+  });
+
   it('removes an entry with its value lines, and a missing key changes nothing', () => {
     expect(removeEntry(lines, readFrontMatter(lines), 'deps')).toEqual(['---', 'status: proposed', 'date: 2026-09-24', '---', '', '# T']);
     expect(removeEntry(lines, readFrontMatter(lines), 'absent')).toEqual(lines);

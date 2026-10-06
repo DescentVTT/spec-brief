@@ -91,4 +91,15 @@ describe('rewriting', () => {
     const s = scan(lines('[a](001_a.md)\n[b](./001_a.md#x) [c](001_a.md)\n[d](002.md)\n[e](#only)\n[f](https://x/001_a.md)'));
     expect(linesLinkingTo(s, 'briefs', 'briefs/001_a.md')).toEqual([0, 1]);
   });
+
+  it('takes no absolute path for a link to the file beside it, where the two spell the same path', () => {
+    // Read from the root, "/001_a.md" and "001_a.md" name one file, and only the second is relative.
+    const s = scan(lines('[abs](/001_a.md)\n[rel](001_a.md)'));
+    expect(linesLinkingTo(s, '', '001_a.md')).toEqual([1]);
+  });
+
+  it('takes a query alone for a link to the document, not to the directory it is read from', () => {
+    const s = scan(lines('[q](?x=1)\n[d](.)'));
+    expect(linesLinkingTo(s, 'briefs', 'briefs')).toEqual([1]);
+  });
 });
