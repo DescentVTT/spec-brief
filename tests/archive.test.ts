@@ -67,10 +67,29 @@ describe('refusals', () => {
     expect(openTasks(the(none, '001'), none)).toEqual([]);
   });
 
-  it('refuses while a dependency is live, and not once it is archived', () => {
-    const corpus = corpusOf({ [A]: goodBrief({ dependsOn: '[002, 003, 001]' }), [B]: goodBrief(), 'briefs/archive/003_c.md': goodBrief({ status: 'archived' }) });
+  it('refuses while a dependency is live, and not once it is archived, for itself, or for one no brief answers to', () => {
+    const corpus = corpusOf({ [A]: goodBrief({ dependsOn: '[002, 003, 001, 404]' }), [B]: goodBrief(), 'briefs/archive/003_c.md': goodBrief({ status: 'archived' }) });
     const plan = planArchive(corpus, the(corpus, '001'), { date: '2026-09-24' });
     expect(plan.blocking.map((f) => f.message)).toEqual(['depends on 002, which is not archived yet']);
+  });
+
+  it('takes a note after a line of only spaces, and after a stop with a space left behind it, and none after a stop inside a word', () => {
+    const body = [
+      '',
+      '## Deliverables',
+      '',
+      '- [ ] Add a cache',
+      '  \t',
+      '  **Rejected** by 012.',
+      '- [ ] Add a queue. ',
+      '  **Rejected** by 012.',
+      '- [ ] Move to v1.2',
+      '  **Rejected** by 012.',
+      '',
+    ].join('\n');
+    const corpus = corpusOf({ [A]: goodBrief({}, body) });
+    const plan = planArchive(corpus, the(corpus, '001'), { date: '2026-09-24' });
+    expect(plan.blocking.map((f) => f.message)).toEqual(['"Move to v1.2" is neither ticked nor dispositioned']);
   });
 
   it('refuses uncommitted work outside the briefs, unless allowed', () => {
@@ -89,6 +108,11 @@ describe('refusals', () => {
     }
     const excluding = corpusOf({ [A]: goodBrief() }, config({ exclude: ['00*'] }));
     expect(planArchive(excluding, the(excluding, '001'), { date: '2026-09-24', dirty: ['briefs/00_INDEX.md'] }).blocking.map((f) => f.rule)).toEqual(['dirty-tree']);
+    // An exclusion takes out the names it matches and no other: the brief beside the index is still the ceremony.
+    const indexed = corpusOf({ [A]: goodBrief() }, config({ exclude: ['00_*'] }));
+    expect(planArchive(indexed, the(indexed, '001'), { date: '2026-09-24', dirty: ['briefs/001_a.md', 'briefs/00_INDEX.md'] }).blocking.map((f) => f.message)).toEqual([
+      'the working tree has uncommitted changes outside the briefs: briefs/00_INDEX.md',
+    ]);
   });
 
   it('refuses a change to a protected file, and reports it once', () => {
@@ -115,6 +139,38 @@ describe('refusals', () => {
     expect(strict.blocking.map((f) => [f.rule, f.severity, f.message])).toEqual([['out-of-scope', 'error', 'the round changed 1 file(s) outside affectedFiles: lib/1']]);
     const unscoped = corpusOf({ [A]: goodBrief() });
     expect(planArchive(unscoped, the(unscoped, '001'), { date: '2026-09-24', commit: COMMIT, changes }).warnings).toEqual([]);
+  });
+
+  it('checks the round against the scope patterns that parse, and leaves one that does not to lint', () => {
+    const changes = ['src/a.ts', 'lib/x.ts'].map((path) => ({ path, insertions: 1, deletions: 0 }));
+    // Alone, a pattern that does not parse scopes nothing: there is no scope to be outside of, and nothing protected.
+    const alone = corpusOf({ [A]: goodBrief({ affectedFiles: '["a{"]', protectedFiles: '["/abs"]' }) });
+    const plan = planArchive(alone, the(alone, '001'), { date: '2026-09-24', commit: COMMIT, changes });
+    expect([plan.blocking, plan.warnings]).toEqual([[], []]);
+    const beside = corpusOf({ [A]: goodBrief({ affectedFiles: '["a{", src/**]' }) });
+    expect(planArchive(beside, the(beside, '001'), { date: '2026-09-24', commit: COMMIT, changes }).warnings.map((f) => [f.rule, f.paths])).toEqual([
+      ['out-of-scope', ['lib/x.ts']],
+    ]);
+  });
+
+  it('warns that a scope went unchecked when the request holds no changes and gives no reason', () => {
+    const corpus = corpusOf({ [A]: linked });
+    const plan = planArchive(corpus, the(corpus, '001'), { date: '2026-09-24' });
+    expect(plan.blocking).toEqual([]);
+    expect(plan.warnings.map((f) => [f.rule, f.severity, f.line, f.message, f.hint])).toEqual([
+      [
+        'scope-unmeasured',
+        'warning',
+        4,
+        'protectedFiles and affectedFiles went unchecked: no commit or base was named, so the files the round changed were not read',
+        'pass --commit <rev> for the commit the round landed as, or --base <rev> for the branch it started from, or set "archiving.base"',
+      ],
+    ]);
+    // Changes that were read are a measurement, even when there are none.
+    expect(planArchive(corpus, the(corpus, '001'), { date: '2026-09-24', changes: [] }).warnings).toEqual([]);
+    // A brief with no scope has nothing to go unchecked.
+    const unscoped = corpusOf({ [A]: goodBrief() });
+    expect(planArchive(unscoped, the(unscoped, '001'), { date: '2026-09-24' }).warnings).toEqual([]);
   });
 
   it('treats a changed path as a file, whatever its name', () => {
@@ -146,10 +202,15 @@ describe('refusals', () => {
     const cfg = config({ status: { field: null } });
     const corpus = corpusOf({ [A]: toml }, cfg);
     const plan = planArchive(corpus, the(corpus, '001'), { date: '2026-09-24' });
-    expect(plan.blocking.map((f) => [f.rule, f.line, f.message, f.hint])).toEqual([
-      ['front-matter', 1, 'the front matter is TOML, which spec-brief does not write', 'write the front matter as YAML between "---" lines'],
+    expect(plan.blocking.map((f) => [f.rule, f.severity, f.line, f.message, f.hint])).toEqual([
+      ['front-matter', 'error', 1, 'the front matter is TOML, which spec-brief does not write', 'write the front matter as YAML between "---" lines'],
     ]);
     expect(write(plan, 'briefs/archive/001_a.md').startsWith('+++\nstatus = "active"\n+++\n\n<!-- spec-brief:banner -->')).toBe(true);
+    // Another refusal beside it does not stand in for it.
+    expect(planArchive(corpus, the(corpus, '001'), { date: '2026-09-24', dirty: ['src/a.ts'] }).blocking.map((f) => f.rule)).toEqual(['dirty-tree', 'front-matter']);
+    // The status is an edit too: with the freeze off and a status field, there is still a word to set.
+    const unfrozen = corpusOf({ [A]: toml }, config({ archiving: { freeze: false } }));
+    expect(planArchive(unfrozen, the(unfrozen, '001'), { date: '2026-09-24' }).blocking.map((f) => f.rule)).toEqual(['front-matter']);
     // Lint reports it already where it is an error; the refusal is not said twice.
     const findings = await lint(corpus);
     expect(planArchive(corpus, the(corpus, '001'), { date: '2026-09-24', findings }).blocking.map((f) => [f.rule, f.message])).toEqual([
@@ -257,6 +318,22 @@ describe('the archived text', () => {
     expect(renderBanner([], {})).toEqual([]);
   });
 
+  it('leaves out each line whose one placeholder the round has nothing for', () => {
+    const banner = ['id {id}', 'title {title}', 'by {author}', 'at {commit}', 'changed {diffstat}', 'kept {date}'];
+    const cfg = config({ id: { source: 'frontmatter' }, files: '*.md', archiving: { banner } });
+    const corpus = corpusOf({ 'briefs/x.md': '---\nstatus: active\n---\n' }, cfg);
+    // A diffstat is a commit's: changes read without one write none.
+    const plan = planArchive(corpus, corpus.briefs[0]!, { date: '2026-09-24', changes: [{ path: 'x', insertions: 1, deletions: 0 }] });
+    expect(plan.banner).toEqual([BANNER_OPEN, '> kept 2026-09-24', BANNER_CLOSE]);
+  });
+
+  it('writes no banner, and no blank line in place of one, when the template leaves nothing', () => {
+    const corpus = corpusOf({ [A]: goodBrief() }, config({ archiving: { banner: [], freeze: false } }));
+    const plan = planArchive(corpus, the(corpus, '001'), { date: '2026-09-24' });
+    expect(plan.banner).toEqual([]);
+    expect(write(plan, 'briefs/archive/001_a.md')).toBe(goodBrief({ status: 'archived' }));
+  });
+
   it('keeps CRLF and a byte-order mark, adds front matter where there is none, and can skip the freeze and the links', () => {
     const cfg = config({ archiving: { freeze: false, rewriteLinks: false } });
     const bom = String.fromCharCode(0xfeff);
@@ -360,6 +437,15 @@ describe('reopening', () => {
     const cfg = config({ status: { field: null }, archiving: { rewriteLinks: false } });
     const corpus = corpusOf({ 'briefs/archive/001_a.md': `${BANNER_OPEN}\n> x\n${BANNER_CLOSE}\n\n# T\n` }, cfg);
     expect(write(planUnarchive(corpus, corpus.briefs[0]!), A)).toBe('# T\n');
+  });
+
+  it('takes back the block archival gave a brief with no front matter to hold its hash', () => {
+    const cfg = config({ status: { field: null }, sections: [], types: {} });
+    const bare = corpusOf({ [A]: '# Bare\n' }, cfg);
+    const archived = write(planArchive(bare, the(bare, '001'), { date: '2026-09-24' }), 'briefs/archive/001_a.md');
+    expect(archived.split('\n').slice(0, 3)).toEqual(['---', `integrity: ${integrityOf(archived)}`, '---']);
+    const after = corpusOf({ 'briefs/archive/001_a.md': archived }, cfg);
+    expect(write(planUnarchive(after, the(after, '001')), A)).toBe('# Bare\n');
   });
 
   it('rewrites every destination a link or a definition writes, and restores each on reopening', () => {
@@ -532,6 +618,24 @@ describe('the transaction', () => {
       ]),
     ).rejects.toThrow('every change was rolled back');
     expect(Object.fromEntries(fs.files)).toEqual({ a: '1', b: '2' });
+  });
+
+  it('undoes the completed operations last first, and names the ones it could not undo in that order', async () => {
+    const fs = new MemoryFileSystem({ a: '1', b: '2' });
+    const writes = new Map<string, number>();
+    // The first write of a and of b goes through; putting either back does not.
+    fs.fail = (_, path) => {
+      writes.set(path, (writes.get(path) ?? 0) + 1);
+      return path === 'c' || (writes.get(path) as number) > 1;
+    };
+    const error = await applyPlan(fs, [
+      { kind: 'write', path: 'a', content: 'x', before: '1' },
+      { kind: 'write', path: 'b', content: 'y', before: '2' },
+      { kind: 'write', path: 'c', content: 'z', before: null },
+    ]).catch((e: unknown) => e);
+    expect((error as Error).message).toBe(
+      'injected failure writing c; the rollback also failed (b: injected failure writing b; a: injected failure writing a), so check these files by hand',
+    );
   });
 
   it('says so when the rollback fails too, and names the files', async () => {

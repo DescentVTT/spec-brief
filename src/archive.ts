@@ -11,7 +11,7 @@
 import { BANNER_CLOSE, BANNER_OPEN, type Brief, lineOfField } from './brief.js';
 import type { Config } from './config.js';
 import { type Corpus, resolveDependency } from './corpus.js';
-import { editable, readFrontMatter, removeEntry, renderScalar, setEntry } from './frontmatter.js';
+import { editable, type FrontMatter, readFrontMatter, removeEntry, renderScalar, setEntry } from './frontmatter.js';
 import type { CommitInfo, FileChange } from './git.js';
 import { type Glob, matchGlob, parseGlob } from './glob.js';
 import { INTEGRITY_FIELD, integrityOf } from './integrity.js';
@@ -182,13 +182,17 @@ function globs(patterns: readonly string[]): Glob[] {
   });
 }
 
-/** A list marker opening a line, after its indentation. */
-const ITEM_START = /^[ \t]*(?:[-*+]|\d{1,9}[.)])[ \t]+/;
+/** A list marker opening a line, after its indentation, and the space that makes it one. */
+const ITEM_START = /^[ \t]*(?:[-*+]|\d{1,9}[.)])[ \t]/;
 
 /** A line that ends a sentence: a stop, then only closing marks. */
 const SENTENCE_END = /[.!?][)\]*_"'`]*[ \t]*$/;
 
-/** Where a note's text starts: after its indentation and a list marker, if it has one. */
+/**
+ * Where a note's text starts: after its indentation and a list marker, if it
+ * has one. Every part is optional, so it matches at the start of any line,
+ * anchored or not.
+ */
 const NOTE_START = /^[ \t]*(?:(?:[-*+]|\d{1,9}[.)])[ \t]+)?/;
 
 /**
@@ -248,6 +252,7 @@ function isBriefPath(path: string, config: Config): boolean {
 /** Task items that must be closed before a brief can be archived. */
 export function openTasks(brief: Brief, corpus: Corpus): Brief['tasks'] {
   const { tasks: scope, dispositions } = corpus.config.archiving;
+  // A box is never on a heading's line or past the last one, so neither bound is ever met.
   const inScope =
     scope === 'all'
       ? brief.tasks
@@ -293,11 +298,13 @@ function withoutBanner(lines: readonly string[], banner: Brief['banner']): strin
 
 /**
  * Inserts a banner under the front matter, after the blank line that usually
- * follows it, and writes one blank line after the banner.
+ * follows it, and writes one blank line after the banner. A front matter never
+ * closed has no line to go under: its `close` is -1, which is the top, as for
+ * a brief with none.
  */
 function withBanner(lines: readonly string[], banner: readonly string[]): string[] {
   const frontMatter = readFrontMatter(lines);
-  let at = frontMatter === null || frontMatter.close < 0 ? 0 : frontMatter.close + 1;
+  let at = frontMatter === null ? 0 : frontMatter.close + 1;
   if (at > 0 && lines[at]?.trim() === '') at += 1;
   return [...lines.slice(0, at), ...banner, '', ...lines.slice(at)];
 }
@@ -305,7 +312,8 @@ function withBanner(lines: readonly string[], banner: readonly string[]): string
 /**
  * Sets the integrity field to the hash of everything else. The field is put in
  * place before hashing, so the lines hashed are exactly the lines a later
- * check sees once it takes the field back out.
+ * check sees once it takes the field back out. The hash is taken without the
+ * field's line, so the word that holds its place is never read.
  */
 function withIntegrity(lines: readonly string[]): string[] {
   const placed = setEntry(lines, readFrontMatter(lines), INTEGRITY_FIELD, 'pending');
@@ -325,7 +333,7 @@ function writable(brief: Brief, edits: boolean, blocking: Finding[]): boolean {
   const frontMatter = brief.frontMatter;
   if (frontMatter === null || editable(frontMatter)) return true;
   if (edits && !blocking.some((f) => f.rule === 'front-matter')) {
-    const open = frontMatter.close < 0;
+    const open = frontMatter.close === -1;
     blocking.push(
       problem(
         brief,
@@ -428,10 +436,9 @@ export function planArchive(corpus: Corpus, brief: Brief, request: ArchiveReques
   const warnings: Finding[] = [];
 
   // Under --strict a warning is an error, here as in lint.
-  for (const finding of request.findings ?? []) {
-    const refuses = finding.severity === 'error' || (request.strict === true && finding.severity === 'warning');
-    if (finding.file === brief.file && refuses) blocking.push(finding);
-  }
+  const refuses = (finding: Finding): boolean =>
+    finding.file === brief.file && (finding.severity === 'error' || (request.strict === true && finding.severity === 'warning'));
+  blocking.push(...(request.findings?.filter(refuses) ?? []));
   // Only a status field can say "draft" or "deferred", so there is one to point at.
   const field = config.status.field as string;
   if (brief.status === 'draft') {
@@ -649,8 +656,10 @@ export function planUnarchive(corpus: Corpus, brief: Brief, request: UnarchiveRe
   // A block this reopening emptied goes too, and the brief is the one that
   // was archived. One that was empty before it was archived reads the same
   // once the hash is in it, and goes with it; one empty in the archive stays.
-  const left = readFrontMatter(lines);
-  const emptied = left !== null && left.kind === 'yaml' && left.close === 1 && (brief.frontMatter?.close ?? 0) > 1;
+  // No edit above reaches the opening line, so a brief that had a block has
+  // one still, and only a YAML block has lost a line.
+  const had = brief.frontMatter;
+  const emptied = had !== null && had.close > 1 && (readFrontMatter(lines) as FrontMatter).close === 1;
   if (emptied) lines = lines.slice(2);
 
   const incoming = inbound(corpus, brief, to);
