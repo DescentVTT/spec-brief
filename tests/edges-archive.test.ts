@@ -63,6 +63,10 @@ describe('archiving', () => {
     const corpus = corpusOf({ [A]: goodBrief() });
     const note = { rule: 'glob-matches-nothing', severity: 'note' as const, message: 'm', file: A, line: 1 };
     expect(planArchive(corpus, corpus.briefs[0]!, { date: '2026-09-24', findings: [note], strict: true }).blocking).toEqual([]);
+    const warning = { rule: 'placeholder', severity: 'warning' as const, message: 'w', file: A, line: 9 };
+    const findings = [note, warning, { ...warning, file: 'briefs/002_b.md' }];
+    expect(planArchive(corpus, corpus.briefs[0]!, { date: '2026-09-24', findings, strict: true }).blocking).toEqual([warning]);
+    expect(planArchive(corpus, corpus.briefs[0]!, { date: '2026-09-24', findings }).blocking).toEqual([]);
   });
 
   it('keeps a change in scope when any one of the scope patterns covers it', () => {
@@ -91,6 +95,14 @@ describe('archiving', () => {
     expect(out).toContain(`${BANNER_CLOSE}\n\n# A brief`);
   });
 
+  it('puts the banner after a line of only spaces under the front matter, as after an empty one', () => {
+    const spaced = goodBrief().replace('---\n\n# A brief', '---\n \t\n# A brief');
+    const corpus = corpusOf({ [A]: spaced });
+    const out = written(planArchive(corpus, corpus.briefs[0]!, { date: '2026-09-24' }), TO);
+    expect(out).toContain(`---\n \t\n${BANNER_OPEN}\n`);
+    expect(out).toContain(`${BANNER_CLOSE}\n\n# A brief`);
+  });
+
   it('puts the banner at the very top of a file with no front matter, even one starting blank', () => {
     const cfg = config({ status: { field: null }, archiving: { freeze: false } });
     const corpus = corpusOf({ [A]: '\n# T\n' }, cfg);
@@ -103,6 +115,18 @@ describe('archiving', () => {
     const cfg = config({ status: { field: null }, archiving: { rewriteLinks: false } });
     const corpus = corpusOf({ [TO]: `---\n---\n${BANNER_OPEN}\n> x\n${BANNER_CLOSE}\n# T\n` }, cfg);
     expect(written(planUnarchive(corpus, corpus.briefs[0]!), A)).toBe('---\n---\n# T\n');
+  });
+
+  it('removes a line of only spaces after a banner, as it removes an empty one', () => {
+    const cfg = config({ status: { field: null }, archiving: { rewriteLinks: false } });
+    const corpus = corpusOf({ [TO]: `${BANNER_OPEN}\n> x\n${BANNER_CLOSE}\n \t\n# T\n` }, cfg);
+    expect(written(planUnarchive(corpus, corpus.briefs[0]!), A)).toBe('# T\n');
+  });
+
+  it('reopens a brief that ends at its banner, with no line after it to look at', () => {
+    const cfg = config({ status: { field: null }, archiving: { rewriteLinks: false } });
+    const corpus = corpusOf({ [TO]: `# T\n${BANNER_OPEN}\n> x\n${BANNER_CLOSE}` }, cfg);
+    expect(written(planUnarchive(corpus, corpus.briefs[0]!), A)).toBe('# T');
   });
 
   it('plans a reopening with no banner and no changes of its own', () => {
