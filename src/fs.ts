@@ -74,8 +74,7 @@ export class NodeFileSystem implements FileSystem {
   }
 
   private host(path: string): string {
-    const normal = repoPath(path);
-    return normal === '' ? this.root : join(this.root, ...normal.split('/'));
+    return join(this.root, ...repoPath(path).split('/'));
   }
 
   async read(path: string): Promise<string | null> {
@@ -92,19 +91,24 @@ export class NodeFileSystem implements FileSystem {
     await mkdir(dirname(target), { recursive: true });
     // Written beside the target and renamed over it, so a reader never sees half a file.
     const temporary = join(dirname(target), `.${randomBytes(6).toString('hex')}.spec-brief.tmp`);
-    await writeFile(temporary, content, { encoding: 'utf8', flag: 'wx' });
+    // "wx" refuses a name that is taken rather than write over it. Six random
+    // bytes are not drawn twice in a test, so none shows the flag at work.
+    await writeFile(temporary, content, { flag: 'wx' });
     try {
       for (let attempt = 1; ; attempt += 1) {
         try {
           await rename(temporary, target);
           return;
         } catch (error) {
-          const code = (error as NodeJS.ErrnoException).code ?? '';
+          // An error with no code is not in the set either.
+          const code = (error as NodeJS.ErrnoException).code as string;
           if (!TRANSIENT.has(code) || attempt >= RENAME_ATTEMPTS) throw error;
+          // How long it waits changes when the answer comes, not what it is.
           await pause(15 * attempt);
         }
       }
     } catch (error) {
+      // Forced, so that a temporary file something else removed does not hide the rename's error.
       await rm(temporary, { force: true });
       throw error;
     }
@@ -121,7 +125,7 @@ export class NodeFileSystem implements FileSystem {
     } catch (error) {
       const code = (error as NodeJS.ErrnoException).code;
       if (code === 'ENOENT' || code === 'ENOTDIR') return null;
-      /* v8 ignore next -- a permission error, which a portable test cannot provoke; it must not read as "no briefs". */
+      // A directory that may not be read must not read as "no briefs".
       throw error;
     }
   }
