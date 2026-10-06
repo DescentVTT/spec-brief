@@ -43,6 +43,14 @@ what a run reports.
   `·`, above the line that says they collide, and where one of them collides
   with a third brief it marked the other as well. The findings,
   `--format json` and the exit code were right and are unchanged.
+- `archive` and `unarchive` refuse a brief whose banner stands on the first
+  line of the file, above front matter they cannot write into. A banner there
+  hides the block under it, so the brief is read as having none; for TOML,
+  or a block never closed, the command ended with
+  `unexpected error: Error: cannot edit TOML front matter` and a stack trace,
+  `--dry-run` included. It is now the `front-matter` refusal any such block
+  gets, with its hint. A YAML block under such a banner is written into, as
+  it was.
 
 ## 0.4.1
 
