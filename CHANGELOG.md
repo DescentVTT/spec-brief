@@ -11,6 +11,31 @@ release that can turn a run red. This is the family's policy, recorded in
 releases up to 0.2.7 came before it, and several of their patches changed
 what a run reports.
 
+## Unreleased
+
+### Security
+
+- **The README gave `npx` the command's name, which on npm is not this
+  project's.** `spec-brief` without the `@descent-vtt` scope belonged to
+  nobody on the registry on 2026-10-07, so anyone can register it; and `npx`
+  given a name the project has not installed fetches the package of that
+  name and runs it, unasked when no terminal is attached. That is a fresh
+  clone, a worktree before `npm ci`, and the GitLab job the README showed,
+  which had no install step. Every command in the README now gives the
+  package's full name behind `--no-install`, as in
+  `npx --no-install @descent-vtt/spec-brief lint`: it runs the project's
+  install, or stops with an error that names this package. The CI examples
+  install first, and [Names](README.md#names) says whose the names are.
+  spec-brief itself is unchanged. What was measured, under npm 10.9.9,
+  11.20.0 and 12.2.0, is in the family's
+  [adopting guide](https://github.com/DescentVTT/spec-core/blob/main/docs/adopting.md#names),
+  and `tests/names.test.ts` holds every file here to the rule.
+  Upgrading: in a CI job or a script that gives `npx` the command's name
+  alone, write `npx --no-install @descent-vtt/spec-brief`. `--no-install` in
+  front of the bare name is not enough: it stops a download, and npm still
+  runs a copy of the bare name's package that an earlier fetch left in its
+  cache.
+
 ## 0.5.0
 
 Five defects a reading of every surviving mutant found, none of which a test
