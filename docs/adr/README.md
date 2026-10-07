@@ -13,6 +13,6 @@ changes is superseded by a new record that says so; the old one keeps its text.
 | [0006](0006-the-freeze-lives-in-the-file.md) | The freeze is a hash in the archived brief's own front matter, not a ledger. |
 | [0007](0007-integrations-are-plugins.md) | Integrations are plugins, owned by the tools that define their formats; amended so a plugin may waive a protected-file or out-of-scope refusal its own check allows. |
 | [0008](0008-toolchain.md) | The toolchain, chosen by "latest is not newest", with the reason for each pin. |
-| [0009](0009-mutation-testing.md) | Mutation testing in two sweeps; the core measured at 95.75, then 97.83 with 112 survivors, and gated at 93; amended to hold vitest on 4 until Stryker's runner reads vitest 5. |
+| [0009](0009-mutation-testing.md) | Mutation testing in two sweeps; the core measured at 95.75, then 97.83 with 112 survivors, and gated at 93, then at 97 once every survivor had been read (99.31% in full); amended to hold vitest on 4 until Stryker's runner reads vitest 5. |
 | [0010](0010-releases-are-published-by-ci.md) | Releases are published by CI from a version tag, by trusted publishing, with provenance. |
 | [0011](0011-waves-are-computed-not-guessed.md) | Waves are computed, not guessed: `schedule` places briefs by precedence-constrained greedy colouring, explains every move, and writes waves only when asked. |
