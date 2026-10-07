@@ -277,7 +277,7 @@ describe('the commands this repository writes', () => {
     const first = (/```bash\n([\s\S]*?)```/.exec(readme)?.[1] ?? '').trim().split('\n');
     expect(first[0]).toBe('npm install --save-dev @descent-vtt/spec-brief');
     expect(first.length).toBeGreaterThan(1);
-    expect(first.slice(1).filter((line) => !line.startsWith('npx --no-install @descent-vtt/spec-brief '))).toEqual([]);
+    expect(first.slice(1).filter((line) => !/^npx --no-install @descent-vtt\/spec-brief(?: |$)/.test(line))).toEqual([]);
   });
 
   it('say whose the name is where a reader looks, under the quick start', () => {
