@@ -36,3 +36,8 @@ Re-read this table when it is a quarter old, when Vitest 5 has had a release
 line's worth of patches, or when TypeScript ships the programmatic API, which
 is expected in 7.1. Moving a pin is an ordinary change with its reason in the
 commit.
+
+*Amended 2026-10-07.* Vitest 5 has had those patches, and they are not what
+it waits for: on vitest 5 Stryker's runner measures nothing, and vitest is
+held on 4 until a released runner reads it
+([ADR-0009](0009-mutation-testing.md), amended the same day).

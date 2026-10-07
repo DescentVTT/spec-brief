@@ -61,6 +61,11 @@ The coverage floors in `vitest.config.ts` and the mutation `break` in both
 measurement. They move up with the
 measurement and never down to make a change pass.
 
+Vitest stays on 4 while Stryker's runner runs no test against a mutant on 5,
+where a sweep reads 4%: Dependabot proposes no major of it,
+`tests/source.test.ts` fails one made by hand, and ADR-0009 has the reason
+and where the steps that lift the hold are.
+
 ## Design rules
 
 - **False positives cost more than misses.** When the evidence is ambiguous,

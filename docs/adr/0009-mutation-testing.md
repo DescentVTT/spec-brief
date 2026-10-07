@@ -248,3 +248,34 @@ and under the 45 minutes at which its workflow says it wants shards. Split
 as spec-harness's is, it would finish sooner, at the price of the merge
 script and its tests kept here as well, and of every shard's own start. The
 static mutants above were the cheaper minutes, and were taken first.
+
+## Amended 2026-10-07: vitest is held on 4
+
+**Vitest stays on 4 until Stryker's runner reads 5.** On vitest 5,
+`@stryker-mutator/vitest-runner` 10.0.0, the newest there is, runs no test
+against a mutant a test covers and scores it as survived, with every test
+green: vitest 5 matches a test's name with ` > ` between its suites, and the
+runner asks for the tests of a mutant by names joined with a space
+([stryker-js #6210](https://github.com/stryker-mutator/stryker-js/issues/6210),
+open). The evidence is spec-guard's, which met this on 2026-09-07 and pinned
+vitest then
+([its ADR-0003](https://github.com/DescentVTT/spec-guard/blob/main/docs/adr/0003-mutation-testing.md)).
+On 2026-10-06 Dependabot proposed vitest 5.0.0 across the family. The two
+repositories that sweep a pull request in full measured it: 4.00% in
+spec-core, where main reads 96.36%, and 3.83% in spec-harness, where main
+reads 98.13%. Here pull request 32 passed every check, because no sweep runs
+on a pull request: the bump would have merged green, and main's core sweep
+would have failed after it, with a score and no reason.
+
+So `.github/dependabot.yml` proposes no major of `vitest` or of an `@vitest`
+package, and `tests/source.test.ts` fails when `package.json` admits a
+vitest that is not a 4, with the issue and this amendment in its message: a
+bump made by hand fails `npm test` before it reaches main. Minors and
+patches of 4 still come, and a security update is not held back.
+
+The hold is the family's and is lifted in spec-core first, by the steps in
+[its ADR-0008](https://github.com/DescentVTT/spec-core/blob/main/docs/adr/0008-toolchain.md)
+(amended 2026-10-07), which also records what vitest 4 still receives while
+it is held. When the bump comes here, its pull request measures nothing:
+dispatch `mutation.yml` on the branch with `full` ticked, and hold both
+sweeps to that ADR's two conditions before merging.
