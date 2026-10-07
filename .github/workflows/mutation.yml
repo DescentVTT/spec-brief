@@ -30,7 +30,9 @@ permissions:
 
 jobs:
   core:
-    runs-on: ubuntu-latest
+    # The image the hosted sweeps in ADR-0009 were measured on. Another image
+    # is another measurement: spec-core's ADR-0008 says what moving takes.
+    runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -59,7 +61,7 @@ jobs:
 
   full:
     if: github.event_name == 'schedule' || inputs.full
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     # Headroom for a bad runner, not a budget: the hosted full sweeps took 22 to
     # 25 minutes. A sweep that keeps passing 45 wants shards, not this number
     # raising.
