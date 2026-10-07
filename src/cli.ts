@@ -471,37 +471,41 @@ export async function main(argv: readonly string[] = process.argv.slice(2), io: 
     return EXIT_ERROR;
   }
   const { command, values, positionals } = parsed;
-  if (flag(values, 'version')) {
-    stdout.write(`${await version()}\n`);
-    return EXIT_OK;
-  }
-  if (flag(values, 'help') || command === undefined) {
-    stdout.write(HELP);
-    // Asked for, the help is the answer; printed because no command was named, it is the error.
-    return flag(values, 'help') ? EXIT_OK : EXIT_ERROR;
-  }
-  const spec = COMMANDS.get(command) as CommandSpec;
-  const format = (text(values, 'format') ?? 'pretty') as Format;
-  if (!spec.formats.includes(format)) {
-    err(`--format for ${command} is one of ${spec.formats.join(', ')}, not "${format}"`);
-    return EXIT_ERROR;
-  }
-  const run: Run = {
-    today: today(io.env ?? process.env),
-    out: (t) => {
-      stdout.write(t);
-    },
-    err,
-    // Read by the pretty format alone: the others have nothing to colour.
-    style: { color: useColor(values, io) },
-    format,
-    strict: flag(values, 'strict'),
-    version: await version(),
-    values,
-    positionals,
-    cwd: io.cwd ?? process.cwd(),
-  };
+  // From here on, so that what comes before a command is covered as the
+  // command is: --version and --help, the package's own manifest, the date.
+  // An error there left main as a rejection, which the launcher ended as
+  // Node's uncaught error with exit 1, "findings" to a script.
   try {
+    if (flag(values, 'version')) {
+      stdout.write(`${await version()}\n`);
+      return EXIT_OK;
+    }
+    if (flag(values, 'help') || command === undefined) {
+      stdout.write(HELP);
+      // Asked for, the help is the answer; printed because no command was named, it is the error.
+      return flag(values, 'help') ? EXIT_OK : EXIT_ERROR;
+    }
+    const spec = COMMANDS.get(command) as CommandSpec;
+    const format = (text(values, 'format') ?? 'pretty') as Format;
+    if (!spec.formats.includes(format)) {
+      err(`--format for ${command} is one of ${spec.formats.join(', ')}, not "${format}"`);
+      return EXIT_ERROR;
+    }
+    const run: Run = {
+      today: today(io.env ?? process.env),
+      out: (t) => {
+        stdout.write(t);
+      },
+      err,
+      // Read by the pretty format alone: the others have nothing to colour.
+      style: { color: useColor(values, io) },
+      format,
+      strict: flag(values, 'strict'),
+      version: await version(),
+      values,
+      positionals,
+      cwd: io.cwd ?? process.cwd(),
+    };
     switch (command) {
       case 'init':
         return await runInit(run);

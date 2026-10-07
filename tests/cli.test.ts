@@ -119,6 +119,41 @@ describe('help, version and usage errors', () => {
   });
 });
 
+describe('an error before any command runs', () => {
+  // A command's own unexpected failure is held below, by `init` over a file
+  // where a directory is wanted. What main does before it reaches a command
+  // was outside that: an error there left main as a rejection, and the
+  // launcher ended it as Node's uncaught error, exit 1, "findings" to a script.
+  const gone = (): never => {
+    throw new Error('the stream is gone');
+  };
+  const STACK = /^spec-brief: unexpected error: Error: the stream is gone\n {4}at [^]*\n$/;
+
+  it.each([
+    ['--version', ['--version']],
+    ['--help', ['--help']],
+    ['no command, which prints the help', []],
+  ])('exits 2 with the stack on stderr when %s cannot be written', async (_name, argv) => {
+    const stderr = new Sink();
+    expect(await main(argv, { stdout: { write: gone }, stderr, cwd: process.cwd(), env: {} })).toBe(EXIT_ERROR);
+    expect(stderr.text).toMatch(STACK);
+  });
+
+  it('exits 2 the same way when the run itself cannot be set up', async () => {
+    // Whether to colour is asked of the stream before any command starts.
+    const stdout = {
+      write: (): boolean => true,
+      get isTTY(): boolean {
+        return gone();
+      },
+    };
+    const stderr = new Sink();
+    const root = plain('cli-setup-fails', { 'briefs/001_a.md': goodBrief() });
+    expect(await main(['lint', '--no-git'], { stdout, stderr, cwd: root, env: {} })).toBe(EXIT_ERROR);
+    expect(stderr.text).toMatch(STACK);
+  });
+});
+
 describe('init and new', () => {
   it('writes a configuration and the directories, and refuses to do it twice', async () => {
     const root = dir('cli-init');
