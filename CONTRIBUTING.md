@@ -81,8 +81,13 @@ provenance and makes the GitHub release. Then a maintainer releases it with a
 second factor: `npm stage list @descent-vtt/spec-brief`, `npm stage view <id>`,
 `npm stage approve <id>`. A prerelease (`0.3.0-rc.1`) goes out under the `next`
 dist-tag. To try the workflow without publishing, run it by hand from main
-(Actions, Release, Run workflow): it does everything but the upload and the
-GitHub release.
+(Actions, Release, Run workflow): it does everything but the signing, the
+upload and the GitHub release. That rehearsal can try another npm than the one
+the release pins, without moving the pin: name one exact version in its
+`npm_version` input, as in
+`gh workflow run release.yml --ref main -f npm_version=12.2.0`. A tag stages
+with the pin whatever was rehearsed, and ADR-0010 says what a rehearsal does
+and does not show.
 
 The first time, a maintainer adds the trusted publisher on npmjs.com, as
 ADR-0010 describes.
