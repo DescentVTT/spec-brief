@@ -11,7 +11,11 @@ release that can turn a run red. This is the family's policy, recorded in
 releases up to 0.2.7 came before it, and several of their patches changed
 what a run reports.
 
-## Unreleased
+## 0.6.0
+
+An error spec-brief did not expect before a command started, or where
+nothing waited for it, ended the run with exit 1, which reads as findings; it
+is exit 2 now, as it was already inside a command.
 
 ### Changed
 
