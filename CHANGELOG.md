@@ -11,6 +11,22 @@ release that can turn a run red. This is the family's policy, recorded in
 releases up to 0.2.7 came before it, and several of their patches changed
 what a run reports.
 
+## Unreleased
+
+### Changed
+
+- **An error spec-brief did not expect before a command starts ends the run
+  with exit 2, not 1.** A command's own such failure was already
+  `spec-brief: unexpected error:` with its stack and exit 2; one from
+  `--version`, `--help` or what a run reads first - a `SOURCE_DATE_EPOCH`
+  no date can be made of, for one - left the process as Node's uncaught
+  error with exit 1, which reads as findings, and so did an error thrown
+  where nothing waits for it. Each is now reported the same way, with exit 2
+  ([the family contract](https://github.com/DescentVTT/spec-core/blob/main/docs/adr/0005-the-family-contract.md)).
+  Upgrading: a script that took exit 1 after such a crash for findings now
+  sees 2, "the run could not be trusted"; `main()` from the package resolves
+  to 2 where its promise rejected.
+
 ## 0.5.1
 
 The README's commands gave `npx` the command's bare name, which on npm is
