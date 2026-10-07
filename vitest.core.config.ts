@@ -21,6 +21,7 @@ export default defineConfig({
       'tests/io-faults.test.ts',
       'tests/names.test.ts',
       'tests/npm.test.ts',
+      'tests/runner-images.test.ts',
       'tests/source.test.ts',
       'tests/vendor.test.ts',
       '**/node_modules/**',
