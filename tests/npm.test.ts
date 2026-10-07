@@ -196,6 +196,34 @@ const sources: ReadonlyArray<readonly [file: string, text: string]> = [
     .map((name) => [name, read(name)] as const),
 ];
 
+/** What an `.npmrc` sets: the last line that sets a key is the one npm takes. */
+function settingsOf(text: string): Map<string, string> {
+  return new Map(
+    text
+      .split(/\r?\n/)
+      .filter((line) => !/^\s*(?:[#;]|$)/.test(line))
+      .map((line) => {
+        const [key, ...value] = line.split('=');
+        return [(key as string).trim(), value.join('=').trim()] as const;
+      }),
+  );
+}
+
+/** What `.gitignore` keeps out of the repository, and git itself: nothing below these is committed. */
+const UNCOMMITTED: readonly string[] = ['.git', '.stryker-tmp', '.tmp', 'coverage', 'dist', 'node_modules', 'reports'];
+
+/**
+ * Each directory below the root that has a `package.json` of its own, as the
+ * plugin fixtures do. npm takes the nearest one for its project, and the
+ * `.npmrc` beside it is then the only one of the repository it reads.
+ */
+function nestedPackages(directory = ''): string[] {
+  return readdirSync(`${ROOT}${directory}`, { withFileTypes: true }).flatMap((entry) => {
+    if (entry.isDirectory()) return UNCOMMITTED.includes(entry.name) ? [] : nestedPackages(`${directory}${entry.name}/`);
+    return entry.name === 'package.json' && directory !== '' ? [directory.slice(0, -1)] : [];
+  });
+}
+
 describe('a tool run through npx, in a tree that may not have it installed', () => {
   const runs = sources.flatMap(([file, text]) => runsOf(text, file));
   const faults = (text: string): Array<string | null> => runsOf(text, 'x').map(faultOf);
@@ -259,17 +287,19 @@ describe('a tool run through npx, in a tree that may not have it installed', () 
   });
 
   it('is one npm stops at, where the command is not installed: `.npmrc` says `yes=false` for every command here', () => {
-    // The last line that sets a key is the one npm takes.
-    const settings = new Map(
-      read('.npmrc')
-        .split(/\r?\n/)
-        .filter((line) => !/^\s*(?:[#;]|$)/.test(line))
-        .map((line) => {
-          const [key, ...value] = line.split('=');
-          return [(key as string).trim(), value.join('=').trim()] as const;
-        }),
-    );
-    expect(settings.get('yes')).toBe('false');
+    expect(settingsOf(read('.npmrc')).get('yes')).toBe('false');
+  });
+
+  it('is one npm stops at from inside a package below the root as well: each has an `.npmrc` of its own that says `yes=false`', () => {
+    // From inside a fixture that is a package, `npm config get yes` answers
+    // null and npx fetched the package it was handed, where at the root it
+    // stopped (npm 11.16.0, 2026-10-07).
+    const nested = nestedPackages();
+    expect(nested).toEqual(expect.arrayContaining(['tests/fixtures/esm-only-plugin', 'tests/fixtures/waiving-plugin']));
+    // The root is not one of them, and neither is anything npm installed.
+    expect(nested.filter((directory) => directory === '' || directory.includes('node_modules'))).toEqual([]);
+    const fetching = nested.filter((directory) => !existsSync(`${ROOT}${directory}/.npmrc`) || settingsOf(read(`${directory}/.npmrc`)).get('yes') !== 'false');
+    expect(fetching).toEqual([]);
   });
 
   it("says so on its line as well: `--no-install`, or the full name of one of the family's packages", () => {
