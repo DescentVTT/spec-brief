@@ -2,7 +2,7 @@
 /**
  * The core sweep: the pure modules, held to the unit suite alone.
  *
- *   npx stryker run stryker.core.config.mjs
+ *   npx --no-install stryker run stryker.core.config.mjs
  *
  * The modules that decide things - parsing, globs, dependencies, collisions,
  * rules, the archival planner and the transaction - with nothing that spawns
