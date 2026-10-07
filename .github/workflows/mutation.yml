@@ -42,7 +42,10 @@ jobs:
           node-version: '24'
           cache: npm
 
-      - run: npm ci
+      # No dependency's install script runs: the tree needs none, npm 12 runs
+      # none unless package.json allows the package, and the flag has npm 10 and
+      # 11 run none either (tests/npm.test.ts).
+      - run: npm ci --ignore-scripts
 
       - name: Core mutation sweep
         run: npm run test:mutation
@@ -71,7 +74,7 @@ jobs:
           node-version: '24'
           cache: npm
 
-      - run: npm ci
+      - run: npm ci --ignore-scripts
 
       - name: Full mutation sweep
         run: npm run test:mutation:full
