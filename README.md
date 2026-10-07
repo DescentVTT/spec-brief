@@ -8,10 +8,22 @@ spec-brief is one of the [spec-\* tools](https://github.com/DescentVTT/spec-core
 
 ```bash
 npm install --save-dev @descent-vtt/spec-brief
-npx spec-brief init
-npx spec-brief new "Rotate session tokens on privilege change" --wave 1
-npx spec-brief lint
+npx --no-install @descent-vtt/spec-brief init
+npx --no-install @descent-vtt/spec-brief new "Rotate session tokens on privilege change" --wave 1
+npx --no-install @descent-vtt/spec-brief lint
 ```
+
+## Names
+
+The package is `@descent-vtt/spec-brief`, and the command it installs is `spec-brief`. The name without the scope is not this project: on npm, `spec-brief` belonged to nobody on 2026-10-07, and whoever registers it decides what it runs.
+
+`npx` fetches and runs the package of whatever name it is given when the project has none installed - a fresh clone, a worktree before `npm ci`, a CI job without the install step - and without a terminal it does not ask first. So give `npx` the full name:
+
+- `npx --no-install @descent-vtt/spec-brief` in a project that installed it: it runs that install, the version the lockfile pins, and where there is none it stops with an error that names this package.
+- `npx @descent-vtt/spec-brief`, without `--no-install`, where nothing is installed: it fetches this package and runs it.
+
+<!-- bare-name: the two forms in the next sentence are shown as what not to write -->
+Never `npx spec-brief`, and not `npx --no-install spec-brief` either: `--no-install` stops a download, and npm still runs a copy of the bare name's package that an earlier fetch left in its cache. A `package.json` script names the command alone, as in `"briefs": "spec-brief lint"`, because npm fetches nothing for a script. The family's [adopting guide](https://github.com/DescentVTT/spec-core/blob/main/docs/adopting.md#names) has what was measured, under npm 10, 11 and 12.
 
 ## Why
 
@@ -357,11 +369,15 @@ How a heading fills a section, and what counts as a heading, a task or a link, i
 
 ## In CI
 
+After the job has installed the project, with `npm ci`:
+
 ```yaml
-- run: npx spec-brief lint --format github
-- run: npx spec-brief matrix --format github
-- run: npx spec-brief schedule --format github
+- run: npx --no-install @descent-vtt/spec-brief lint --format github
+- run: npx --no-install @descent-vtt/spec-brief matrix --format github
+- run: npx --no-install @descent-vtt/spec-brief schedule --format github
 ```
+
+Each gives `npx` the package's [full name](#names) and `--no-install`: a job that lost its install step then stops, where the command's name alone would fetch whatever package has that name.
 
 | Format | What it writes |
 | --- | --- |
@@ -372,7 +388,9 @@ How a heading fills a section, and what counts as a heading, a task or a link, i
 
 ```yaml
 spec-brief:
-  script: npx spec-brief lint --format gitlab > gl-code-quality.json
+  script:
+    - npm ci
+    - npx --no-install @descent-vtt/spec-brief lint --format gitlab > gl-code-quality.json
   artifacts:
     reports:
       codequality: gl-code-quality.json
