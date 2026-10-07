@@ -3,7 +3,7 @@
 ## Getting started
 
 ```bash
-npm install
+npm ci
 npm test          # vitest
 npm run lint      # tsc --noEmit, strict
 npm run build     # emits dist/
@@ -12,6 +12,11 @@ npm run selfcheck # spec-brief lints its own briefs
 
 Node 22 or later. There are no runtime dependencies and no build step for the
 tests: Vitest reads `src/` directly.
+
+npm 10, 11 and 12 install the same tree from the lockfile and run the same
+suite. `npm ci` leaves the lockfile as it is under each of them; npm 10's
+`npm install` writes it back without the `libc` fields npm 11 and 12 keep, so
+a change to the lockfile is made with npm 11 or later.
 
 ## The pipeline
 
