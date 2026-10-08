@@ -11,7 +11,7 @@ release that can turn a run red. This is the family's policy, recorded in
 releases up to 0.2.7 came before it, and several of their patches changed
 what a run reports.
 
-## Unreleased
+## 0.6.1
 
 Four ways a run ended with `unexpected error:` and a stack for something
 that was no defect of spec-brief's. Each is one line now; every exit code is
