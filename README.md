@@ -99,7 +99,7 @@ Writes `.spec-brief.json` with every default spelled out, and creates the brief 
 
 ### `spec-brief new <title>`
 
-Scaffolds a brief with the next free number - one more than the highest id, live or archived, since ids are never reused - and every required section, each holding its `hint` in a comment. A comment is not content, so a fresh brief reads as unwritten until someone writes it. `--id`, `--type`, `--wave`, `--depends-on 7,8` and `--date` fill the front matter.
+Scaffolds a brief with the next free number - one more than the highest id, live or archived, since ids are never reused - and every required section, each holding its `hint` in a comment. A comment is not content, so a fresh brief reads as unwritten until someone writes it. `--id`, `--type`, `--wave`, `--depends-on 7,8` and `--date` fill the front matter; without `--date` the date is [today's](#todays-date).
 
 ### `spec-brief lint [brief...]`
 
@@ -230,6 +230,7 @@ With `archiving.rewriteLinks` off, no link is rewritten, and the links other liv
 | `--base <rev>` | Measures from the merge base instead, for a branch of several commits. |
 | `--pr <n>` | Links the pull request. |
 | `--summary <text>` | What the round did, in the banner. |
+| `--date <YYYY-MM-DD>` | The date in the banner, where it is not [today's](#todays-date). |
 | `--dry-run` | Prints the plan and the banner, and writes nothing. |
 
 spec-brief reads git and never writes it. Review the change and commit it with the round.
@@ -262,9 +263,17 @@ Reopens an archived brief: the banner and the hash come off, the status goes bac
 | --- | --- |
 | `0` | Clean. |
 | `1` | Findings, a collision, or a refused action. |
-| `2` | The run could not be trusted, or its answer did not arrive - a bad flag, a configuration that does not load, a brief that does not exist, a git command that failed, a `SOURCE_DATE_EPOCH` no date can be made of, a stdout its reader closed before all of the output was written, as a pipeline into `head` does, each said in one line on stderr, or an error spec-brief did not expect, reported on stderr as `spec-brief: unexpected error:` with its stack. |
+| `2` | The run could not be trusted, or its answer did not arrive - a bad flag, a configuration that does not load, a brief that does not exist, a git command that failed, a `SOURCE_DATE_EPOCH` that [cannot be read as a date](#todays-date) where one is to be written, a stdout its reader closed before all of the output was written, as a pipeline into `head` does, each said in one line on stderr, or an error spec-brief did not expect, reported on stderr as `spec-brief: unexpected error:` with its stack. |
 
 A run over a briefs directory that does not exist exits 2, because a check over nothing looks exactly like a clean one.
+
+### Today's date
+
+`new` writes a date into the front matter and `archive` one into the banner: the one `--date` gives, or today's. Today is the clock's date in UTC, unless `SOURCE_DATE_EPOCH` is set, the variable a pipeline sets to have every run write the same bytes ([its specification](https://reproducible-builds.org/specs/source-date-epoch/)): then it is the date of that time, in UTC.
+
+- **What it holds**: whole seconds since 1970-01-01 in digits alone, as `date +%s` prints them, from `0` to `253402300799`, the last second of 9999-12-31 and of the dates written `YYYY-MM-DD`.
+- **Anything else is refused**, never read as unset: a word, `1.5`, `-1`, a space or a newline beside the digits, a later time, or nothing at all, which is what `SOURCE_DATE_EPOCH=$(git log -1 --format=%ct)` leaves where git failed. `new` and `archive` then write nothing and exit 2 with a line that names the variable and shows what it holds. The clock's date, written where a pipeline asked for its own, would look like any other.
+- **Only a run that would use it reads it**: `--date` gives the date instead, and `init`, `lint`, `list`, `matrix`, `schedule`, `unarchive`, `--version` and `--help` write none, so each runs whatever the variable holds.
 
 ## Configuration
 

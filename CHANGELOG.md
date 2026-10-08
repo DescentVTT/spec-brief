@@ -11,6 +11,33 @@ release that can turn a run red. This is the family's policy, recorded in
 releases up to 0.2.7 came before it, and several of their patches changed
 what a run reports.
 
+## Unreleased
+
+### Changed
+
+- **A `SOURCE_DATE_EPOCH` that is set and cannot be read as a date is
+  refused, not read as unset.** `new` and `archive` without `--date` took
+  `tomorrow`, `1.5`, `-1`, a value with a space beside its digits and an
+  empty one for no value at all, wrote the clock's date and exited 0. Each
+  now writes nothing and ends with exit 2 and a line that names the variable
+  and shows what it holds, and `today()` from the package throws for them
+  (ADR-0004, [Today's date](README.md#todays-date)).
+  Upgrading: set it to whole seconds in digits alone, as `date +%s` prints
+  them, no more than `253402300799` (9999-12-31), or pass `--date`, or leave
+  it unset; set and empty is not unset.
+
+### Fixed
+
+- A `SOURCE_DATE_EPOCH` that cannot be read stops only a run that would
+  write its date. One of more seconds than any date has ended `lint`,
+  `list`, `matrix`, `schedule`, `init` and `unarchive`, and `new` and
+  `archive` given `--date`, with exit 2; they now run whatever it holds.
+- A `SOURCE_DATE_EPOCH` in the years 10000 to 275760 is refused by name,
+  where `new` and `archive` said `"+010000-01" is not a date written
+  YYYY-MM-DD`. Exit 2, as before.
+- The README says what `SOURCE_DATE_EPOCH` does, and `--help` names it
+  beside `--date`.
+
 ## 0.6.1
 
 Four ways a run ended with `unexpected error:` and a stack for something
