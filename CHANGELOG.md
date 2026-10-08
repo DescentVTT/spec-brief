@@ -11,6 +11,31 @@ release that can turn a run red. This is the family's policy, recorded in
 releases up to 0.2.7 came before it, and several of their patches changed
 what a run reports.
 
+## Unreleased
+
+Four ways a run ended with `unexpected error:` and a stack for something
+that was no defect of spec-brief's. Each is one line now; every exit code is
+as it was.
+
+### Fixed
+
+- **A reader that closes the output is answered in one line, not a stack.**
+  `spec-brief list | head` could end with `spec-brief: unexpected error:
+  Error: EPIPE: broken pipe, write` and a stack once `head` had left; it now
+  prints `spec-brief: stdout was closed before all of the output was
+  written` on stderr, exit 2 as before
+  ([the family contract](https://github.com/DescentVTT/spec-core/blob/main/docs/adr/0005-the-family-contract.md)).
+- A `SOURCE_DATE_EPOCH` of more seconds than any date has is named, with
+  what to do about it, where the run ended on `RangeError: Invalid time
+  value` and a stack. Exit 2, as before.
+- `archive` reports what git was not handed or could not do by its message
+  alone: `"-x" is not a revision` for a `--commit`, a `--base` or an
+  `archiving.base` that would be read as an option, and git's own words
+  when its status or its diff fails. Exit 2, as before.
+- `init --briefs ../docs` and `--archive` likewise are refused as the
+  configuration refuses them, `--briefs must be a directory inside the
+  repository`, where the path's error came with a stack. Exit 2, as before.
+
 ## 0.6.0
 
 An error spec-brief did not expect before a command started, or where
