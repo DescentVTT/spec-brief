@@ -38,6 +38,22 @@ describe('dates', () => {
     expect(today({ SOURCE_DATE_EPOCH: 's1790208000' })).toBe(new Date().toISOString().slice(0, 10));
   });
 
+  it('refuses a number of seconds no date can be made of, by the name of the variable', () => {
+    // The last second a date has is not refused; the one after it is.
+    expect(() => today({ SOURCE_DATE_EPOCH: '8640000000000' })).not.toThrow();
+    let thrown: unknown;
+    try {
+      today({ SOURCE_DATE_EPOCH: '8640000000001' });
+    } catch (error) {
+      thrown = error;
+    }
+    expect(thrown).toBeInstanceOf(EngineError);
+    expect(thrown).toMatchObject({
+      code: 'invalid',
+      message: 'SOURCE_DATE_EPOCH is "8640000000001", which is not a time: no date is that many seconds after 1970-01-01; set it to a date\'s seconds, or unset it',
+    });
+  });
+
   it('accepts only real calendar dates', () => {
     expect(isDate('2026-09-24')).toBe(true);
     expect(isDate('2026-02-30')).toBe(false);

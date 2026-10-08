@@ -152,6 +152,75 @@ describe('an error before any command runs', () => {
     expect(await main(['lint', '--no-git'], { stdout, stderr, cwd: root, env: {} })).toBe(EXIT_ERROR);
     expect(stderr.text).toMatch(STACK);
   });
+
+  it('reports a thrown value that is no Error as it reads, and an Error with no stack by its message', async () => {
+    const bare = new Error('no stack on this one');
+    delete bare.stack;
+    for (const [thrown, said] of [
+      ['only a string', 'only a string'],
+      [bare, 'no stack on this one'],
+    ] as const) {
+      const stderr = new Sink();
+      const stdout = {
+        write: (): never => {
+          throw thrown;
+        },
+      };
+      expect(await main(['--version'], { stdout, stderr, cwd: process.cwd(), env: {} })).toBe(EXIT_ERROR);
+      expect(stderr.text).toBe(`spec-brief: unexpected error: ${said}\n`);
+    }
+  });
+});
+
+describe('a reader that closed the output', () => {
+  // `spec-brief list --format json | head`: the write fails with EPIPE once
+  // head has left. The answer was not delivered, which is still 2, and
+  // nothing in spec-brief is at fault, so no stack says a defect was found.
+  async function refused(thrown: Error, argv: string[], cwd = process.cwd()): Promise<{ code: number; err: string }> {
+    const stderr = new Sink();
+    const stdout = {
+      write: (): never => {
+        throw thrown;
+      },
+    };
+    return { code: await main(argv, { stdout, stderr, cwd, env: {} }), err: stderr.text };
+  }
+  const failed = (code: string): Error => Object.assign(new Error(`${code}: the write failed`), { code, syscall: 'write' });
+
+  it('ends the run with exit 2 and one line that says so, before a command and inside one', async () => {
+    const said = { code: EXIT_ERROR, err: 'spec-brief: stdout was closed before all of the output was written\n' };
+    expect(await refused(failed('EPIPE'), ['--version'])).toEqual(said);
+    expect(await refused(failed('EPIPE'), ['--help'])).toEqual(said);
+    const root = plain('cli-closed-output', { 'briefs/001_a.md': goodBrief() });
+    expect(await refused(failed('EPIPE'), ['list', '--no-git'], root)).toEqual(said);
+    expect(await refused(failed('EPIPE'), ['lint', '--no-git', '--format', 'json'], root)).toEqual(said);
+  });
+
+  it('keeps the stack of a write that failed for any other reason', async () => {
+    // A disk that filled up under `> briefs.json` is not a reader that left.
+    const result = await refused(failed('ENOSPC'), ['--version']);
+    expect(result.code).toBe(EXIT_ERROR);
+    expect(result.err).toMatch(/^spec-brief: unexpected error: Error: ENOSPC: the write failed\n {4}at /);
+  });
+
+  it('reads the code of the error, not its words', async () => {
+    const result = await refused(new Error('EPIPE: broken pipe, write'), ['--version']);
+    expect(result.code).toBe(EXIT_ERROR);
+    expect(result.err).toMatch(/^spec-brief: unexpected error: Error: EPIPE: broken pipe, write\n {4}at /);
+  });
+});
+
+describe('a SOURCE_DATE_EPOCH no date can be made of', () => {
+  it('is named, with what to do about it, and ends the run with exit 2', async () => {
+    // Digits, so it is read as seconds, and more of them than any date has:
+    // the date's own complaint was a RangeError and a stack.
+    const root = plain('cli-epoch', { 'briefs/001_a.md': goodBrief() });
+    expect(await run(root, ['list'], { SOURCE_DATE_EPOCH: '99999999999999999' })).toEqual({
+      code: EXIT_ERROR,
+      out: '',
+      err: 'spec-brief: SOURCE_DATE_EPOCH is "99999999999999999", which is not a time: no date is that many seconds after 1970-01-01; set it to a date\'s seconds, or unset it\n',
+    });
+  });
 });
 
 describe('init and new', () => {
@@ -184,6 +253,22 @@ describe('init and new', () => {
     expect(await run(dir('cli-init-one'), ['init', '--briefs', 'a', '--archive', './a/'])).toEqual(refusal);
     expect(await run(dir('cli-init-briefs-root'), ['init', '--briefs', '.'])).toEqual(refusal);
     expect(await run(dir('cli-init-archive-root'), ['init', '--archive', '.'])).toEqual(refusal);
+  });
+
+  it('refuses a directory outside the repository, as the configuration does, and writes nothing', async () => {
+    // It ended on a stack: the path's own error is no error main names.
+    const root = dir('cli-init-outside');
+    expect(await run(root, ['init', '--briefs', '../outside'])).toEqual({
+      code: EXIT_ERROR,
+      out: '',
+      err: 'spec-brief: --briefs must be a directory inside the repository, not "../outside"\n',
+    });
+    expect(await run(root, ['init', '--archive', 'a/../../b'])).toEqual({
+      code: EXIT_ERROR,
+      out: '',
+      err: 'spec-brief: --archive must be a directory inside the repository, not "a/../../b"\n',
+    });
+    expect(existsSync(join(root, '.spec-brief.json'))).toBe(false);
   });
 
   it('says where an unexpected failure was thrown, and exits 2', async () => {
@@ -622,6 +707,21 @@ describe('archive and unarchive', () => {
     expect(json).toEqual(expect.objectContaining({ command: 'unarchive', ok: true, plan: expect.objectContaining({ to: 'briefs/001_a.md' }) }));
     expect((await run(root, ['unarchive', '1'])).out).toBe('briefs/001_a.md is already live; nothing to do\n');
     expect((await run(root, ['unarchive'])).err).toBe('spec-brief: unarchive takes one brief: spec-brief unarchive <brief>\n');
+  });
+
+  it('reports what git was not handed, or could not do, by its message alone', async () => {
+    // Each ended on `unexpected error:` and a stack, as a defect would.
+    const root = repo('cli-archive-git', { 'briefs/001_a.md': goodBrief() });
+    // A revision that would be read as an option is never handed to git.
+    expect(await run(root, ['archive', '1', '--commit=-x', '--dry-run'])).toEqual({ code: EXIT_ERROR, out: '', err: 'spec-brief: "-x" is not a revision\n' });
+    expect(await run(root, ['archive', '1', '--base', ' ', '--dry-run'])).toEqual({ code: EXIT_ERROR, out: '', err: 'spec-brief: " " is not a revision\n' });
+    // An index git cannot read: its status fails, and what git said is the report.
+    writeFileSync(join(root, '.git', 'index'), 'no index');
+    const unread = await run(root, ['archive', '1', '--dry-run']);
+    expect(unread.code).toBe(EXIT_ERROR);
+    expect(unread.out).toBe('');
+    expect(unread.err).toMatch(/^spec-brief: git status failed: fatal: [^]*\S\n$/);
+    expect(unread.err).not.toMatch(/\n {4}at /);
   });
 
   it('refuses with the reasons and exits 1, and exits 2 on bad arguments', async () => {

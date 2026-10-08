@@ -16,6 +16,7 @@ import { reported } from './collisions.js';
 import { CONFIG_FILES, ConfigError, initialConfig } from './config.js';
 import { BriefEngine, EngineError, today } from './engine.js';
 import { NodeFileSystem } from './fs.js';
+import { GitError } from './git.js';
 import { failing, sortFindings, summarise } from './lint.js';
 import { normalisePath } from './links.js';
 import {
@@ -323,8 +324,17 @@ async function runInit(run: Run): Promise<number> {
   for (const name of CONFIG_FILES) {
     if (await fs.exists(name)) throw new UsageError(`${name} already exists here; edit it instead`);
   }
-  const briefs = normalisePath(text(run.values, 'briefs') ?? 'briefs');
-  const archive = normalisePath(text(run.values, 'archive') ?? `${briefs}/archive`);
+  // A directory above the root is refused as the configuration refuses one
+  // (config.ts), in the same words, before anything is written.
+  const inside = (option: string, given: string): string => {
+    try {
+      return normalisePath(given);
+    } catch {
+      throw new UsageError(`--${option} must be a directory inside the repository, not "${given}"`);
+    }
+  };
+  const briefs = inside('briefs', text(run.values, 'briefs') ?? 'briefs');
+  const archive = inside('archive', text(run.values, 'archive') ?? `${briefs}/archive`);
   if (briefs === '' || archive === '' || briefs === archive) throw new UsageError('--briefs and --archive must be two directories');
   const config = `${JSON.stringify(initialConfig(briefs, archive), null, 2)}\n`;
   await fs.write('.spec-brief.json', config);
@@ -525,12 +535,21 @@ export async function main(argv: readonly string[] = process.argv.slice(2), io: 
         return await runTransition(run, 'unarchive');
     }
   } catch (error) {
-    const expected = [ConfigError, UsageError, EngineError, ConflictError, TransactionError];
+    // What git refused or could not do is git's message, and no line here.
+    const expected = [ConfigError, UsageError, EngineError, ConflictError, TransactionError, GitError];
     if (expected.some((kind) => error instanceof kind)) {
       err((error as Error).message);
       return EXIT_ERROR;
     }
-    err(`unexpected error: ${error instanceof Error ? (error.stack ?? error.message) : String(error)}`);
+    // A write its reader had closed the pipe for is no defect either: the
+    // answer was not delivered, which is still 2, and no stack sends a person
+    // looking for a bug. The process's own streams report it as an event,
+    // which the launcher answers in the same words; here it is a caller's
+    // stream that throws it. It is read by its code: stdout and stderr are the
+    // only pipes spec-brief writes to.
+    if (!(error instanceof Error)) err(`unexpected error: ${String(error)}`);
+    else if ((error as NodeJS.ErrnoException).code === 'EPIPE') err('stdout was closed before all of the output was written');
+    else err(`unexpected error: ${error.stack ?? error.message}`);
     return EXIT_ERROR;
   }
 }

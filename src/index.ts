@@ -59,7 +59,7 @@ export {
 } from './corpus.js';
 export { type ArchiveOptions, BriefEngine, EngineError, type EngineSetup, type NewOptions, type OpenOptions, today } from './engine.js';
 export { type FileSystem, MemoryFileSystem, NodeFileSystem } from './fs.js';
-export { type CommitInfo, type FileChange, type Git, NodeGit } from './git.js';
+export { type CommitInfo, type FileChange, type Git, GitError, NodeGit } from './git.js';
 export {
   type Glob,
   globBase,
