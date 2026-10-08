@@ -11,7 +11,13 @@ release that can turn a run red. This is the family's policy, recorded in
 releases up to 0.2.7 came before it, and several of their patches changed
 what a run reports.
 
-## Unreleased
+## 0.7.0
+
+An input that is set and names nothing is refused, exit 2, by a line that
+names it, where it was read as if it had not been given: a
+`SOURCE_DATE_EPOCH` that is no date, an option given an empty value, an
+argument a command does not take, a `--root` that is no directory, a list
+that names no brief or has a place that names none.
 
 ### Changed
 
