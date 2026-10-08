@@ -173,7 +173,7 @@ new:
   --type <type>         a brief type from the configuration
   --wave <n>            the wave it runs in
   --depends-on <ids>    comma-separated ids it runs after
-  --date <YYYY-MM-DD>   the date in its front matter; default today
+  --date <YYYY-MM-DD>   the date in its front matter; default SOURCE_DATE_EPOCH's, or today's in UTC
 
 list:
   --ready               only briefs that can run now: dependencies archived, not drafts or deferred
@@ -190,7 +190,7 @@ archive:
   --commit <rev>        the commit the round landed as
   --base <rev>          the branch it started from; the diff runs from the merge base
   --summary <text>      what the round did, for the banner
-  --date <YYYY-MM-DD>   the archival date; default today
+  --date <YYYY-MM-DD>   the archival date; default SOURCE_DATE_EPOCH's, or today's in UTC
   --allow-dirty         archive although the tree has uncommitted work
   --dry-run             print the plan and change nothing
 
@@ -263,8 +263,13 @@ async function version(): Promise<string> {
 }
 
 interface Run {
-  /** Today, as the environment the run was given says. */
-  readonly today: string;
+  /**
+   * Today, as the environment the run was given says. Asked only by a command
+   * that writes a date and was given none: a `SOURCE_DATE_EPOCH` that cannot
+   * be read stops the run that would have written the clock's date for it,
+   * and no run whose answer it has no part in.
+   */
+  readonly today: () => string;
   readonly out: (text: string) => void;
   readonly err: (text: string) => void;
   readonly style: Style;
@@ -365,7 +370,7 @@ async function runNew(run: Run): Promise<number> {
     type: text(run.values, 'type'),
     wave: integer(run.values, 'wave', 0),
     dependsOn,
-    date: text(run.values, 'date') ?? run.today,
+    date: text(run.values, 'date') ?? run.today(),
   });
   if (run.format === 'json') run.out(jsonDocument('new', run.version, { ok: true, file: created.file }));
   else run.out(`wrote ${created.file}\n`);
@@ -454,7 +459,7 @@ async function runTransition(run: Run, action: 'archive' | 'unarchive'): Promise
           commit: text(run.values, 'commit'),
           base: text(run.values, 'base'),
           summary: text(run.values, 'summary'),
-          date: text(run.values, 'date') ?? run.today,
+          date: text(run.values, 'date') ?? run.today(),
           allowDirty: flag(run.values, 'allow-dirty'),
           strict: run.strict,
           noGit: flag(run.values, 'no-git'),
@@ -482,7 +487,7 @@ export async function main(argv: readonly string[] = process.argv.slice(2), io: 
   }
   const { command, values, positionals } = parsed;
   // From here on, so that what comes before a command is covered as the
-  // command is: --version and --help, the package's own manifest, the date.
+  // command is: --version and --help, the package's own manifest, the colour.
   // An error there left main as a rejection, which the launcher ended as
   // Node's uncaught error with exit 1, "findings" to a script.
   try {
@@ -502,7 +507,7 @@ export async function main(argv: readonly string[] = process.argv.slice(2), io: 
       return EXIT_ERROR;
     }
     const run: Run = {
-      today: today(io.env ?? process.env),
+      today: () => today(io.env ?? process.env),
       out: (t) => {
         stdout.write(t);
       },

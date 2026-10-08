@@ -1,7 +1,10 @@
 import { execFileSync, spawn, spawnSync } from 'node:child_process';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync, rmSync } from 'node:fs';
+import { join } from 'node:path';
 
 import { beforeAll, describe, expect, it } from 'vitest';
+
+import { tempDir } from './helpers.js';
 
 /**
  * The published binary, spawned as a user would run it. Left out of mutation
@@ -22,6 +25,32 @@ describe('the binary', () => {
     const result = spawnSync(process.execPath, ['bin/spec-brief.js', 'no-such-command'], { encoding: 'utf8' });
     expect(result.status).toBe(2);
     expect(result.stderr).toContain('is not a command');
+  });
+
+  // cli.test.ts hands main an environment of its own. The launcher hands it
+  // none, so the one read is the process's, and a variable that is set and
+  // empty has to arrive there as one: it is not the variable left unset.
+  it('reads SOURCE_DATE_EPOCH from the environment of the process, and refuses one that is set and empty', () => {
+    const root = tempDir('bin-epoch');
+    const dated = (epoch: string): { code: number | null; out: string; err: string } => {
+      const result = spawnSync(process.execPath, ['bin/spec-brief.js', 'new', 'A title', '--root', root, '--no-git'], {
+        encoding: 'utf8',
+        env: { ...process.env, SOURCE_DATE_EPOCH: epoch },
+      });
+      return { code: result.status, out: result.stdout, err: result.stderr };
+    };
+    try {
+      expect(dated('')).toEqual({
+        code: 2,
+        out: '',
+        err: 'spec-brief: SOURCE_DATE_EPOCH is "", which is not a whole number of seconds since 1970-01-01; set it to one in digits alone, as "date +%s" prints it, or unset it\n',
+      });
+      expect(existsSync(join(root, 'briefs'))).toBe(false);
+      expect(dated('1790208000')).toEqual({ code: 0, out: 'wrote briefs/001_a-title.md\n', err: '' });
+      expect(readFileSync(join(root, 'briefs', '001_a-title.md'), 'utf8')).toContain('\ndate: 2026-09-24\n');
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
   });
 
   // main answers what it awaits, in process (cli.test.ts). An error thrown

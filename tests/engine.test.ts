@@ -29,29 +29,62 @@ function memoryEngine(files: Record<string, string>, config = DEFAULT_CONFIG, gi
 }
 
 describe('dates', () => {
-  it('uses SOURCE_DATE_EPOCH when it is a number of seconds', () => {
-    expect(today({ SOURCE_DATE_EPOCH: '1790208000' })).toBe('2026-09-24');
-    expect(today({ SOURCE_DATE_EPOCH: 'soon' })).toBe(new Date().toISOString().slice(0, 10));
+  /** What `today` throws over an environment, or `undefined` where it answers. */
+  function refusal(epoch: string): unknown {
+    try {
+      today({ SOURCE_DATE_EPOCH: epoch });
+    } catch (error) {
+      return error;
+    }
+    return undefined;
+  }
+
+  it('is the clock in UTC where SOURCE_DATE_EPOCH is not set, and its date where it is', () => {
     expect(today({})).toBe(new Date().toISOString().slice(0, 10));
-    // A number with anything before or after it is not a number of seconds.
-    expect(today({ SOURCE_DATE_EPOCH: '1790208000s' })).toBe(new Date().toISOString().slice(0, 10));
-    expect(today({ SOURCE_DATE_EPOCH: 's1790208000' })).toBe(new Date().toISOString().slice(0, 10));
+    expect(today({ SOURCE_DATE_EPOCH: '1790208000' })).toBe('2026-09-24');
+    // The seconds of a day are that day's, to its last one, in UTC.
+    expect(today({ SOURCE_DATE_EPOCH: '1790294399' })).toBe('2026-09-24');
+    expect(today({ SOURCE_DATE_EPOCH: '1790294400' })).toBe('2026-09-25');
+    // The first second there is, and a number written with zeros before it.
+    expect(today({ SOURCE_DATE_EPOCH: '0' })).toBe('1970-01-01');
+    expect(today({ SOURCE_DATE_EPOCH: '0001790208000' })).toBe('2026-09-24');
   });
 
-  it('refuses a number of seconds no date can be made of, by the name of the variable', () => {
-    // The last second a date has is not refused; the one after it is.
-    expect(() => today({ SOURCE_DATE_EPOCH: '8640000000000' })).not.toThrow();
-    let thrown: unknown;
-    try {
-      today({ SOURCE_DATE_EPOCH: '8640000000001' });
-    } catch (error) {
-      thrown = error;
-    }
+  it.each([
+    ['a word', 'tomorrow', '"tomorrow"'],
+    ['nothing at all, which a command that failed leaves', '', '""'],
+    ['a fraction', '1.5', '"1.5"'],
+    ['a time before 1970', '-1', '"-1"'],
+    ['a sign', '+1790208000', '"+1790208000"'],
+    ['a space before the digits', ' 1790208000', '" 1790208000"'],
+    ['a space after them', '1790208000 ', '"1790208000 "'],
+    ['a letter after them', '1790208000s', '"1790208000s"'],
+    ['a letter before them', 's1790208000', '"s1790208000"'],
+    ['another way to write a number', '1e9', '"1e9"'],
+    // Shown with its escape, so the refusal is one line and the newline is seen.
+    ['the newline a command printed after them', '1790208000\n', '"1790208000\\n"'],
+  ])('refuses a SOURCE_DATE_EPOCH that holds %s, by name, and never reads it as unset', (_kind, epoch, shown) => {
+    const thrown = refusal(epoch);
     expect(thrown).toBeInstanceOf(EngineError);
     expect(thrown).toMatchObject({
       code: 'invalid',
-      message: 'SOURCE_DATE_EPOCH is "8640000000001", which is not a time: no date is that many seconds after 1970-01-01; set it to a date\'s seconds, or unset it',
+      message: `SOURCE_DATE_EPOCH is ${shown}, which is not a whole number of seconds since 1970-01-01; set it to one in digits alone, as "date +%s" prints it, or unset it`,
     });
+  });
+
+  it('refuses seconds past the last date written YYYY-MM-DD, by name', () => {
+    // The last second of 9999 is that year's last day; the one after it is refused.
+    expect(today({ SOURCE_DATE_EPOCH: '253402300799' })).toBe('9999-12-31');
+    // The year 10000, which the date check refused as "+010000-01" with no word of the variable.
+    // Past 8640000000000 seconds there is no date at all.
+    for (const epoch of ['253402300800', '8640000000000', '8640000000001', '9'.repeat(400)]) {
+      const thrown = refusal(epoch);
+      expect(thrown, epoch).toBeInstanceOf(EngineError);
+      expect(thrown, epoch).toMatchObject({
+        code: 'invalid',
+        message: `SOURCE_DATE_EPOCH is "${epoch}", which is after 9999-12-31, the last date written YYYY-MM-DD; set it to 253402300799 or less, or unset it`,
+      });
+    }
   });
 
   it('accepts only real calendar dates', () => {
