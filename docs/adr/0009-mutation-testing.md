@@ -197,7 +197,12 @@ over 6,941 and, for the core, 99.38% over 5,286 - 98.73% and 98.68% with
 every timeout lost. **Both gates are now `break: 97`**, under that worst
 case, and move only up. For 0.6.0 the sweep of 6decf9d (run 37697989079)
 read the same two figures over the same counts, with the survivors of
-9670753 and none new.
+9670753 and none new. For 0.6.1 the sweep of d94da7d (run 37791585328) read
+99.31% over 6,963 and, for the core, 99.36% over 5,286, where 34 mutants
+timed out against 106 before: the full sweep's survivors are the same, and
+the core's one more is the anchor of `NOTE_START`, which had only timed out
+there, survives the full sweep as it always has, and is called equivalent
+beside the code.
 
 Reading them was a review again, and found what no test had:
 
