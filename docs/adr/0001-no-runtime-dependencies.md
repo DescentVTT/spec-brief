@@ -219,3 +219,80 @@ takes in a terminal, and `list`, `schedule` and `matrix` pad their columns
 by it, where `padEnd` counted a Han character as one column of two.
 `rebaseGlob` is not read: spec-brief takes no pattern on the command line,
 only those a brief or the configuration writes.
+
+## Amended 2026-10-09: what the parser takes is not what names something
+
+Arguments are parsed by `parseArgs`, which says what was typed and leaves to
+the tool whether it names anything. A command-line framework would have
+brought that check; spec-brief had not written it. Measured on 2026-10-09
+through the launcher, 65 command lines each in a tree of its own, before this
+amendment:
+
+- `new "T" --id ""` wrote `briefs/_t.md`, a file `lint` and `list` never read
+  again. `--root ""` and `--root " "` ran in the current directory.
+  `archive --summary ""` wrote a banner without the sentence, and
+  `init --briefs " "` made a directory named with a space.
+- `new --depends-on ","` scaffolded a brief with no dependency.
+- `list nonsense`, `matrix 12 extra` and `schedule later --write` ran as if
+  the argument were not there, and `init mydir` set up the current
+  directory.
+- `--root notes.txt`, a file, and `--root nowhere`, which does not exist,
+  had the search for a configuration go on from the parent: `lint` reported
+  on the tree above, and `new` wrote a brief into it.
+
+Each ended with exit 0, having answered a question nobody had put: the
+fall back to a default that the family contract rules out for a
+configuration
+([spec-core ADR-0005](https://github.com/DescentVTT/spec-core/blob/main/docs/adr/0005-the-family-contract.md)),
+and that [ADR-0004](0004-archival-is-a-planned-transaction.md) rules out
+for `SOURCE_DATE_EPOCH`. A value comes out of a shell variable as often as
+it is typed, and `--root "$DIR"` where the variable is not set is the line
+this is about.
+
+**An input that is set and names nothing is refused**: exit 2, one line
+that names it, nothing written.
+
+- **An option given nothing.** Every option that takes a value refuses one
+  that is empty or only space, by the option's name, where the command line
+  is read and before anything else is. No option here gives an empty value
+  a meaning, so the rule has no exception: `--summary ""` is the one that
+  was read as the option left out by design, and a script that has no
+  summary leaves the option out. The values refused already - an empty
+  `--type`, `--wave`, `--date`, `--pr`, `--commit`, `--base` or `--format` -
+  say the same line now. A test holds the rule to every option the help
+  gives a value. The library is as it was: `planArchive` given an empty
+  summary writes a banner without one, since a caller that passes a value
+  wrote it.
+- **A list that names nothing.** `--depends-on` is the one list, and one
+  that holds no id is refused: a brief that depends on nothing is scaffolded
+  without the option. A comma too many in a list that does name a brief,
+  `7,8,`, is dropped, as a test has held since 0.1.0: the list names its
+  briefs, and the comma is not one left out.
+- **An argument a command does not take.** `init`, `list`, `matrix` and
+  `schedule` take none, and refuse one with its name and their usage.
+  `init`'s names `--root`, which sets up another directory, and `--briefs`,
+  since a person who typed `init mydir` meant one of the two.
+- **A `--root` that is no directory.** A file, or a path that does not
+  exist or cannot be reached, is refused. `init` alone is given a root that
+  is not there, and makes it, which is what its refusal of an argument
+  points to. A directory below the configuration's stays a place to start
+  from. `--version` and `--help` open no root and check none.
+- **A configuration that is a directory**, named by `--config` or found
+  under the configuration's name, ended the run on `unexpected error:
+  Error: EISDIR` and a stack. It is a configuration that does not load, and
+  says so in a line. One that is not JSON already did, in the parser's
+  words, which quote the file: a line break in the quote made the line two,
+  and any other control character went to the terminal. Each is written as
+  its escape.
+
+Left as they are, and measured the same day:
+
+- `--config <file>` beside `--no-config` runs on the defaults, the file
+  unread. The help says of `--no-config` that it ignores any configuration
+  file, so this is what was documented, and a refusal is a decision of its
+  own.
+- An option every command accepts and one command has no use for, such as
+  `init --config` or `init --strict`, is taken and not read.
+- An empty item in a list that names a brief, as above.
+- On Linux and macOS a `--config` below a file, `notes.txt/x.json`, was not
+  measured; on Windows it is reported as a file that does not exist.

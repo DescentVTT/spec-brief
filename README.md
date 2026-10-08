@@ -95,7 +95,7 @@ A brief is read as CommonMark reads it wherever that decides what is code or a c
 
 ### `spec-brief init`
 
-Writes `.spec-brief.json` with every default spelled out, and creates the brief and archive directories. `--briefs <dir>` and `--archive <dir>` choose them.
+Writes `.spec-brief.json` with every default spelled out, and creates the brief and archive directories. `--briefs <dir>` and `--archive <dir>` choose them, and `--root <dir>` the directory to set up, which `init` makes when it is not there. It takes no argument: `init mydir` is [refused](#an-input-that-names-nothing).
 
 ### `spec-brief new <title>`
 
@@ -248,7 +248,7 @@ Reopens an archived brief: the banner and the hash come off, the status goes bac
 
 | Flag | What it does |
 | --- | --- |
-| `--root <dir>` | Runs from another directory. |
+| `--root <dir>` | Runs from another directory, which must be there: only `init` makes one that is not. |
 | `--config <file>` | Names the configuration. |
 | `--no-config` | Uses the defaults. |
 | `--format <format>` | `pretty` by default, or `json`; `lint`, `matrix` and `schedule`, which report findings, also write `sarif`, `github` and `gitlab`, and `--help` lists each command's formats. |
@@ -263,9 +263,19 @@ Reopens an archived brief: the banner and the hash come off, the status goes bac
 | --- | --- |
 | `0` | Clean. |
 | `1` | Findings, a collision, or a refused action. |
-| `2` | The run could not be trusted, or its answer did not arrive - a bad flag, a configuration that does not load, a brief that does not exist, a git command that failed, a `SOURCE_DATE_EPOCH` that [cannot be read as a date](#todays-date) where one is to be written, a stdout its reader closed before all of the output was written, as a pipeline into `head` does, each said in one line on stderr, or an error spec-brief did not expect, reported on stderr as `spec-brief: unexpected error:` with its stack. |
+| `2` | The run could not be trusted, or its answer did not arrive - a bad flag, [an input that names nothing](#an-input-that-names-nothing), a configuration that does not load, a brief that does not exist, a git command that failed, a `SOURCE_DATE_EPOCH` that [cannot be read as a date](#todays-date) where one is to be written, a stdout its reader closed before all of the output was written, as a pipeline into `head` does, each said in one line on stderr, or an error spec-brief did not expect, reported on stderr as `spec-brief: unexpected error:` with its stack. |
 
 A run over a briefs directory that does not exist exits 2, because a check over nothing looks exactly like a clean one.
+
+### An input that names nothing
+
+An option, an argument or a path that is given and names nothing is refused: exit 2, one line that names it, nothing written. None is read as if it had not been given. `--root "$DIR"` where the variable is not set would otherwise run in the current directory, and the answer would look like the one that was asked for.
+
+- **An option given nothing.** Every option that takes a value refuses one that is empty or only space, by the option's name: `--id is "", which is no value`. No option gives an empty value a meaning; leave the option out for what it does by default.
+- **A list that names nothing.** `--depends-on ,` names no brief, and a brief that depends on nothing is one scaffolded without the option. A comma too many in a list that does name a brief, `7,8,`, is dropped.
+- **An argument a command does not take.** `init`, `list`, `matrix` and `schedule` take none and refuse one by name, with their usage. `init mydir` set up the current directory; `init --root mydir` is what sets up another.
+- **A `--root` that is no directory.** A file, or a path that does not exist, is refused: the search for a configuration would go on from its parent, and the run would report on, or `new` write into, the tree above. A directory below the configuration's is a place to start from, as the current directory is.
+- **A configuration that is a directory**, named by `--config` or found under the configuration's name, does not load, and is said so in a line, as one that is not JSON is.
 
 ### Today's date
 

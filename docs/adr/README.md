@@ -5,7 +5,7 @@ changes is superseded by a new record that says so; the old one keeps its text.
 
 | ADR | Decision |
 | --- | --- |
-| [0001](0001-no-runtime-dependencies.md) | No runtime dependencies: the front-matter reader and the Markdown scanner are written here; amended as the glob engine, then the scanner and the reader, became spec-core's, copied and verified by hash, with the dialect a brief is read in kept here. |
+| [0001](0001-no-runtime-dependencies.md) | No runtime dependencies: the front-matter reader and the Markdown scanner are written here; amended as the glob engine, then the scanner and the reader, became spec-core's, copied and verified by hash, with the dialect a brief is read in kept here; amended so that an input that names nothing - an option given an empty value, a list of only commas, an argument a command does not take, a root that is no directory - is refused, not read as if it were not there. |
 | [0002](0002-the-brief-is-the-record.md) | The brief is the record: no status file, no manifest, no roadmap editing, no persisted intermediate state. |
 | [0003](0003-conventions-are-configuration.md) | Conventions are configuration, measured against two repositories that keep briefs; amended with a status for deferred work and its observable trigger, then for a trigger written in Chinese, for English only again, and for the stop after a placeholder. |
 | [0004](0004-archival-is-a-planned-transaction.md) | Archival is a planned transaction over files; git is read, never written; amended so that the date is `--date`'s, `SOURCE_DATE_EPOCH`'s or the clock's, and a variable that cannot be read as a date is refused where one is to be written. |
