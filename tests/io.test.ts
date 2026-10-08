@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
 
 import { MemoryFileSystem, NodeFileSystem } from '../src/fs.js';
-import { NodeGit, parseNumstat, parsePorcelain, pullRequestUrl } from '../src/git.js';
+import { GitError, NodeGit, parseNumstat, parsePorcelain, pullRequestUrl } from '../src/git.js';
 import { commitAll, git, head, initRepo, tempDir, writeTree } from './helpers.js';
 
 const made: string[] = [];
@@ -162,6 +162,10 @@ describe('real git', () => {
     expect(await g.commit('no-such-ref')).toBeNull();
     await expect(g.commit('--output=x')).rejects.toThrow('is not a revision');
     await expect(g.commit(' ')).rejects.toThrow('is not a revision');
+    // By its class the command line tells it from a defect, and reports the
+    // message alone; printed whole by a caller, it says which kind it is.
+    await expect(g.commit(' ')).rejects.toBeInstanceOf(GitError);
+    expect(String(new GitError('no'))).toBe('GitError: no');
     expect(await g.mergeBase('HEAD', first)).toBe(first);
     expect(await g.mergeBase('HEAD', 'nothing')).toBeNull();
     expect((await g.changes(null, second)).map((c) => c.path).sort()).toEqual(['a.txt', 'c.txt']);
@@ -173,6 +177,7 @@ describe('real git', () => {
     // What git said, without the newline it ends on.
     await expect(g.changes('nothing', second)).rejects.toThrow(new RegExp(`^git could not diff nothing\\.\\.${second}: fatal: [^]*\\S$`));
     await expect(g.changes(null, 'nothing')).rejects.toThrow(/^git could not diff nothing\^\.\.nothing: fatal: [^]*\S$/);
+    await expect(g.changes('nothing', second)).rejects.toBeInstanceOf(GitError);
     expect(await g.dirty()).toEqual(['dirty.txt']);
     expect((await g.files()).sort()).toEqual(['a.txt', 'b.bin', 'c.txt', 'dirty.txt']);
     expect(await g.remoteUrl('origin')).toBe('https://github.com/o/r.git');
@@ -202,6 +207,8 @@ describe('real git', () => {
     await expect(g.files()).rejects.toThrow('git ls-files failed');
     // What git said, without the newline it ends on.
     const plain = new NodeGit(outside);
+    await expect(plain.dirty()).rejects.toBeInstanceOf(GitError);
+    await expect(plain.files()).rejects.toBeInstanceOf(GitError);
     await expect(plain.dirty()).rejects.toThrow(/^git status failed: fatal: not a git repository[^]*\S$/);
     await expect(plain.files()).rejects.toThrow(/^git ls-files failed: fatal: not a git repository[^]*\S$/);
   });

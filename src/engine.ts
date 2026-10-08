@@ -108,11 +108,18 @@ async function exists(path: string): Promise<boolean> {
 /**
  * Today, in UTC. `SOURCE_DATE_EPOCH` wins where it is set, which is what makes
  * a banner written in a reproducible pipeline reproducible.
+ *
+ * A number of seconds past the last date there is, 8640000000000, makes no
+ * date, and the date's own complaint is a RangeError that names no variable:
+ * it is refused here, by name. What is not a whole number is read as unset.
  */
 export function today(env: Readonly<Record<string, string | undefined>> = process.env): string {
   const epoch = env['SOURCE_DATE_EPOCH'];
   // The check for a variable that is not set is the compiler's: unset, it would read as "undefined", which is no number.
   const when = epoch !== undefined && /^\d+$/.test(epoch) ? new Date(Number(epoch) * 1000) : new Date();
+  if (Number.isNaN(when.getTime())) {
+    throw new EngineError('invalid', `SOURCE_DATE_EPOCH is "${epoch}", which is not a time: no date is that many seconds after 1970-01-01; set it to a date's seconds, or unset it`);
+  }
   return when.toISOString().slice(0, 10);
 }
 

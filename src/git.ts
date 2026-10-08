@@ -41,6 +41,18 @@ export interface Git {
   remoteUrl(name: string): Promise<string | null>;
 }
 
+/**
+ * A revision git cannot be handed, or a command of git's that failed: the
+ * message is the whole report, since what failed is git or what it was given,
+ * and no line of spec-brief's.
+ */
+export class GitError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'GitError';
+  }
+}
+
 interface Run {
   readonly ok: boolean;
   readonly stdout: string;
@@ -61,7 +73,7 @@ function run(cwd: string, args: readonly string[]): Promise<Run> {
 
 /** A revision that starts with "-" would be read as an option. */
 function safeRevision(revision: string): string {
-  if (revision.startsWith('-') || revision.trim() === '') throw new Error(`"${revision}" is not a revision`);
+  if (revision.startsWith('-') || revision.trim() === '') throw new GitError(`"${revision}" is not a revision`);
   return revision;
 }
 
@@ -146,20 +158,20 @@ export class NodeGit implements Git {
         ? await run(this.cwd, ['diff', '--numstat', '-z', '--no-renames', '--relative', `${target}^`, target])
         : await run(this.cwd, ['show', '--numstat', '-z', '--no-renames', '--relative', '--format=', target]);
     }
-    if (!result.ok) throw new Error(`git could not diff ${from ?? `${to}^`}..${to}: ${result.stderr.trim()}`);
+    if (!result.ok) throw new GitError(`git could not diff ${from ?? `${to}^`}..${to}: ${result.stderr.trim()}`);
     return parseNumstat(result.stdout);
   }
 
   async dirty(): Promise<string[]> {
     const result = await run(this.cwd, ['status', '--porcelain=v1', '-z', '--untracked-files=all']);
-    if (!result.ok) throw new Error(`git status failed: ${result.stderr.trim()}`);
+    if (!result.ok) throw new GitError(`git status failed: ${result.stderr.trim()}`);
     const prefix = await this.rootPrefix();
     return parsePorcelain(result.stdout).map((path) => relativePath(prefix, path));
   }
 
   async files(): Promise<string[]> {
     const result = await run(this.cwd, ['ls-files', '-z', '--cached', '--others', '--exclude-standard']);
-    if (!result.ok) throw new Error(`git ls-files failed: ${result.stderr.trim()}`);
+    if (!result.ok) throw new GitError(`git ls-files failed: ${result.stderr.trim()}`);
     return records(result.stdout).sort();
   }
 
