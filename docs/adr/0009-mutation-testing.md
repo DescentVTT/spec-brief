@@ -202,7 +202,10 @@ read the same two figures over the same counts, with the survivors of
 timed out against 106 before: the full sweep's survivors are the same, and
 the core's one more is the anchor of `NOTE_START`, which had only timed out
 there, survives the full sweep as it always has, and is called equivalent
-beside the code.
+beside the code. For 0.7.0 the sweep of fba3c1e (run 37827733882) read
+99.33% over 7,041 and, for the core, 99.36% over 5,289: the 78 mutants the
+refusals of that release made were all killed, no survivor is new, and one
+is gone, the check that the variable is set in `today()`.
 
 Reading them was a review again, and found what no test had:
 
