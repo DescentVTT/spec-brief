@@ -55,6 +55,9 @@ what a run reports.
 
 ### Fixed
 
+- A terminal that says `TERM=dumb` gets no colour, unless `FORCE_COLOR` or
+  `--color` asks for it, as the family's other tools have it. It was sent
+  the escape sequences it had said it does not read.
 - A `SOURCE_DATE_EPOCH` that cannot be read stops only a run that would
   write its date. One of more seconds than any date has ended `lint`,
   `list`, `matrix`, `schedule`, `init` and `unarchive`, and `new` and

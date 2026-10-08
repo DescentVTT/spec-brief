@@ -254,7 +254,7 @@ Reopens an archived brief: the banner and the hash come off, the status goes bac
 | `--format <format>` | `pretty` by default, or `json`; `lint`, `matrix` and `schedule`, which report findings, also write `sarif`, `github` and `gitlab`, and `--help` lists each command's formats. |
 | `--strict` | Makes warnings fail the run. |
 | `--no-git` | Leaves git out even inside a repository: the tree is read from disk, and `archive` records no commit. |
-| `--color`, `--no-color` | Override `NO_COLOR`, `FORCE_COLOR` and the terminal check. |
+| `--color`, `--no-color` | Override `NO_COLOR`, `FORCE_COLOR`, `TERM=dumb` and the terminal check. |
 | `--help`, `--version` | Do what they say. |
 
 **Exit codes:**

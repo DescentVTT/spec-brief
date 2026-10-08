@@ -316,6 +316,9 @@ function useColor(values: Values, io: CliIO): boolean {
   if ((env['NO_COLOR'] ?? '') !== '') return false;
   const force = env['FORCE_COLOR'];
   if (force !== undefined && force !== '') return force !== '0';
+  // A terminal that says it is dumb has asked for no escape sequence, and
+  // Node itself counts one colour for it: the family's tools read it alike.
+  if (env['TERM'] === 'dumb') return false;
   return (io.stdout ?? process.stdout).isTTY === true;
 }
 
