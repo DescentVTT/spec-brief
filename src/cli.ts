@@ -7,7 +7,7 @@
  * must never exit as though it found nothing.
  */
 
-import { readFile } from 'node:fs/promises';
+import { readFile, stat } from 'node:fs/promises';
 import { parseArgs, type ParseArgsConfig } from 'node:util';
 
 import { TransactionError, ConflictError } from './apply.js';
@@ -79,10 +79,19 @@ const GLOBAL: NonNullable<ParseArgsConfig['options']> = {
 interface CommandSpec {
   readonly options: NonNullable<ParseArgsConfig['options']>;
   readonly formats: readonly Format[];
+  /**
+   * Set on a command that takes no argument: what its refusal of one adds to
+   * the usage, which is where the option a person most likely meant is named.
+   */
+  readonly noArgument?: string;
 }
 
 const TABLE: Readonly<Record<string, CommandSpec>> = {
-  init: { options: { briefs: { type: 'string' }, archive: { type: 'string' } }, formats: ['pretty', 'json'] },
+  init: {
+    options: { briefs: { type: 'string' }, archive: { type: 'string' } },
+    formats: ['pretty', 'json'],
+    noArgument: '; --root <dir> names the directory it sets up, and --briefs <dir> the one for the briefs',
+  },
   new: {
     options: {
       id: { type: 'string' },
@@ -94,9 +103,9 @@ const TABLE: Readonly<Record<string, CommandSpec>> = {
     formats: ['pretty', 'json'],
   },
   lint: { options: {}, formats: FORMATS },
-  list: { options: { ready: { type: 'boolean' }, archived: { type: 'boolean' } }, formats: ['pretty', 'json'] },
-  matrix: { options: { 'all-waves': { type: 'boolean' } }, formats: FORMATS },
-  schedule: { options: { write: { type: 'boolean' } }, formats: FORMATS },
+  list: { options: { ready: { type: 'boolean' }, archived: { type: 'boolean' } }, formats: ['pretty', 'json'], noArgument: '' },
+  matrix: { options: { 'all-waves': { type: 'boolean' } }, formats: FORMATS, noArgument: '' },
+  schedule: { options: { write: { type: 'boolean' } }, formats: FORMATS, noArgument: '' },
   archive: {
     options: {
       pr: { type: 'string' },
@@ -151,7 +160,7 @@ Commands:
   unarchive <brief>     reopen an archived brief
 
 Options for every command:
-  --root <dir>          run from this directory instead of the current one
+  --root <dir>          run from this directory instead of the current one; it must exist, unless init makes it
   --config <file>       use this configuration file
   --no-config           use the defaults, ignoring any configuration file
   --format <format>     the output format, pretty by default; each command's are below
@@ -197,6 +206,9 @@ archive:
 unarchive:
   --dry-run             print the plan and change nothing
 
+An option given an empty value, a list that names nothing and an argument a
+command does not take are refused, not read as if they were not there.
+
 Exit codes: 0 clean, 1 findings or refused, 2 the run could not be trusted.
 `;
 
@@ -228,17 +240,33 @@ export function parse(argv: readonly string[]): Parsed {
   if (command !== undefined && spec === undefined) {
     throw new UsageError(`"${command}" is not a command; run spec-brief --help`);
   }
+  let parsed: { values: Values; positionals: string[] };
   try {
-    const { values, positionals } = parseArgs({
+    parsed = parseArgs({
       args: [...argv],
       options: { ...GLOBAL, ...(spec?.options ?? {}) },
       allowPositionals: true,
       strict: true,
-    });
-    return { command, values: values as Values, positionals: positionals.slice(1) };
+    }) as { values: Values; positionals: string[] };
   } catch (error) {
     throw new UsageError((error as Error).message);
   }
+  const positionals = parsed.positionals.slice(1);
+  // What the parser takes is not yet what names something. An option whose
+  // value is empty, as `--root "$DIR"` is where the variable is not set, was
+  // read as the option left out, and an argument no command asked for was
+  // dropped: either way the run answered a question nobody had put, exit 0.
+  for (const [name, value] of Object.entries(parsed.values)) {
+    if (typeof value === 'string' && value.trim() === '') {
+      // Shown as JSON, where a tab or a line break in it can be seen.
+      throw new UsageError(`--${name} is ${JSON.stringify(value)}, which is no value; give it one, or leave the option out`);
+    }
+  }
+  if (spec?.noArgument !== undefined && positionals.length > 0) {
+    const extra = positionals.map((argument) => `"${argument}"`).join(', ');
+    throw new UsageError(`${command} takes no argument, not ${extra}: spec-brief ${command}${spec.noArgument}`);
+  }
+  return { command, values: parsed.values, positionals };
 }
 
 /** The value of an option declared a string, which is all `parseArgs` gives one. */
@@ -359,11 +387,17 @@ async function runInit(run: Run): Promise<number> {
 async function runNew(run: Run): Promise<number> {
   const title = run.positionals.join(' ').trim();
   if (title === '') throw new UsageError('new needs a title: spec-brief new "<title>"');
-  const engine = await openEngine(run);
-  const dependsOn = text(run.values, 'depends-on')
+  const listed = text(run.values, 'depends-on');
+  const dependsOn = listed
     ?.split(',')
     .map((d) => d.trim())
     .filter((d) => d !== '');
+  // A list that names no brief is not a brief that depends on none: written
+  // as given, "," scaffolded a brief with no dependency and said nothing.
+  if (dependsOn?.length === 0) {
+    throw new UsageError(`--depends-on is ${JSON.stringify(listed)}, which names no brief; give it ids with commas between them, as in 7,8, or leave the option out`);
+  }
+  const engine = await openEngine(run);
   const created = await engine.create({
     title,
     id: text(run.values, 'id'),
@@ -505,6 +539,18 @@ export async function main(argv: readonly string[] = process.argv.slice(2), io: 
     if (!spec.formats.includes(format)) {
       err(`--format for ${command} is one of ${spec.formats.join(', ')}, not "${format}"`);
       return EXIT_ERROR;
+    }
+    // A file, or a name with nothing behind it, had the search for a
+    // configuration go on from its parent: the run reported on a tree nobody
+    // had named, and `new` wrote into it. A path that cannot be reached is
+    // not there to the run either. `init` alone is given a directory that
+    // does not exist yet, which it makes.
+    const root = text(values, 'root');
+    if (root !== undefined) {
+      const found = await stat(root).catch(() => null);
+      if (found === null ? command !== 'init' : !found.isDirectory()) {
+        throw new UsageError(`--root is "${root}", which is no directory; give it one, or leave the option out`);
+      }
     }
     const run: Run = {
       today: () => today(io.env ?? process.env),

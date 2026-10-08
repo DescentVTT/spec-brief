@@ -1,10 +1,10 @@
 import { execFileSync, spawn, spawnSync } from 'node:child_process';
 import { existsSync, readFileSync, rmSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 
 import { beforeAll, describe, expect, it } from 'vitest';
 
-import { tempDir } from './helpers.js';
+import { goodBrief, tempDir, writeTree } from './helpers.js';
 
 /**
  * The published binary, spawned as a user would run it. Left out of mutation
@@ -50,6 +50,30 @@ describe('the binary', () => {
       expect(readFileSync(join(root, 'briefs', '001_a-title.md'), 'utf8')).toContain('\ndate: 2026-09-24\n');
     } finally {
       rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  // cli.test.ts gives --root whole paths. A person writes one from where
+  // they stand, and it is read from there: the directory of the process.
+  it('reads a --root written from the directory it was started in, and refuses one that is a file or is not there', () => {
+    const tree = tempDir('bin-root');
+    writeTree(tree, { '.spec-brief.json': '{}', 'briefs/001_a.md': goodBrief(), 'notes.txt': 'a file', 'sub/keep.txt': '' });
+    const bin = resolve('bin/spec-brief.js');
+    const listed = (root: string): { code: number | null; out: string; err: string } => {
+      const result = spawnSync(process.execPath, [bin, 'list', '--no-git', '--root', root], { cwd: tree, encoding: 'utf8' });
+      return { code: result.status, out: result.stdout, err: result.stderr };
+    };
+    try {
+      const refused = (root: string): string => `spec-brief: --root is "${root}", which is no directory; give it one, or leave the option out\n`;
+      // Each listed the briefs of the tree above it, exit 0.
+      expect(listed('notes.txt')).toEqual({ code: 2, out: '', err: refused('notes.txt') });
+      expect(listed('nowhere')).toEqual({ code: 2, out: '', err: refused('nowhere') });
+      expect(listed('')).toEqual({ code: 2, out: '', err: 'spec-brief: --root is "", which is no value; give it one, or leave the option out\n' });
+      const below = listed('sub');
+      expect({ code: below.code, err: below.err }).toEqual({ code: 0, err: '' });
+      expect(below.out).toContain('001');
+    } finally {
+      rmSync(tree, { recursive: true, force: true });
     }
   });
 

@@ -1,4 +1,4 @@
-import { existsSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { afterAll, describe, expect, it } from 'vitest';
@@ -286,6 +286,176 @@ describe('a SOURCE_DATE_EPOCH that cannot be read as a date', () => {
   it('says in the help where the date comes from when --date does not give it', () => {
     expect(HELP).toContain("  --date <YYYY-MM-DD>   the date in its front matter; default SOURCE_DATE_EPOCH's, or today's in UTC\n");
     expect(HELP).toContain("  --date <YYYY-MM-DD>   the archival date; default SOURCE_DATE_EPOCH's, or today's in UTC\n");
+  });
+});
+
+describe('an input that names nothing', () => {
+  // `--root "$DIR"` where the variable is not set, a list of only commas, an
+  // argument no command asked for: each was read as if it were not there, and
+  // the run answered a question nobody had put, exit 0.
+  const noValue = (option: string, shown: string): string => `--${option} is ${shown}, which is no value; give it one, or leave the option out`;
+  const VALUED: [string, string[], string][] = [
+    ['list', [], 'root'],
+    ['list', [], 'config'],
+    ['list', [], 'format'],
+    ['init', [], 'briefs'],
+    ['init', [], 'archive'],
+    ['new', ['T'], 'id'],
+    ['new', ['T'], 'type'],
+    ['new', ['T'], 'wave'],
+    ['new', ['T'], 'depends-on'],
+    ['new', ['T'], 'date'],
+    ['archive', ['1'], 'pr'],
+    ['archive', ['1'], 'commit'],
+    ['archive', ['1'], 'base'],
+    ['archive', ['1'], 'summary'],
+    ['archive', ['1'], 'date'],
+  ];
+
+  it.each(VALUED)('refuses %s %j --%s given nothing, or only space, by the name of the option', (command, args, option) => {
+    for (const [value, shown] of [
+      ['', '""'],
+      [' ', '" "'],
+      // Shown with its escapes, so that what cannot be seen is.
+      ['\t \n', '"\\t \\n"'],
+    ] as const) {
+      expect(() => parse([command, ...args, `--${option}`, value]), shown).toThrow(new UsageError(noValue(option, shown)));
+    }
+    // Written with "=", the option holds the same nothing.
+    expect(() => parse([command, ...args, `--${option}=`])).toThrow(new UsageError(noValue(option, '""')));
+  });
+
+  it('holds every option the help gives a value to that rule', () => {
+    const valued = new Set([...HELP.matchAll(/^ {2}--([a-z-]+) </gm)].map((m) => m[1] as string));
+    expect([...new Set(VALUED.map(([, , option]) => option))].sort()).toEqual([...valued].sort());
+  });
+
+  it('takes a value that holds something, space in it or around it, and every flag', () => {
+    expect(parse(['archive', '1', '--summary', ' Done. ']).values['summary']).toBe(' Done. ');
+    expect(parse(['new', 'T', '--wave', '0']).values['wave']).toBe('0');
+    expect(parse(['new', 'T', '--depends-on', '7, 8']).values['depends-on']).toBe('7, 8');
+    expect(parse(['list', '--ready', '--archived', '--no-git', '--strict']).values).toMatchObject({ ready: true, archived: true, 'no-git': true, strict: true });
+  });
+
+  it.each([
+    ['list', ['nonsense'], 'list takes no argument, not "nonsense": spec-brief list'],
+    ['matrix', ['12', 'extra'], 'matrix takes no argument, not "12", "extra": spec-brief matrix'],
+    ['schedule', ['later'], 'schedule takes no argument, not "later": spec-brief schedule'],
+    // Where the directory a person most likely meant is named.
+    ['init', ['mydir'], 'init takes no argument, not "mydir": spec-brief init; --root <dir> names the directory it sets up, and --briefs <dir> the one for the briefs'],
+  ])('refuses an argument %s does not take, naming it and the usage', (command, extra, message) => {
+    expect(() => parse([command, ...extra])).toThrow(new UsageError(message));
+    // Wherever it stands among the options, and after "--" too.
+    expect(() => parse(['--strict', command, '--no-git', ...extra])).toThrow(new UsageError(message));
+    expect(() => parse(['--', command, ...extra])).toThrow(new UsageError(message));
+  });
+
+  it('takes the arguments a command does take, and none where none is given', () => {
+    expect(parse(['lint', '1', '2']).positionals).toEqual(['1', '2']);
+    expect(parse(['new', 'Two', 'words']).positionals).toEqual(['Two', 'words']);
+    expect(parse(['archive', '1']).positionals).toEqual(['1']);
+    expect(parse(['unarchive', '1']).positionals).toEqual(['1']);
+    for (const command of ['init', 'list', 'matrix', 'schedule']) expect(parse([command, '--no-git']).positionals, command).toEqual([]);
+    // No command, which is the help's to answer.
+    expect(parse(['--version']).positionals).toEqual([]);
+  });
+
+  it('writes nothing for a line it refuses', async () => {
+    const root = plain('cli-nothing', { 'briefs/001_a.md': goodBrief() });
+    // It wrote briefs/_t.md, a file no command reads again.
+    expect(await run(root, ['new', 'T', '--id', ''])).toEqual({ code: EXIT_ERROR, out: '', err: `spec-brief: ${noValue('id', '""')}\n` });
+    expect(await run(root, ['new', 'T', '--root', ' '])).toEqual({ code: EXIT_ERROR, out: '', err: `spec-brief: ${noValue('root', '" "')}\n` });
+    expect(await run(root, ['archive', '1', '--summary', ' '])).toEqual({ code: EXIT_ERROR, out: '', err: `spec-brief: ${noValue('summary', '" "')}\n` });
+    expect(await run(root, ['list', 'nonsense'])).toEqual({ code: EXIT_ERROR, out: '', err: 'spec-brief: list takes no argument, not "nonsense": spec-brief list\n' });
+    expect(await run(root, ['schedule', 'later', '--write'])).toEqual({ code: EXIT_ERROR, out: '', err: 'spec-brief: schedule takes no argument, not "later": spec-brief schedule\n' });
+    expect(readdirSync(join(root, 'briefs'))).toEqual(['001_a.md']);
+    expect(readFileSync(join(root, 'briefs', '001_a.md'), 'utf8')).toBe(goodBrief());
+    // It set up the directory it was started in, and said nothing of "mydir".
+    const empty = dir('cli-nothing-init');
+    expect(await run(empty, ['init', 'mydir'])).toEqual({
+      code: EXIT_ERROR,
+      out: '',
+      err: 'spec-brief: init takes no argument, not "mydir": spec-brief init; --root <dir> names the directory it sets up, and --briefs <dir> the one for the briefs\n',
+    });
+    expect(readdirSync(empty)).toEqual([]);
+    // What the refusal names does it.
+    expect((await run(empty, ['init', '--root', join(empty, 'mydir')])).code).toBe(EXIT_OK);
+    expect(readdirSync(empty)).toEqual(['mydir']);
+    expect(existsSync(join(empty, 'mydir', '.spec-brief.json'))).toBe(true);
+  });
+
+  it('refuses a list of dependencies that names none, and takes one that names some', async () => {
+    const root = plain('cli-depends', { 'briefs/001_a.md': goodBrief() });
+    const names = (shown: string): Result => ({
+      code: EXIT_ERROR,
+      out: '',
+      err: `spec-brief: --depends-on is ${shown}, which names no brief; give it ids with commas between them, as in 7,8, or leave the option out\n`,
+    });
+    // Each scaffolded a brief that depends on nothing.
+    expect(await run(root, ['new', 'T', '--depends-on', ','])).toEqual(names('","'));
+    expect(await run(root, ['new', 'T', '--depends-on', ' ,\t, '])).toEqual(names('" ,\\t, "'));
+    expect(readdirSync(join(root, 'briefs'))).toEqual(['001_a.md']);
+    // A comma too many in a list that names a brief is no brief left out.
+    expect(await run(root, ['new', 'T', '--depends-on', '1,'])).toEqual({ code: EXIT_OK, out: 'wrote briefs/002_t.md\n', err: '' });
+    expect(readFileSync(join(root, 'briefs', '002_t.md'), 'utf8')).toContain('\ndependsOn: ["1"]\n');
+    // And without the option a brief depends on nothing, which is not said in its front matter.
+    expect(await run(root, ['new', 'U'])).toEqual({ code: EXIT_OK, out: 'wrote briefs/003_u.md\n', err: '' });
+    expect(readFileSync(join(root, 'briefs', '003_u.md'), 'utf8')).not.toContain('dependsOn');
+  });
+
+  it('refuses a --root that is no directory, and has init make one that is not there', async () => {
+    // The search for a configuration went on from the parent: each of these
+    // listed, linted or wrote into the tree above the path it was given.
+    const root = plain('cli-root', { 'briefs/001_a.md': goodBrief(), 'notes.txt': 'a file', 'sub/keep.txt': '' });
+    const refused = (given: string): Result => ({ code: EXIT_ERROR, out: '', err: `spec-brief: --root is "${given}", which is no directory; give it one, or leave the option out\n` });
+    const file = join(root, 'notes.txt');
+    const missing = join(root, 'nowhere');
+    for (const command of [['list'], ['lint'], ['new', 'T'], ['init']]) {
+      expect(await run(root, [...command, '--root', file]), command.join(' ')).toEqual(refused(file));
+    }
+    for (const command of [['list'], ['lint'], ['new', 'T'], ['archive', '1', '--dry-run']]) {
+      expect(await run(root, [...command, '--root', missing]), command.join(' ')).toEqual(refused(missing));
+    }
+    expect(readdirSync(join(root, 'briefs'))).toEqual(['001_a.md']);
+    expect(existsSync(missing)).toBe(false);
+    // A directory below the configuration's is a place to start from, as it was.
+    expect(await run(root, ['list', '--root', join(root, 'sub')])).toEqual(await run(root, ['list']));
+    expect((await run(root, ['list', '--root', join(root, 'sub')])).code).toBe(EXIT_OK);
+    // init is the command that makes a directory, so it is given one that is not there.
+    expect((await run(root, ['init', '--root', missing])).code).toBe(EXIT_OK);
+    expect(existsSync(join(missing, '.spec-brief.json'))).toBe(true);
+    // --version and --help answer whatever the root is: they open none.
+    expect((await run(root, ['--version', '--root', file])).code).toBe(EXIT_OK);
+    expect((await run(root, ['list', '--help', '--root', file])).out).toBe(HELP);
+  });
+
+  it('says in one line that a configuration is a directory, named or found', async () => {
+    // Each ended on `unexpected error: Error: EISDIR` and a stack.
+    const root = plain('cli-config-directory', { 'briefs/001_a.md': goodBrief(), 'adir/keep.txt': '' });
+    expect(await run(root, ['list', '--config', 'adir'])).toEqual({ code: EXIT_ERROR, out: '', err: 'spec-brief: adir: is a directory, not a configuration file\n' });
+    const found = dir('cli-config-found');
+    mkdirSync(join(found, '.spec-brief.json'));
+    expect(await run(found, ['list'])).toEqual({ code: EXIT_ERROR, out: '', err: 'spec-brief: .spec-brief.json: is a directory, not a configuration file\n' });
+    // A read that fails for a reason nothing names is still reported whole: a name no file can have.
+    const unnamed = await run(root, ['list', '--config', `a${String.fromCharCode(0)}b`]);
+    expect(unnamed.code).toBe(EXIT_ERROR);
+    expect(unnamed.err).toMatch(/^spec-brief: unexpected error: [^]*\n {4}at /);
+  });
+
+  it('says in one line that a configuration is not JSON, be it text or not', async () => {
+    // A text file's first line break was quoted into the refusal, which made it two lines.
+    const root = plain('cli-config-text', { 'briefs/001_a.md': goodBrief(), 'notes.txt': 'a file\nof two lines\n' });
+    writeFileSync(join(root, 'binary.bin'), Buffer.from([0xff, 0xfe, 0x00, 0x01, 0x1b, 0x5b]));
+    for (const name of ['notes.txt', 'binary.bin']) {
+      const result = await run(root, ['list', '--config', name]);
+      expect({ code: result.code, out: result.out }, name).toEqual({ code: EXIT_ERROR, out: '' });
+      expect(result.err, name).toMatch(/^spec-brief: [a-z]+\.[a-z]+: is not valid JSON \([^\u0000-\u001f\u007f-\u009f]+\)\n$/);
+    }
+  });
+
+  it('says in the help what is refused, and which command makes its root', () => {
+    expect(HELP).toContain('  --root <dir>          run from this directory instead of the current one; it must exist, unless init makes it\n');
+    expect(HELP).toContain('An option given an empty value, a list that names nothing and an argument a\ncommand does not take are refused, not read as if they were not there.\n');
   });
 });
 
@@ -777,10 +947,12 @@ describe('archive and unarchive', () => {
 
   it('reports what git was not handed, or could not do, by its message alone', async () => {
     // Each ended on `unexpected error:` and a stack, as a defect would.
-    const root = repo('cli-archive-git', { 'briefs/001_a.md': goodBrief() });
+    const root = repo('cli-archive-git', { 'briefs/001_a.md': goodBrief(), 'blank.json': '{ "archiving": { "base": " " } }' });
     // A revision that would be read as an option is never handed to git.
     expect(await run(root, ['archive', '1', '--commit=-x', '--dry-run'])).toEqual({ code: EXIT_ERROR, out: '', err: 'spec-brief: "-x" is not a revision\n' });
-    expect(await run(root, ['archive', '1', '--base', ' ', '--dry-run'])).toEqual({ code: EXIT_ERROR, out: '', err: 'spec-brief: " " is not a revision\n' });
+    expect(await run(root, ['archive', '1', '--base=-x', '--dry-run'])).toEqual({ code: EXIT_ERROR, out: '', err: 'spec-brief: "-x" is not a revision\n' });
+    // Nor is one that names nothing: the option's is refused before git is reached, the configuration's here.
+    expect(await run(root, ['archive', '1', '--config', 'blank.json', '--dry-run'])).toEqual({ code: EXIT_ERROR, out: '', err: 'spec-brief: " " is not a revision\n' });
     // An index git cannot read: its status fails, and what git said is the report.
     writeFileSync(join(root, '.git', 'index'), 'no index');
     const unread = await run(root, ['archive', '1', '--dry-run']);
