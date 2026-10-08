@@ -212,6 +212,47 @@ describe('resolving a configuration', () => {
     expect(() => parseConfig('{', 'c.json')).toThrow(/^c\.json: is not valid JSON/);
     expect(() => parseConfig('{"briefs": 1}', 'c.json')).toThrow('c.json: "briefs" must be a string');
   });
+
+  it('says in one line what is not JSON, whatever the text holds', () => {
+    // The parser quotes the text it stopped at, in words of its own that a
+    // test cannot hold: each is asked of the parser, and compared.
+    const parser = (text: string): string => {
+      try {
+        JSON.parse(text);
+      } catch (error) {
+        return (error as Error).message;
+      }
+      throw new Error(`${JSON.stringify(text)} is JSON`);
+    };
+    const said = (text: string): string => {
+      try {
+        parseConfig(text, 'c.json');
+      } catch (error) {
+        return (error as Error).message;
+      }
+      throw new Error(`${JSON.stringify(text)} is a configuration`);
+    };
+    // A line break quoted from the file made the refusal two lines.
+    expect(parser('a file\n')).toContain('\n');
+    expect(said('a file\n')).toBe(`c.json: is not valid JSON (${parser('a file\n').split('\n').join('\\u000a')})`);
+    // Each control character is written as its escape, four digits wide: the ends of both ranges, and an escape sequence's first.
+    for (const [character, escape] of [
+      ['\u0000', '\\u0000'],
+      ['\u001b', '\\u001b'],
+      ['\u001f', '\\u001f'],
+      ['\u007f', '\\u007f'],
+      ['\u009f', '\\u009f'],
+    ] as const) {
+      expect(parser(`${character}x`), escape).toContain(character);
+      expect(said(`${character}x`), escape).toBe(`c.json: is not valid JSON (${parser(`${character}x`).split(character).join(escape)})`);
+    }
+    // What a person can read is left as the parser wrote it: the characters beside each range.
+    for (const character of ['~', '\u00a0', '\u00e9']) {
+      expect(parser(`${character}x`), character).toContain(character);
+      expect(said(`${character}x`), character).toBe(`c.json: is not valid JSON (${parser(`${character}x`)})`);
+    }
+    expect(said(' x')).toBe(`c.json: is not valid JSON (${parser(' x')})`);
+  });
 });
 
 describe('finding the file', () => {

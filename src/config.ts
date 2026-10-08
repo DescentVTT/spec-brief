@@ -418,7 +418,11 @@ export function parseConfig(text: string, file: string): Config {
   try {
     raw = JSON.parse(text.charCodeAt(0) === 0xfeff ? text.slice(1) : text);
   } catch (error) {
-    throw new ConfigError(file, [`is not valid JSON (${(error as Error).message})`]);
+    // The parser quotes what it could not read. A line break quoted from the
+    // file made this refusal two lines, and any other control character was
+    // handed to the terminal: each is written as its escape.
+    const said = (error as Error).message.replace(/[\u0000-\u001f\u007f-\u009f]/g, (c) => `\\u${c.charCodeAt(0).toString(16).padStart(4, '0')}`);
+    throw new ConfigError(file, [`is not valid JSON (${said})`]);
   }
   return resolveConfig(raw, file);
 }

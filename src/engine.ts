@@ -196,7 +196,12 @@ export class BriefEngine {
     const root = configPath === undefined ? (toplevel ?? cwd) : dirname(configPath);
     let config = DEFAULT_CONFIG;
     if (configPath !== undefined) {
-      const text = await new NodeFileSystem(root).read(basename(configPath));
+      const text = await new NodeFileSystem(root).read(basename(configPath)).catch((error: NodeJS.ErrnoException) => {
+        // A directory of that name, found or named with --config, is a
+        // configuration that does not load, and no defect to report a stack for.
+        if (error.code !== 'EISDIR') throw error;
+        throw new ConfigError(relative(cwd, configPath), ['is a directory, not a configuration file']);
+      });
       if (text === null) throw new EngineError('not-found', `${configPath} does not exist`);
       config = parseConfig(text, relative(cwd, configPath));
     }
