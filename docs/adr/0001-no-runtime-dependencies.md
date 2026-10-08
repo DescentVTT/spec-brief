@@ -258,11 +258,11 @@ that names it, nothing written.
   a meaning, so the rule has no exception: `--summary ""` is the one that
   was read as the option left out by design, and a script that has no
   summary leaves the option out. The values refused already - an empty
-  `--type`, `--wave`, `--date`, `--pr`, `--commit`, `--base` or `--format` -
-  say the same line now. A test holds the rule to every option the help
-  gives a value. The library is as it was: `planArchive` given an empty
-  summary writes a banner without one, since a caller that passes a value
-  wrote it.
+  `--type`, `--wave`, `--date`, `--pr`, `--commit`, `--base` or `--format`,
+  and `init`'s `--briefs` and `--archive` - say the same line now. A test
+  holds the rule to every option the help gives a value. The library is as
+  it was: `planArchive` given an empty summary writes a banner without one,
+  since a caller that passes a value wrote it.
 - **A list that names nothing.** `--depends-on` is the one list, and one
   that holds no id is refused: a brief that depends on nothing is scaffolded
   without the option. A comma too many in a list that does name a brief,
