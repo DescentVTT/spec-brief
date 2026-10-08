@@ -262,7 +262,7 @@ Reopens an archived brief: the banner and the hash come off, the status goes bac
 | --- | --- |
 | `0` | Clean. |
 | `1` | Findings, a collision, or a refused action. |
-| `2` | The run could not be trusted - a bad flag, a configuration that does not load, a brief that does not exist, or an error spec-brief did not expect, reported on stderr as `spec-brief: unexpected error:` with its stack. |
+| `2` | The run could not be trusted, or its answer did not arrive - a bad flag, a configuration that does not load, a brief that does not exist, a git command that failed, a `SOURCE_DATE_EPOCH` no date can be made of, a stdout its reader closed before all of the output was written, as a pipeline into `head` does, each said in one line on stderr, or an error spec-brief did not expect, reported on stderr as `spec-brief: unexpected error:` with its stack. |
 
 A run over a briefs directory that does not exist exits 2, because a check over nothing looks exactly like a clean one.
 
