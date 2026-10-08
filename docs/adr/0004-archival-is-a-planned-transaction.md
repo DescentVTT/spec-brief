@@ -116,3 +116,77 @@ shortest link, and far rarer than a brief with no front matter at all.
 hold to the moving brief were rewritten whatever the switch said. Off, no other
 brief is written, and the links they are left holding are reported as
 `stale-link`, a warning with every file and line.
+
+## Amended 2026-10-09: the date the environment gives is read, or refused
+
+The date in the banner, and the one `new` writes into a front matter, is the
+one `--date` gives, else the day `SOURCE_DATE_EPOCH` names, else the clock's,
+in UTC. The variable is how a pipeline has a tool write the same bytes on
+every run
+([its specification](https://reproducible-builds.org/specs/source-date-epoch/)).
+spec-brief has read it since 0.1.0, and the README named it only among the
+errors, and only since 0.6.1.
+
+**A value that cannot be read is refused, not read as unset.** The variable
+was taken when it was all digits and passed over otherwise, so `tomorrow`,
+`1.5`, `-1`, a value with a space beside its digits and an empty one each
+had the clock's date written, exit 0. The pipeline that set the variable to
+fix the date, and mistyped it, got another date and no word: the fall back
+to a default that the family contract rules out
+([spec-core ADR-0005](https://github.com/DescentVTT/spec-core/blob/main/docs/adr/0005-the-family-contract.md)).
+The specification has the value be "an ASCII representation of an integer
+with no fractional component, identical to the output format of `date +%s`",
+and says of a malformed one that the build process "SHOULD exit with a
+non-zero error code". So a variable that is set and is not whole seconds in
+digits alone ends the run with exit 2 and one line that names it, shows what
+it holds - quoted as JSON, so that a space or a newline is seen and the line
+stays one line - and says to set it in digits or unset it.
+
+**The last second is 253402300799**, the end of 9999-12-31, since a date
+here is written YYYY-MM-DD. Measured on 0.6.1: a later time, up to the
+8640000000000 seconds a JavaScript date can hold, made the text
+`+010000-01`, which `new` and `archive` refused as `"+010000-01" is not a
+date written YYYY-MM-DD` with no word of the variable; past that it was
+refused by name. Both are one refusal now, which names the variable and the
+limit. GCC and Clang, which write a four-digit year too, stop at the same
+second.
+
+**A sign, a fraction and a space are refused**, though `-1` is a time, and
+`date +%s` prints one for a day before 1970. `-1` is also what a call that
+failed returns, both compilers refuse a negative value, and the values taken
+are then exactly the ones 0.6.1 read as a date, less the years past 9999.
+Nothing that was passed over is read as a date now, which would have changed
+what is written without a word.
+
+**Set and empty is refused too.** The specification does not speak of it,
+and the variable's readers give three answers, read on 2026-10-09. For
+unset: a shell's `${SOURCE_DATE_EPOCH:-$(date +%s)}` and Perl's `||`, as the
+reproducible-builds examples write them, and CMake. Refused: GCC, Clang's
+parse of it, and Python's `int('')`. The year 1970: `Number('')`, which is
+0, in the same page's example for Node.js. By the specification's words an
+empty value is no integer, so it is malformed. It is also what
+`export SOURCE_DATE_EPOCH=$(git log -1 --format=%ct)` leaves where git
+failed - under `set -e` as well, since the `export` succeeds - and what a
+workflow expression that names an output no step set expands to: the
+mistyped pipeline this refusal is for. The cost falls on a pipeline that
+passes an empty value to mean none, which must leave the variable unset,
+and the line says so. Where readers give three answers, a refusal is the
+one that cannot write the wrong date.
+
+**Only a run that would use the date is stopped.** The date was read before
+any command started, so on 0.6.1 a variable past the last date stopped
+`lint`, `list`, `matrix`, `schedule`, `init` and `unarchive`, which write no
+date, and `new` and `archive` under `--date`, which were told theirs. Exit 2
+says a result cannot be trusted, and nothing those runs answer depends on
+the variable: a pipeline that exports a mistyped one for another tool and
+runs `spec-brief lint` has a lint it can trust, and a job turned red over a
+value the command never reads is a false positive. The date is now asked
+for where it is used, by `new` and `archive` without `--date`, a dry run
+included, before either writes anything. `--version` and `--help` never read
+it, and are how a person finds out what to set. GCC reads the variable the
+same way, when a date is first asked for.
+
+An archival of a brief already archived, which writes nothing, is stopped
+with the rest: the date is asked for before the brief is found. Telling the
+two apart would mean handing the engine a way to ask for the date in place
+of a date, for a case whose answer is to fix the variable either way.
