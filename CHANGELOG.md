@@ -25,6 +25,31 @@ what a run reports.
   Upgrading: set it to whole seconds in digits alone, as `date +%s` prints
   them, no more than `253402300799` (9999-12-31), or pass `--date`, or leave
   it unset; set and empty is not unset.
+- **An option given an empty value is refused by its name, not read as the
+  option left out.** `new "T" --id ""` wrote `briefs/_t.md`, a file no
+  command reads again; `--root ""` ran in the current directory; `archive
+  --summary ""` wrote a banner without the sentence; `init --briefs " "`
+  made a directory named with a space. Every option that takes a value now
+  ends the run with exit 2 and `--id is "", which is no value` for one that
+  is empty or only space, nothing written; the ones refused already say the
+  same line (ADR-0001, [An input that names nothing](README.md#an-input-that-names-nothing)).
+  Upgrading: where a script may hand an option nothing, leave the option
+  out, as `${ID:+--id "$ID"}` does in a shell.
+- **`new --depends-on` refuses a list that names no brief.** `--depends-on
+  ,` scaffolded a brief with no dependency, exit 0. A comma too many in a
+  list that names one, `7,8,`, is dropped as before. Upgrading: leave the
+  option out for a brief that depends on nothing.
+- **`init`, `list`, `matrix` and `schedule` refuse an argument, which they
+  do not take.** `list nonsense` listed every brief, `schedule later
+  --write` ran as `schedule --write`, and `init mydir` set up the current
+  directory, each exit 0; each is now exit 2 with the argument named and the
+  command's usage. Upgrading: drop the argument; `init --root mydir` sets up another
+  directory, and `--briefs mydir` names the one for the briefs.
+- **A `--root` that is no directory is refused.** Given a file or a path
+  that does not exist, the search for a configuration went on from its
+  parent: `lint --root tpyo` linted the tree above, and `new --root tpyo`
+  wrote into it, exit 0. `init` still makes a root that is not there.
+  Upgrading: give `--root` a directory that exists.
 
 ### Fixed
 
@@ -37,6 +62,14 @@ what a run reports.
   YYYY-MM-DD`. Exit 2, as before.
 - The README says what `SOURCE_DATE_EPOCH` does, and `--help` names it
   beside `--date`.
+- A configuration that is a directory, named by `--config` or found as
+  `.spec-brief.json`, is said in one line, `adir: is a directory, not a
+  configuration file`, where the run ended on `unexpected error: Error:
+  EISDIR` and a stack. Exit 2, as before.
+- A configuration that is not JSON is refused in one line whatever the file
+  holds. A line break the parser quoted from it made the refusal two lines,
+  and any other control character reached the terminal as it was; each is
+  now written as its escape. Exit 2, as before.
 
 ## 0.6.1
 
