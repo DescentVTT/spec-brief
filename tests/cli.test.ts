@@ -593,7 +593,7 @@ describe('lint', () => {
     expect(gitlab.map((i) => [i.check_name, i.severity, i.location])).toEqual([['unknown-type', 'major', { path: 'briefs/001_a.md', lines: { begin: 3 } }]]);
   });
 
-  it('colours a terminal, and follows NO_COLOR, FORCE_COLOR and the flags', async () => {
+  it('colours a terminal, and follows NO_COLOR, FORCE_COLOR, a dumb terminal and the flags', async () => {
     const root = plain('cli-lint-color', { 'briefs/001_a.md': goodBrief({ type: 'epic' }) });
     const esc = String.fromCharCode(27);
     expect((await run(root, ['lint'], {}, true)).out).toContain(`${esc}[`);
@@ -603,6 +603,12 @@ describe('lint', () => {
     expect((await run(root, ['lint'], { FORCE_COLOR: '1' })).out).toContain(esc);
     expect((await run(root, ['lint'], { FORCE_COLOR: '0' }, true)).out).not.toContain(esc);
     expect((await run(root, ['lint'], { FORCE_COLOR: '' })).out).not.toContain(esc);
+    // A terminal that says it is dumb gets none, unless colour is forced or asked for; any other terminal's name changes nothing.
+    expect((await run(root, ['lint'], { TERM: 'dumb' }, true)).out).not.toContain(esc);
+    expect((await run(root, ['lint'], { TERM: 'dumb', FORCE_COLOR: '1' }, true)).out).toContain(esc);
+    expect((await run(root, ['lint', '--color'], { TERM: 'dumb' }, true)).out).toContain(esc);
+    expect((await run(root, ['lint'], { TERM: 'xterm-256color' }, true)).out).toContain(esc);
+    expect((await run(root, ['lint'], { TERM: 'DUMB' }, true)).out).toContain(esc);
     expect((await run(root, ['lint', '--color'])).out).toContain(esc);
     expect((await run(root, ['lint', '--no-color'], { FORCE_COLOR: '1' })).out).not.toContain(esc);
     expect((await run(root, ['lint', '--format', 'json', '--color'])).out).not.toContain(esc);
