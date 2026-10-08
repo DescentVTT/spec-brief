@@ -395,9 +395,19 @@ describe('an input that names nothing', () => {
     expect(await run(root, ['new', 'T', '--depends-on', ','])).toEqual(names('","'));
     expect(await run(root, ['new', 'T', '--depends-on', ' ,\t, '])).toEqual(names('" ,\\t, "'));
     expect(readdirSync(join(root, 'briefs'))).toEqual(['001_a.md']);
-    // A comma too many in a list that names a brief is no brief left out.
-    expect(await run(root, ['new', 'T', '--depends-on', '1,'])).toEqual({ code: EXIT_OK, out: 'wrote briefs/002_t.md\n', err: '' });
-    expect(readFileSync(join(root, 'briefs', '002_t.md'), 'utf8')).toContain('\ndependsOn: ["1"]\n');
+    // A place that names no brief is one left out, as "$A,$B" is with one of the two unset: each scaffolded a brief that depends on the rest.
+    const place = (shown: string): Result => ({
+      code: EXIT_ERROR,
+      out: '',
+      err: `spec-brief: --depends-on is ${shown}, which names no brief in one of its places; give it ids with one comma between each two, as in 7,8, and none before or after\n`,
+    });
+    expect(await run(root, ['new', 'T', '--depends-on', '1,'])).toEqual(place('"1,"'));
+    expect(await run(root, ['new', 'T', '--depends-on', ',1'])).toEqual(place('",1"'));
+    expect(await run(root, ['new', 'T', '--depends-on', '1, ,1'])).toEqual(place('"1, ,1"'));
+    expect(readdirSync(join(root, 'briefs'))).toEqual(['001_a.md']);
+    // Spaces beside an id are not a place of their own.
+    expect(await run(root, ['new', 'T', '--depends-on', ' 1 , 1 '])).toEqual({ code: EXIT_OK, out: 'wrote briefs/002_t.md\n', err: '' });
+    expect(readFileSync(join(root, 'briefs', '002_t.md'), 'utf8')).toContain('\ndependsOn: ["1", "1"]\n');
     // And without the option a brief depends on nothing, which is not said in its front matter.
     expect(await run(root, ['new', 'U'])).toEqual({ code: EXIT_OK, out: 'wrote briefs/003_u.md\n', err: '' });
     expect(readFileSync(join(root, 'briefs', '003_u.md'), 'utf8')).not.toContain('dependsOn');
@@ -531,7 +541,7 @@ describe('init and new', () => {
   it('scaffolds a brief with the next id, and says why it cannot', async () => {
     const root = dir('cli-new');
     await run(root, ['init']);
-    const made1 = await run(root, ['new', 'Rotate', 'the', 'tokens', '--wave', '2', '--depends-on', '7, 8,', '--type', 'feature']);
+    const made1 = await run(root, ['new', 'Rotate', 'the', 'tokens', '--wave', '2', '--depends-on', '7, 8', '--type', 'feature']);
     expect(made1).toEqual({ code: EXIT_OK, out: 'wrote briefs/001_rotate-the-tokens.md\n', err: '' });
     const text = readFileSync(join(root, 'briefs', '001_rotate-the-tokens.md'), 'utf8');
     expect(text).toContain('date: 2026-09-24\ntype: feature\nwave: 2\ndependsOn: ["7", "8"]');

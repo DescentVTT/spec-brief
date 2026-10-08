@@ -35,10 +35,12 @@ what a run reports.
   same line (ADR-0001, [An input that names nothing](README.md#an-input-that-names-nothing)).
   Upgrading: where a script may hand an option nothing, leave the option
   out, as `${ID:+--id "$ID"}` does in a shell.
-- **`new --depends-on` refuses a list that names no brief.** `--depends-on
-  ,` scaffolded a brief with no dependency, exit 0. A comma too many in a
-  list that names one, `7,8,`, is dropped as before. Upgrading: leave the
-  option out for a brief that depends on nothing.
+- **`new --depends-on` refuses a list that names no brief, and a place in
+  one that names none.** `--depends-on ,` scaffolded a brief with no
+  dependency, and `7,8,` or `7,,8` one that depends on 7 and 8, as `"$A,$B"`
+  with `$B` unset made one that depends on `$A` alone, each exit 0.
+  Upgrading: leave the option out for a brief that depends on nothing, and
+  write the list with one comma between each two ids and none at either end.
 - **`init`, `list`, `matrix` and `schedule` refuse an argument, which they
   do not take.** `list nonsense` listed every brief, `schedule later
   --write` ran as `schedule --write`, and `init mydir` set up the current

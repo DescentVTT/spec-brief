@@ -388,14 +388,16 @@ async function runNew(run: Run): Promise<number> {
   const title = run.positionals.join(' ').trim();
   if (title === '') throw new UsageError('new needs a title: spec-brief new "<title>"');
   const listed = text(run.values, 'depends-on');
-  const dependsOn = listed
-    ?.split(',')
-    .map((d) => d.trim())
-    .filter((d) => d !== '');
+  const dependsOn = listed?.split(',').map((d) => d.trim());
   // A list that names no brief is not a brief that depends on none: written
   // as given, "," scaffolded a brief with no dependency and said nothing.
-  if (dependsOn?.length === 0) {
+  if (dependsOn?.every((d) => d === '')) {
     throw new UsageError(`--depends-on is ${JSON.stringify(listed)}, which names no brief; give it ids with commas between them, as in 7,8, or leave the option out`);
+  }
+  // And a place in it that names none is a brief left out: "$A,$B" with one
+  // of the two unset scaffolded a brief that depends on the other alone.
+  if (dependsOn?.includes('')) {
+    throw new UsageError(`--depends-on is ${JSON.stringify(listed)}, which names no brief in one of its places; give it ids with one comma between each two, as in 7,8, and none before or after`);
   }
   const engine = await openEngine(run);
   const created = await engine.create({

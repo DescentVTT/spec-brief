@@ -265,9 +265,12 @@ that names it, nothing written.
   since a caller that passes a value wrote it.
 - **A list that names nothing.** `--depends-on` is the one list, and one
   that holds no id is refused: a brief that depends on nothing is scaffolded
-  without the option. A comma too many in a list that does name a brief,
-  `7,8,`, is dropped, as a test has held since 0.1.0: the list names its
-  briefs, and the comma is not one left out.
+  without the option. A place in a list that names no brief is refused as
+  well, the comma too many in `7,8,` and the gap in `7,,8`. A test had held
+  since 0.1.0 that such a comma is dropped; but a list a script builds as
+  `"$A,$B"` reads `7,` when `$B` is not set, and a brief scaffolded from it
+  depends on one brief where two were meant, which no later command can
+  know.
 - **An argument a command does not take.** `init`, `list`, `matrix` and
   `schedule` take none, and refuse one with its name and their usage.
   `init`'s names `--root`, which sets up another directory, and `--briefs`,
