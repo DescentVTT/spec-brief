@@ -105,20 +105,33 @@ async function exists(path: string): Promise<boolean> {
   }
 }
 
+/** The last second of 9999-12-31, the last date written YYYY-MM-DD. */
+const LAST_SECOND = 253402300799;
+
 /**
  * Today, in UTC. `SOURCE_DATE_EPOCH` wins where it is set, which is what makes
  * a banner written in a reproducible pipeline reproducible.
  *
- * A number of seconds past the last date there is, 8640000000000, makes no
- * date, and the date's own complaint is a RangeError that names no variable:
- * it is refused here, by name. What is not a whole number is read as unset.
+ * Set, it is what its specification says it is: whole seconds since
+ * 1970-01-01 in digits alone, as `date +%s` prints them, and here no later
+ * than the last date written YYYY-MM-DD. Anything else is refused by name,
+ * an empty value too, which is what a command substitution that failed
+ * leaves. Read as unset, it had the run write the clock's date where a
+ * pipeline asked for its own, and say nothing.
  */
 export function today(env: Readonly<Record<string, string | undefined>> = process.env): string {
   const epoch = env['SOURCE_DATE_EPOCH'];
-  // The check for a variable that is not set is the compiler's: unset, it would read as "undefined", which is no number.
-  const when = epoch !== undefined && /^\d+$/.test(epoch) ? new Date(Number(epoch) * 1000) : new Date();
-  if (Number.isNaN(when.getTime())) {
-    throw new EngineError('invalid', `SOURCE_DATE_EPOCH is "${epoch}", which is not a time: no date is that many seconds after 1970-01-01; set it to a date's seconds, or unset it`);
+  let when = new Date();
+  if (epoch !== undefined) {
+    // Quoted as JSON, so a newline or a tab in it is seen, and the refusal stays one line.
+    const held = `SOURCE_DATE_EPOCH is ${JSON.stringify(epoch)}`;
+    if (!/^\d+$/.test(epoch)) {
+      throw new EngineError('invalid', `${held}, which is not a whole number of seconds since 1970-01-01; set it to one in digits alone, as "date +%s" prints it, or unset it`);
+    }
+    if (Number(epoch) > LAST_SECOND) {
+      throw new EngineError('invalid', `${held}, which is after 9999-12-31, the last date written YYYY-MM-DD; set it to ${LAST_SECOND} or less, or unset it`);
+    }
+    when = new Date(Number(epoch) * 1000);
   }
   return when.toISOString().slice(0, 10);
 }

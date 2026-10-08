@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { afterAll, describe, expect, it } from 'vitest';
@@ -210,16 +210,82 @@ describe('a reader that closed the output', () => {
   });
 });
 
-describe('a SOURCE_DATE_EPOCH no date can be made of', () => {
-  it('is named, with what to do about it, and ends the run with exit 2', async () => {
-    // Digits, so it is read as seconds, and more of them than any date has:
-    // the date's own complaint was a RangeError and a stack.
-    const root = plain('cli-epoch', { 'briefs/001_a.md': goodBrief() });
-    expect(await run(root, ['list'], { SOURCE_DATE_EPOCH: '99999999999999999' })).toEqual({
-      code: EXIT_ERROR,
-      out: '',
-      err: 'spec-brief: SOURCE_DATE_EPOCH is "99999999999999999", which is not a time: no date is that many seconds after 1970-01-01; set it to a date\'s seconds, or unset it\n',
+describe('a SOURCE_DATE_EPOCH that cannot be read as a date', () => {
+  // A pipeline sets it to have the date it names written, and a value that is
+  // no such date was read as unset: the clock's date, exit 0, and no word.
+  const notSeconds = (shown: string): string =>
+    `spec-brief: SOURCE_DATE_EPOCH is ${shown}, which is not a whole number of seconds since 1970-01-01; set it to one in digits alone, as "date +%s" prints it, or unset it\n`;
+  const tooLate = (shown: string): string =>
+    `spec-brief: SOURCE_DATE_EPOCH is ${shown}, which is after 9999-12-31, the last date written YYYY-MM-DD; set it to 253402300799 or less, or unset it\n`;
+  const files = { 'briefs/001_a.md': goodBrief(), 'briefs/002_b.md': goodBrief() };
+
+  it.each([
+    ['a word', 'tomorrow', notSeconds('"tomorrow"')],
+    // What `SOURCE_DATE_EPOCH=$(git log -1 --format=%ct)` leaves where git failed.
+    ['nothing at all', '', notSeconds('""')],
+    ['a fraction', '1.5', notSeconds('"1.5"')],
+    ['a time before 1970', '-1', notSeconds('"-1"')],
+    ['a space before its digits', ' 1790208000', notSeconds('" 1790208000"')],
+    ['the newline a command printed after them', '1790208000\n', notSeconds('"1790208000\\n"')],
+    // The date check refused these as "+010000-01", with no word of the variable.
+    ['the first second of the year 10000', '253402300800', tooLate('"253402300800"')],
+    // The date's own complaint was a RangeError, and before 0.6.1 a stack.
+    ['more seconds than any date has', '99999999999999999', tooLate('"99999999999999999"')],
+  ])('ends new and archive with exit 2 and one line that names it, when it holds %s', async (_kind, epoch, err) => {
+    const root = plain('cli-epoch', files);
+    for (const argv of [
+      ['new', 'Third'],
+      ['archive', '1'],
+      ['archive', '1', '--dry-run'],
+      ['archive', '1', '--format', 'json'],
+    ]) {
+      expect(await run(root, argv, { SOURCE_DATE_EPOCH: epoch }), argv.join(' ')).toEqual({ code: EXIT_ERROR, out: '', err });
+    }
+    // Nothing was written: no third brief, and the first is where it was.
+    expect(readdirSync(join(root, 'briefs'))).toEqual(['001_a.md', '002_b.md']);
+  });
+
+  it.each([['tomorrow'], [''], ['253402300800'], ['99999999999999999']])('stops no command that writes no date, and none that was told the date, when it holds "%s"', async (epoch) => {
+    // The answer of each is the one it gives under a variable that can be
+    // read: a run is not stopped over a value it has no use for.
+    const unread = { SOURCE_DATE_EPOCH: epoch };
+    const [here, twin] = [plain('cli-epoch-unread', files), plain('cli-epoch-read', files)];
+    for (const argv of [
+      ['--version'],
+      ['--help'],
+      ['lint'],
+      ['list'],
+      ['matrix'],
+      ['schedule'],
+      ['new', 'Third', '--date', '2026-01-02'],
+      ['archive', '2', '--date', '2026-01-03'],
+      ['list', '--archived', '--format', 'json'],
+      ['unarchive', '2'],
+    ]) {
+      const result = await run(here, argv, unread);
+      expect(result, argv.join(' ')).toEqual(await run(twin, argv));
+      expect(result.err, argv.join(' ')).toBe('');
+    }
+    // The dates written are the ones the flags gave.
+    expect(readFileSync(join(here, 'briefs', '003_third.md'), 'utf8')).toContain('\ndate: 2026-01-02\n');
+    expect((await run(here, ['archive', '2', '--date', '2026-01-03', '--dry-run'], unread)).out).toContain('> **Archived 2026-01-03.**');
+    expect(await run(dir('cli-epoch-init'), ['init'], unread)).toEqual({
+      code: EXIT_OK,
+      out: 'wrote .spec-brief.json\nwrote briefs/.gitkeep\nwrote briefs/archive/.gitkeep\nnext: spec-brief new "<title>"\n',
+      err: '',
     });
+  });
+
+  it('writes the date of the last second it may hold, and of the first', async () => {
+    const root = plain('cli-epoch-ends', files);
+    expect(await run(root, ['new', 'Last'], { SOURCE_DATE_EPOCH: '253402300799' })).toEqual({ code: EXIT_OK, out: 'wrote briefs/003_last.md\n', err: '' });
+    expect(readFileSync(join(root, 'briefs', '003_last.md'), 'utf8')).toContain('\ndate: 9999-12-31\n');
+    expect((await run(root, ['archive', '1', '--dry-run'], { SOURCE_DATE_EPOCH: '0' })).out).toContain('> **Archived 1970-01-01.**');
+  });
+
+  it('says in the help where the date comes from when --date does not give it', () => {
+    expect(HELP).toContain("  --date <YYYY-MM-DD>   the date in its front matter; default SOURCE_DATE_EPOCH's, or today's in UTC\n");
+    expect(HELP).toContain("  --date <YYYY-MM-DD>   the archival date; default SOURCE_DATE_EPOCH's, or today's in UTC\n");
   });
 });
 
