@@ -200,6 +200,7 @@ export function dependencyCycles(corpus: Corpus): Brief[][] {
   for (const brief of nodes) if (!index.has(brief)) connect(brief);
 
   return components.map((component) => {
+    // Two briefs of a component are two files, so no two compare equal.
     const start = [...component].sort((a, b) => (a.file < b.file ? -1 : 1))[0]!;
     return cyclePath(start, edges);
   });

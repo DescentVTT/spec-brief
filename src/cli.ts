@@ -376,6 +376,9 @@ function integer(values: Values, key: string, minimum: number): number | undefin
 }
 
 async function version(): Promise<string> {
+  // `JSON.parse` reads a file's bytes as it reads their text in UTF-8, so the
+  // encoding says what the manifest is and decides nothing: with none named,
+  // the version read is the same, and no test can tell the two apart.
   const pkg: { version: string } = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'));
   return pkg.version;
 }

@@ -92,6 +92,7 @@ export function exportsTarget(exports: unknown, subpath: string): string | null 
 /** A package.json, `undefined` when there is none to read. */
 async function manifest(path: string): Promise<Record<string, unknown> | undefined> {
   try {
+    // The encoding decides nothing here either, for the reason `version` in cli.ts has.
     return JSON.parse(await readFile(path, 'utf8'));
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === 'ENOENT' || (error as NodeJS.ErrnoException).code === 'ENOTDIR') return undefined;
