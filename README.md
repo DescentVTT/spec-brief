@@ -246,16 +246,21 @@ Reopens an archived brief: the banner and the hash come off, the status goes bac
 
 ### Every command
 
-| Flag | What it does |
-| --- | --- |
-| `--root <dir>` | Runs from another directory, which must be there: only `init` makes one that is not. |
-| `--config <file>` | Names the configuration. |
-| `--no-config` | Uses the defaults. |
-| `--format <format>` | `pretty` by default, or `json`; `lint`, `matrix` and `schedule`, which report findings, also write `sarif`, `github` and `gitlab`, and `--help` lists each command's formats. |
-| `--strict` | Makes warnings fail the run. |
-| `--no-git` | Leaves git out even inside a repository: the tree is read from disk, and `archive` records no commit. |
-| `--color`, `--no-color` | Override `NO_COLOR`, `FORCE_COLOR`, `TERM=dumb` and the terminal check. |
-| `--help`, `--version` | Do what they say. |
+Every command takes these, except where the last column names it: an option is [refused where taking it would tell someone what is not so](#an-option-a-command-does-not-read).
+
+| Flag | What it does | Not for |
+| --- | --- | --- |
+| `--root <dir>` | Runs from another directory, which must be there: only `init` makes one that is not. | |
+| `--config <file>` | Names the configuration. | `init`, which writes `.spec-brief.json` |
+| `--no-config` | Uses the defaults. | |
+| `--format <format>` | `pretty` by default, or `json`; `lint`, `matrix` and `schedule`, which report findings, also write `sarif`, `github` and `gitlab`, and `--help` lists each command's formats. | |
+| `--strict` | Makes warnings fail the run. | `init`, `new` and `list`, which have none |
+| `--no-git` | Leaves git out even inside a repository: the tree is read from disk, and `archive` records no commit. | |
+| `--color` | Colour, whatever the environment and the terminal say. | `init` and `new`, which print none |
+| `--no-color` | No colour, whatever they say. | |
+| `--help`, `--version` | Do what they say, whatever else is on the line. | |
+
+Without `--color` or `--no-color`, `NO_COLOR` set to anything turns colour off; otherwise `FORCE_COLOR` turns it on, and `FORCE_COLOR=0` or `FORCE_COLOR=false` off, on a terminal too; otherwise `TERM=dumb` turns it off; otherwise a terminal has colour and a pipe has none. `NO_COLOR` or `FORCE_COLOR` set to nothing is as unset. Only the `pretty` format has colour.
 
 **Exit codes:**
 
@@ -263,7 +268,7 @@ Reopens an archived brief: the banner and the hash come off, the status goes bac
 | --- | --- |
 | `0` | Clean. |
 | `1` | Findings, a collision, or a refused action. |
-| `2` | The run could not be trusted, or its answer did not arrive - a bad flag, [an input that names nothing](#an-input-that-names-nothing), a configuration that does not load, a brief that does not exist, a git command that failed, a `SOURCE_DATE_EPOCH` that [cannot be read as a date](#todays-date) where one is to be written, a stdout its reader closed before all of the output was written, as a pipeline into `head` does, each said in one line on stderr, or an error spec-brief did not expect, reported on stderr as `spec-brief: unexpected error:` with its stack. |
+| `2` | The run could not be trusted, or its answer did not arrive - a bad flag, [an input that names nothing](#an-input-that-names-nothing), [an option the command does not read](#an-option-a-command-does-not-read), a configuration that does not load, a brief that does not exist, a git command that failed, a `SOURCE_DATE_EPOCH` that [cannot be read as a date](#todays-date) where one is to be written, a stdout its reader closed before all of the output was written, as a pipeline into `head` does, each said in one line on stderr, or an error spec-brief did not expect, reported on stderr as `spec-brief: unexpected error:` with its stack. |
 
 A run over a briefs directory that does not exist exits 2, because a check over nothing looks exactly like a clean one.
 
@@ -276,6 +281,25 @@ An option, an argument or a path that is given and names nothing is refused: exi
 - **An argument a command does not take.** `init`, `list`, `matrix` and `schedule` take none and refuse one by name, with their usage. `init mydir` set up the current directory; `init --root mydir` is what sets up another.
 - **A `--root` that is no directory.** A file, or a path that does not exist, is refused: the search for a configuration would go on from its parent, and the run would report on, or `new` write into, the tree above. A directory below the configuration's is a place to start from, as the current directory is.
 - **A configuration that is a directory**, named by `--config` or found under the configuration's name, does not load, and is said so in a line, as one that is not JSON is.
+
+### An option a command does not read
+
+An option is refused where taking it would tell someone what is not so: exit 2, one line that names the command, the option, what the command does read and what it takes besides, nothing written. `init --strict` would otherwise say the briefs had been set up strictly, and `init --config team.json` that the configuration had been written there.
+
+| Command | Refuses | Because it would say |
+| --- | --- | --- |
+| `init` | `--config`, `--strict`, `--color` | That the configuration was written to the file named, where `.spec-brief.json` is; that something was strict, where `init` has no warning to fail on; that colour was printed, where it prints none. |
+| `new` | `--strict`, `--color` | That a warning would have failed it, where it has none; that colour was printed, where it prints none. |
+| `list` | `--strict` | That a warning would have failed it, where it reports no finding. |
+
+```text
+spec-brief: init does not read --strict; it reads --root, --format, --briefs and --archive, and takes --no-config, --no-git and --no-color
+```
+
+- **Two options of which one would go unread** are refused together, for the same reason: `--config <file>` beside `--no-config` says the file was read, where the defaults ran and it was never opened, and `--color` beside `--no-color` that colour was forced on, where it was off. Give one of the two.
+- **An option that asks a command to leave out what it never does is taken**, since it asks for what is already so: `--no-color` by `init` and `new`, which print no colour, `--no-git` by `init`, which asks git nothing, and `--no-config` by `init`, which opens no configuration file. A script that runs every command in a tree without git, or into a log, passes such an option to each of them. `init --no-config` still writes over no configuration: where one is there, it stops as `init` does.
+- **An option a format has nothing to read for is taken**: `--no-color` or `--color` beside `--format json` changes nothing, and a caller that asks for JSON passes `--no-color` beside it.
+- **`--help` and `--version` answer first**: `init --strict --help` prints the help.
 
 ### Today's date
 

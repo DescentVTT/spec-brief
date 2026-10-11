@@ -465,7 +465,205 @@ describe('an input that names nothing', () => {
 
   it('says in the help what is refused, and which command makes its root', () => {
     expect(HELP).toContain('  --root <dir>          run from this directory instead of the current one; it must exist, unless init makes it\n');
-    expect(HELP).toContain('An option given an empty value, a list that names nothing and an argument a\ncommand does not take are refused, not read as if they were not there.\n');
+    expect(HELP).toContain('An option given an empty value, a list that names nothing and an argument a\ncommand does not take are refused, not read as if they were not there.');
+  });
+});
+
+describe('an option that would tell someone what is not so', () => {
+  // `init --strict`, `init --config team.json`, `new T --color`, `list --strict`:
+  // each ran as the line without the option does and exited 0, which told
+  // someone the briefs were set up strictly, or the configuration written
+  // where it was not. An option that asks a command to leave out what it
+  // never does, `init --no-git`, asks for what is already so, and is taken.
+  const OFFERED = ['root', 'config', 'no-config', 'format', 'strict', 'no-git', 'color', 'no-color'] as const;
+
+  /** The table in the README: what each command refuses, and in its refusal what it reads and what it takes besides. */
+  const COMMANDS: Record<string, { line: string[]; refuses: readonly string[]; reads: string }> = {
+    init: { line: ['init'], refuses: ['config', 'strict', 'color'], reads: '--root, --format, --briefs and --archive, and takes --no-config, --no-git and --no-color' },
+    new: {
+      line: ['new', 'T'],
+      refuses: ['strict', 'color'],
+      reads: '--root, --config, --no-config, --format, --no-git, --id, --type, --wave, --depends-on and --date, and takes --no-color',
+    },
+    list: { line: ['list'], refuses: ['strict'], reads: '--root, --config, --no-config, --format, --no-git, --color, --no-color, --ready and --archived' },
+    lint: { line: ['lint'], refuses: [], reads: '' },
+    matrix: { line: ['matrix'], refuses: [], reads: '' },
+    schedule: { line: ['schedule'], refuses: [], reads: '' },
+    archive: { line: ['archive', '1', '--dry-run'], refuses: [], reads: '' },
+    unarchive: { line: ['unarchive', '2', '--dry-run'], refuses: [], reads: '' },
+  };
+
+  /** A tree every command runs clean in: a live brief in its wave, an archived one, a second configuration. */
+  async function tree(name: string): Promise<string> {
+    const root = plain(name, { 'team.json': '{}', 'briefs/001_a.md': goodBrief({ wave: '1' }), 'briefs/002_b.md': goodBrief({ wave: '1' }) });
+    expect((await run(root, ['archive', '2'])).code).toBe(EXIT_OK);
+    return root;
+  }
+
+  const given = (option: string, root: string): string[] => {
+    if (option === 'root') return ['--root', root];
+    if (option === 'config') return ['--config', 'team.json'];
+    if (option === 'format') return ['--format', 'json'];
+    return [`--${option}`];
+  };
+
+  it('holds the help to the commands and the options of this table', () => {
+    const commands = [...(HELP.split('\nOptions for every command')[0] as string).matchAll(/^ {2}([a-z]+) /gm)].map((m) => m[1] as string);
+    expect(commands.sort()).toEqual(Object.keys(COMMANDS).sort());
+    const offered = (HELP.split('\nOptions for every command')[1] as string).split('\n\n')[0] as string;
+    expect([...offered.matchAll(/--([a-z-]+)/g)].map((m) => m[1] as string).filter((name, i, all) => all.indexOf(name) === i)).toEqual([...OFFERED, 'help', 'version']);
+  });
+
+  it.each(Object.keys(COMMANDS))('%s refuses each option that would say of it what is not so, by both names, and runs with every other', async (command) => {
+    const { line, refuses, reads } = COMMANDS[command] as { line: string[]; refuses: readonly string[]; reads: string };
+    const root = command === 'init' ? '' : await tree(`cli-unread-${command}`);
+    for (const option of OFFERED) {
+      // init sets up a directory of its own each time: a second init of one is refused for another reason.
+      const cwd = command === 'init' ? dir(`cli-unread-init-${option}`) : root;
+      const args = given(option, command === 'init' ? join(cwd, 'made') : cwd);
+      const result = await run(cwd, [...line, ...args]);
+      if (refuses.includes(option)) {
+        const refusal = { code: EXIT_ERROR, out: '', err: `spec-brief: ${command} does not read --${option}; it reads ${reads}\n` };
+        expect(result, `${command} --${option}`).toEqual(refusal);
+        // Wherever the option stands, and nothing is written for it.
+        expect(await run(cwd, [...args, ...line]), `--${option} ${command}`).toEqual(refusal);
+        if (command === 'init') expect(readdirSync(cwd), option).toEqual([]);
+      } else {
+        expect({ code: result.code, err: result.err }, `${command} --${option}`).toEqual({ code: EXIT_OK, err: '' });
+      }
+    }
+    if (command === 'new') expect(readdirSync(join(root, 'briefs')).sort()).toEqual(['001_a.md', '003_t.md', '004_t.md', '005_t.md', '006_t.md', '007_t.md', '008_t.md', 'archive']);
+  });
+
+  it('names the first such option as the line was typed, and an option of the command before a format it does not write', async () => {
+    const empty = dir('cli-unread-order');
+    const reads = '--root, --format, --briefs and --archive, and takes --no-config, --no-git and --no-color';
+    expect((await run(empty, ['init', '--color', '--strict'])).err).toBe(`spec-brief: init does not read --color; it reads ${reads}\n`);
+    expect((await run(empty, ['init', '--strict', '--color'])).err).toBe(`spec-brief: init does not read --strict; it reads ${reads}\n`);
+    expect((await run(empty, ['--strict', 'init', '--briefs', 'specs', '--color'])).err).toBe(`spec-brief: init does not read --strict; it reads ${reads}\n`);
+    expect((await run(empty, ['init', '--format', 'sarif', '--strict'])).err).toBe(`spec-brief: init does not read --strict; it reads ${reads}\n`);
+    // An option that is taken is passed over for the one that is not, wherever it stands.
+    expect((await run(empty, ['init', '--no-config', '--no-color', '--config', 'team.json'])).err).toBe(`spec-brief: init does not read --config; it reads ${reads}\n`);
+    // An argument init does not take is said first, as it was: the line is read before the command is asked.
+    expect((await run(empty, ['init', 'mydir', '--strict'])).err).toMatch(/^spec-brief: init takes no argument, not "mydir"/);
+    expect(readdirSync(empty)).toEqual([]);
+  });
+
+  it('takes an option that asks a command to leave out what it never does, and runs as without it', async () => {
+    // init opens no configuration file, asks git nothing and prints no colour;
+    // new prints none. A script that runs every command in a tree without
+    // git passes --no-git to each, as this suite does.
+    const wrote = { code: EXIT_OK, out: 'wrote .spec-brief.json\nwrote briefs/.gitkeep\nwrote briefs/archive/.gitkeep\nnext: spec-brief new "<title>"\n', err: '' };
+    const files = (root: string): string[] => (readdirSync(root, { recursive: true }) as string[]).map((path) => path.replaceAll('\\', '/')).filter((path) => !path.startsWith('.git/') && path !== '.git').sort();
+    // The line with none of them, in a repository, where the suite hands it no --no-git.
+    const bare = dir('cli-already-so-bare');
+    initRepo(bare);
+    expect(await run(bare, ['init'])).toEqual(wrote);
+    const configuration = readFileSync(join(bare, '.spec-brief.json'), 'utf8');
+    for (const options of [['--no-git'], ['--no-config'], ['--no-color'], ['--no-config', '--no-git', '--no-color']]) {
+      const root = dir(`cli-already-so${options.join('')}`);
+      // Wherever they stand; the directory is given a .git of its own so that the line is as written here.
+      mkdirSync(join(root, '.git'));
+      expect(await run(root, [...options.slice(1), 'init', ...options.slice(0, 1)]), options.join(' ')).toEqual(wrote);
+      expect(files(root), options.join(' ')).toEqual(files(bare));
+      expect(readFileSync(join(root, '.spec-brief.json'), 'utf8'), options.join(' ')).toBe(configuration);
+    }
+    // --no-config has init open no configuration, which it never does; it still writes over none.
+    expect(await run(bare, ['init', '--no-config'])).toEqual({ code: EXIT_ERROR, out: '', err: 'spec-brief: .spec-brief.json already exists here; edit it instead\n' });
+    expect(readFileSync(join(bare, '.spec-brief.json'), 'utf8')).toBe(configuration);
+    // new prints no colour, and takes --no-color; the others it reads.
+    expect(await run(bare, ['new', 'T', '--no-color'])).toEqual({ code: EXIT_OK, out: 'wrote briefs/001_t.md\n', err: '' });
+  });
+
+  it('refuses --config beside --no-config, and --color beside --no-color, of which one went unread', async () => {
+    // The defaults ran and the file was never opened; colour was off, whatever --color asked.
+    const root = plain('cli-unread-pairs', { 'team.json': JSON.stringify({ briefs: 'specs' }), 'specs/001_a.md': goodBrief(), 'briefs/001_b.md': goodBrief({ type: 'epic' }) });
+    const config = { code: EXIT_ERROR, out: '', err: 'spec-brief: --config is given beside --no-config, which has the run read no configuration file; give one of the two\n' };
+    for (const line of [['lint'], ['list'], ['matrix'], ['schedule'], ['new', 'T'], ['archive', '1', '--dry-run'], ['unarchive', '1', '--dry-run']]) {
+      expect(await run(root, [...line, '--config', 'team.json', '--no-config']), line.join(' ')).toEqual(config);
+      expect(await run(root, ['--no-config', ...line, '--config', 'team.json']), line.join(' ')).toEqual(config);
+    }
+    // A file that is not there is not looked for either: the pair is refused before any is opened.
+    expect(await run(root, ['lint', '--config', 'nowhere.json', '--no-config'])).toEqual(config);
+    expect(readdirSync(join(root, 'specs'))).toEqual(['001_a.md']);
+    expect(readdirSync(join(root, 'briefs'))).toEqual(['001_b.md']);
+    // Each of the two alone is read, as it was.
+    expect(await run(root, ['lint', '--config', 'team.json'])).toEqual({ code: EXIT_OK, out: '1 brief(s) checked, no findings\n', err: '' });
+    expect((await run(root, ['lint', '--no-config'])).code).toBe(EXIT_FAILED);
+
+    const colour = { code: EXIT_ERROR, out: '', err: 'spec-brief: --color is given beside --no-color, which turns colour off; give one of the two\n' };
+    for (const line of [['lint'], ['list'], ['matrix'], ['schedule'], ['archive', '1', '--dry-run'], ['unarchive', '1', '--dry-run']]) {
+      expect(await run(root, [...line, '--color', '--no-color']), line.join(' ')).toEqual(colour);
+      expect(await run(root, ['--no-color', ...line, '--color']), line.join(' ')).toEqual(colour);
+    }
+    const esc = String.fromCharCode(27);
+    expect((await run(root, ['lint', '--color'])).out).toContain(esc);
+    expect((await run(root, ['lint', '--no-color'], { FORCE_COLOR: '1' })).out).not.toContain(esc);
+    // Where a command refuses one of a pair for itself, that is what it says.
+    expect((await run(dir('cli-unread-pairs-init'), ['init', '--no-config', '--config', 'team.json'])).err).toBe(
+      'spec-brief: init does not read --config; it reads --root, --format, --briefs and --archive, and takes --no-config, --no-git and --no-color\n',
+    );
+    expect((await run(root, ['new', 'T', '--no-color', '--color'])).err).toBe(
+      'spec-brief: new does not read --color; it reads --root, --config, --no-config, --format, --no-git, --id, --type, --wave, --depends-on and --date, and takes --no-color\n',
+    );
+  });
+
+  it('takes an option a format has nothing to read for, as a caller that asks for JSON passes --no-color beside it', async () => {
+    // The lines spec-harness has run since its 0.1.0, and --color beside a format that has none.
+    const root = repo('cli-unread-harness', { 'briefs/001_a.md': goodBrief({ wave: '1' }), 'briefs/002_b.md': goodBrief({ wave: '1' }) });
+    expect((await run(root, ['archive', '2', '--commit', 'HEAD'])).code).toBe(EXIT_OK);
+    commitAll(root, 'the second round is archived');
+    const list = await run(root, ['list', '--archived', '--format', 'json', '--no-color']);
+    expect({ code: list.code, err: list.err }).toEqual({ code: EXIT_OK, err: '' });
+    expect((JSON.parse(list.out) as { briefs: { id: string }[] }).briefs.map((b) => b.id).sort()).toEqual(['001', '002']);
+    for (const line of [
+      ['archive', '1', '--dry-run', '--format', 'json', '--no-color'],
+      ['archive', '1', '--dry-run', '--format', 'json', '--no-color', '--base', 'main'],
+    ]) {
+      const plan = await run(root, line);
+      expect({ code: plan.code, err: plan.err }, line.join(' ')).toEqual({ code: EXIT_OK, err: '' });
+      expect(JSON.parse(plan.out), line.join(' ')).toEqual(expect.objectContaining({ command: 'archive', ok: true, dryRun: true }));
+    }
+    expect((await run(dir('cli-unread-harness-init'), ['init'])).code).toBe(EXIT_OK);
+    const forced = await run(root, ['list', '--format', 'json', '--color']);
+    expect({ code: forced.code, err: forced.err }).toEqual({ code: EXIT_OK, err: '' });
+    expect(forced.out).toBe((await run(root, ['list', '--format', 'json'])).out);
+  });
+
+  it('lets --help and --version answer a line it would refuse', async () => {
+    const cwd = process.cwd();
+    const pkg = JSON.parse(readFileSync('package.json', 'utf8')) as { version: string };
+    expect(await run(cwd, ['init', '--strict', '--help'])).toEqual({ code: EXIT_OK, out: HELP, err: '' });
+    expect(await run(cwd, ['list', '--strict', '--version'])).toEqual({ code: EXIT_OK, out: `${pkg.version}\n`, err: '' });
+    expect(await run(cwd, ['lint', '--config', 'team.json', '--no-config', '-h'])).toEqual({ code: EXIT_OK, out: HELP, err: '' });
+    expect(await run(cwd, ['lint', '--color', '--no-color', '-v'])).toEqual({ code: EXIT_OK, out: `${pkg.version}\n`, err: '' });
+  });
+
+  it('says in the help which command an option is not for, and the rule', () => {
+    expect(HELP).toContain(
+      [
+        'Options for every command, except where a line says otherwise:',
+        '  --root <dir>          run from this directory instead of the current one; it must exist, unless init makes it',
+        '  --config <file>       use this configuration file; not for init, which writes .spec-brief.json',
+        '  --no-config           use the defaults, ignoring any configuration file',
+        "  --format <format>     the output format, pretty by default; each command's are below",
+        '  --strict              treat warnings as errors; not for init, new or list, which have none',
+        '  --no-git              leave git out; read the files on disk instead',
+        '  --color, --no-color   force colour on or off; --color not for init or new, which print none',
+        '',
+      ].join('\n'),
+    );
+    expect(HELP).toContain(
+      [
+        'An option given an empty value, a list that names nothing and an argument a',
+        'command does not take are refused, not read as if they were not there. So is',
+        'an option where taking it would say what is not so, as init --strict, and so',
+        'are --config beside --no-config and --color beside --no-color, of which one',
+        'would go unread. An option that asks a command to leave out what it never',
+        'does is taken, as init --no-git: it asks for what is already so.',
+        '',
+      ].join('\n'),
+    );
   });
 });
 
@@ -612,6 +810,26 @@ describe('lint', () => {
     expect((await run(root, ['lint', '--color'])).out).toContain(esc);
     expect((await run(root, ['lint', '--no-color'], { FORCE_COLOR: '1' })).out).not.toContain(esc);
     expect((await run(root, ['lint', '--format', 'json', '--color'])).out).not.toContain(esc);
+  });
+
+  it('reads FORCE_COLOR as off for exactly 0 and exactly false, and as on for any other word', async () => {
+    const root = plain('cli-lint-force-color', { 'briefs/001_a.md': goodBrief({ type: 'epic' }) });
+    const esc = String.fromCharCode(27);
+    // "false" forced colour on, into a pipe too, where Node itself and supports-color read it as off.
+    expect((await run(root, ['lint'], { FORCE_COLOR: 'false' })).out).not.toContain(esc);
+    expect((await run(root, ['lint'], { FORCE_COLOR: 'false' }, true)).out).not.toContain(esc);
+    expect((await run(root, ['lint'], { FORCE_COLOR: 'false', TERM: 'xterm-256color' }, true)).out).not.toContain(esc);
+    // --color still asks for colour over it, and NO_COLOR still wins over a word that forces it.
+    expect((await run(root, ['lint', '--color'], { FORCE_COLOR: 'false' })).out).toContain(esc);
+    expect((await run(root, ['lint'], { FORCE_COLOR: 'true', NO_COLOR: '1' }, true)).out).not.toContain(esc);
+  });
+
+  it.each(['true', '1', 'FALSE', 'False', 'no', '00', ' false', '2'])('reads FORCE_COLOR=%j as on, into a pipe and on a dumb terminal', async (value) => {
+    // Only the two spellings are off: "FALSE" is on here, though Node reads every word it does not know as off.
+    const root = plain('cli-lint-force-on', { 'briefs/001_a.md': goodBrief({ type: 'epic' }) });
+    const esc = String.fromCharCode(27);
+    expect((await run(root, ['lint'], { FORCE_COLOR: value })).out).toContain(esc);
+    expect((await run(root, ['lint'], { FORCE_COLOR: value, TERM: 'dumb' }, true)).out).toContain(esc);
   });
 
   it('exits 2 for a configuration that does not load, a missing brief and a misspelt rule', async () => {

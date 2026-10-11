@@ -122,6 +122,86 @@ const TABLE: Readonly<Record<string, CommandSpec>> = {
 };
 
 /**
+ * Whether taking the option would tell someone what is not so. `init
+ * --strict` says the briefs were set up strictly, where nothing was strict;
+ * `init --config team.json` that the configuration was written there, where
+ * `.spec-brief.json` was; `init --color` and `new --color` that colour was
+ * printed, where neither prints any; `new --strict` and `list --strict` that
+ * a warning would have failed the run, where neither has one. Each ran as
+ * the line without the option does, exit 0.
+ *
+ * A function, not a table beside the commands': a table built when the
+ * module loads is static to Stryker, and each of its mutants then runs the
+ * whole suite (ADR-0009).
+ */
+function untrue(command: string, option: string): boolean {
+  switch (option) {
+    case 'config':
+      return command === 'init';
+    case 'strict':
+      return command === 'init' || command === 'new' || command === 'list';
+    case 'color':
+      return command === 'init' || command === 'new';
+    default:
+      return false;
+  }
+}
+
+/**
+ * Whether the option asks the command to leave out what it never does, and
+ * so asks for what is already so: `init` opens no configuration file and
+ * asks git nothing, and neither it nor `new` prints colour. Such an option
+ * is taken. A script that runs every command in a tree without git, or into
+ * a log, passes it to each of them, as spec-harness passes `--no-color`.
+ * The command reads nothing of it, so a refusal's line lists it apart from
+ * what the command reads, as taken.
+ */
+function alreadySo(command: string, option: string): boolean {
+  switch (option) {
+    case 'no-config':
+    case 'no-git':
+      return command === 'init';
+    case 'no-color':
+      return command === 'init' || command === 'new';
+    default:
+      return false;
+  }
+}
+
+/** Options by their names on the command line, as a sentence lists them. */
+function listed(names: readonly string[]): string {
+  const options = names.map((name) => `--${name}`);
+  return options.length === 1 ? (options[0] as string) : `${options.slice(0, -1).join(', ')} and ${options.at(-1) as string}`;
+}
+
+/**
+ * Why a command line that parsed is still not one to run.
+ *
+ * An option is refused where taking it would tell someone what is not so,
+ * and so are two options of which one would go unread: `--config team.json
+ * --no-config` says the file was read, where the defaults ran, and `--color
+ * --no-color` that colour was forced on, where it was off. An option that
+ * asks a command to leave out what it never does asks for what is already
+ * so, and is taken.
+ */
+function unread(command: string, spec: CommandSpec, values: Values): string | null {
+  // The first such option as the line was typed, which is the order the
+  // parser keeps.
+  const stray = Object.keys(values).find((option) => untrue(command, option));
+  if (stray !== undefined) {
+    const shared = Object.keys(GLOBAL).filter((option) => option !== 'help' && option !== 'version' && !untrue(command, option));
+    const reads = [...shared.filter((option) => !alreadySo(command, option)), ...Object.keys(spec.options)];
+    const takes = shared.filter((option) => alreadySo(command, option));
+    return `${command} does not read --${stray}; it reads ${listed(reads)}${takes.length > 0 ? `, and takes ${listed(takes)}` : ''}`;
+  }
+  if (text(values, 'config') !== undefined && flag(values, 'no-config')) {
+    return '--config is given beside --no-config, which has the run read no configuration file; give one of the two';
+  }
+  if (flag(values, 'color') && flag(values, 'no-color')) return '--color is given beside --no-color, which turns colour off; give one of the two';
+  return null;
+}
+
+/**
  * The commands by name, and nothing for a command line that names none. A map,
  * because an object answers to more names than it was given: `constructor` and
  * `toString` are no commands.
@@ -159,14 +239,14 @@ Commands:
   archive <brief>       close a round: check it, stamp it, freeze it, move it
   unarchive <brief>     reopen an archived brief
 
-Options for every command:
+Options for every command, except where a line says otherwise:
   --root <dir>          run from this directory instead of the current one; it must exist, unless init makes it
-  --config <file>       use this configuration file
+  --config <file>       use this configuration file; not for init, which writes .spec-brief.json
   --no-config           use the defaults, ignoring any configuration file
   --format <format>     the output format, pretty by default; each command's are below
-  --strict              treat warnings as errors
+  --strict              treat warnings as errors; not for init, new or list, which have none
   --no-git              leave git out; read the files on disk instead
-  --color, --no-color   force colour on or off
+  --color, --no-color   force colour on or off; --color not for init or new, which print none
   -h, --help            show this help
   -v, --version         show the version
 
@@ -207,7 +287,11 @@ unarchive:
   --dry-run             print the plan and change nothing
 
 An option given an empty value, a list that names nothing and an argument a
-command does not take are refused, not read as if they were not there.
+command does not take are refused, not read as if they were not there. So is
+an option where taking it would say what is not so, as init --strict, and so
+are --config beside --no-config and --color beside --no-color, of which one
+would go unread. An option that asks a command to leave out what it never
+does is taken, as init --no-git: it asks for what is already so.
 
 Exit codes: 0 clean, 1 findings or refused, 2 the run could not be trusted.
 `;
@@ -314,8 +398,12 @@ function useColor(values: Values, io: CliIO): boolean {
   if (flag(values, 'color')) return true;
   const env = io.env ?? process.env;
   if ((env['NO_COLOR'] ?? '') !== '') return false;
+  // Off for exactly "0" and exactly "false": Node itself and supports-color
+  // read "false" as off, and here it forced colour on. Any other value that
+  // is not empty is on, "FALSE" too, which is the one reading the family's
+  // tools share (spec-core ADR-0005).
   const force = env['FORCE_COLOR'];
-  if (force !== undefined && force !== '') return force !== '0';
+  if (force !== undefined && force !== '') return force !== '0' && force !== 'false';
   // A terminal that says it is dumb has asked for no escape sequence, and
   // Node itself counts one colour for it: the family's tools read it alike.
   if (env['TERM'] === 'dumb') return false;
@@ -540,6 +628,8 @@ export async function main(argv: readonly string[] = process.argv.slice(2), io: 
       return flag(values, 'help') ? EXIT_OK : EXIT_ERROR;
     }
     const spec = COMMANDS.get(command) as CommandSpec;
+    const refusal = unread(command, spec, values);
+    if (refusal !== null) throw new UsageError(refusal);
     const format = (text(values, 'format') ?? 'pretty') as Format;
     if (!spec.formats.includes(format)) {
       err(`--format for ${command} is one of ${spec.formats.join(', ')}, not "${format}"`);
