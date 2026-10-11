@@ -27,9 +27,9 @@ export default {
     '!src/plugins.ts',
     '!src/vendor/**',
   ],
-  // Unit tests finish in milliseconds; a mutant still running after a few
-  // seconds is one that will not finish.
-  timeoutMS: 3000,
+  // A measurement, not a decision: the full sweep's clock, for one sweep, to
+  // see which of the core's timeouts are the clock's and what the wait costs.
+  timeoutMS: 20000,
   // A regression guard below the measurement, never a target to argue down
   // to: 95.75 on 2026-09-24, 97.83 on 2026-09-26, 99.38 on 2026-10-07 (98.68
   // with every timeout lost), and the rule for moving it is in ADR-0009.
