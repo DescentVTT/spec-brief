@@ -12,8 +12,9 @@ import { QuickestFirst } from './vitest.mutation.config.js';
  * the unit suite alone, a core mutant is killed by the tests written for its
  * module, which is the stronger claim anyway.
  *
- * A mutant's files run quickest first, as in the full sweep, and for its
- * reason (`vitest.mutation.config.ts`).
+ * A mutant's files run quickest first, as in the full sweep and for its
+ * reason (`vitest.mutation.config.ts`). The test of that order reaches no
+ * module, and is left out here as it is there.
  */
 export default defineConfig({
   test: {
@@ -24,6 +25,7 @@ export default defineConfig({
       'tests/engine.test.ts',
       'tests/io.test.ts',
       'tests/io-faults.test.ts',
+      'tests/mutation-order.test.ts',
       'tests/names.test.ts',
       'tests/npm.test.ts',
       'tests/runner-images.test.ts',
