@@ -299,3 +299,106 @@ Left as they are, and measured the same day:
 - An empty item in a list that names a brief, as above.
 - On Linux and macOS a `--config` below a file, `notes.txt/x.json`, was not
   measured; on Windows it is reported as a file that does not exist.
+
+## Amended 2026-10-11: an option a command does not read
+
+The amendment of 2026-10-09 left two things as they were: an option every
+command accepts and one command has no use for, and `--config` beside
+`--no-config`. spec-graph, spec-guard and spec-harness refuse the first, for
+the reason spec-guard's README gives: `query --strict` taking the flag and
+doing nothing with it would tell someone their query was strict.
+
+Measured on 2026-10-11 through the launcher (Windows 11, Node 24.18.1): the
+eight options offered to every command against each of the eight commands,
+and the seventeen options of single commands against each command, every
+line in a copy of a tree of its own beside the same line without the option.
+The tree is built so that the option can matter - a configuration that names
+another directory beside a `briefs/` the defaults would read, a second
+configuration file, a warning, a collision over a directory git ignores, a
+run from below the top of a repository with no configuration - and an option
+counts as read when the two runs differ in exit code, stdout, stderr or the
+files left behind.
+
+- Of the 64 pairings of a command with an option offered to every command,
+  54 are read. Ten ran as the line without the option does, exit 0: `init`
+  with `--config`, `--no-config`, `--strict`, `--no-git`, `--color` and
+  `--no-color`, `new` with `--strict`, `--color` and `--no-color`, and
+  `list --strict`. `--no-git` is read by `new`, `list` and `unarchive` only
+  where no configuration says where the root is: git's answer is then the
+  root, and without git it is the directory the run started in.
+- An option of one command on another is the parser's to refuse, as an
+  option it does not know, and all 117 such pairings were exit 2 already.
+- `--config <file> --no-config` ran on the defaults with the file never
+  opened, one that does not exist included, and `--color --no-color`
+  without colour: each as the line with one of the two, and no word of the
+  other.
+
+**A command refuses an option it reads nothing of**: exit 2, before anything
+is opened or written, in one line that names the command, the option and
+what the command does read.
+
+    spec-brief: init does not read --strict; it reads --root, --format, --briefs and --archive
+
+- `init` refuses `--config`, `--no-config`, `--strict`, `--no-git` and
+  `--color`: it writes `.spec-brief.json` and opens no other configuration,
+  asks git nothing, and prints no warning and no colour. `init --config
+  team.json` wrote `.spec-brief.json`, which is the pairing that most needed
+  a word.
+- `new` refuses `--strict` and `--color`, and `list` refuses `--strict`:
+  neither has a warning to fail on, and `new` prints no colour.
+- The option named is the first such on the line as it was typed.
+
+**Two options of which one would go unread are refused together**, by both
+names: `--config` beside `--no-config`, and `--color` beside `--no-color`.
+The file is not looked for first: the pair is refused whether or not it is
+there.
+
+What is taken, and why:
+
+- **`--no-color`, by every command.** On `init` and `new` it asks for what
+  is already so, and a script passes it to every command it runs: spec-guard
+  and spec-graph take it the same way, and spec-harness has run
+  `list --archived --format json --no-color` and
+  `archive <id> --dry-run --format json --no-color` since its 0.1.0. It is
+  the one exception. `--no-git` on `init` is as true of the run as
+  `--no-color` is, and is refused all the same: nothing is known to pass it
+  to every command, and one exception is a rule a person can keep in mind.
+- **An option a format has nothing to read for.** `--color` or `--no-color`
+  beside `--format json` changes nothing, and stays: that pairs an option
+  with the value of another, and a caller that asks for JSON passes
+  `--no-color` beside it. A test has held since 0.1.0 that `--format json
+  --color` writes no escape.
+- **`--help` and `--version` answer first**, as they do over a `--format`
+  the command does not write and a `--root` that is no directory: the
+  refusal is asked where those two are, once a command is known.
+  `init --strict --help` prints the help. The refusals of 2026-10-09 are
+  made where the line is read, before either, and still are.
+- **`list --ready --archived`** prints what `list --ready` prints, since an
+  archived brief is never ready. Both are read and the answer to the two
+  together is true, so it is no pair of this kind.
+- **`archive --no-git --allow-dirty`**: without git no tree is measured, so
+  the option asks for what is already so. `--commit` or `--base` beside
+  `--no-git` was refused already, by name.
+- **An option given twice** is read as its last, `--format json --format
+  pretty` as `pretty`. That is the parser's reading, and the one an alias
+  with a default and a line that overrides it rely on.
+
+The check is a function of the command and the options given, asked once per
+run, and not a table beside the commands': a table built when the module
+loads is static to Stryker, and each of its mutants then runs the whole
+suite ([ADR-0009](0009-mutation-testing.md)). A test holds the table above
+to every pairing, the 56 that run and the 8 that are refused, and to the
+commands and options the help lists.
+
+Each refusal is input refused that was accepted, a minor release
+([spec-core ADR-0009](https://github.com/DescentVTT/spec-core/blob/main/docs/adr/0009-versions-before-1-0.md)).
+
+**`FORCE_COLOR=false` is off.** The same day, in the three tools that read
+the variable: off for exactly `0` and exactly `false`, on for any other
+value that is not empty, and as unset when empty
+([spec-core ADR-0005](https://github.com/DescentVTT/spec-core/blob/main/docs/adr/0005-the-family-contract.md)).
+`false` forced colour on here, into a pipe too, where Node itself
+(`getColorDepth({ FORCE_COLOR: 'false' })` is 1 on 24.18.1) and
+`supports-color` read it as off. Only the two spellings are off: Node reads
+every word it does not know as off, `FALSE` and `no` among them, and here
+each of those still forces colour on, as the family's reading has it.

@@ -11,6 +11,33 @@ release that can turn a run red. This is the family's policy, recorded in
 releases up to 0.2.7 came before it, and several of their patches changed
 what a run reports.
 
+## Unreleased
+
+### Changed
+
+- **An option a command reads nothing of is refused, not taken and
+  ignored.** `init` with `--config`, `--no-config`, `--strict`, `--no-git`
+  or `--color`, `new` with `--strict` or `--color`, and `list --strict` each
+  ran as the line without the option does, exit 0; each is now exit 2 with a
+  line that names the command, the option and what the command reads, and
+  writes nothing. `--no-color` is still taken by every command (ADR-0001,
+  [An option a command does not read](README.md#an-option-a-command-does-not-read)).
+  Upgrading: drop the option from that command's line; `init` writes
+  `.spec-brief.json` and no other file, so a configuration kept under
+  another name is renamed after it.
+- **`--config` beside `--no-config`, and `--color` beside `--no-color`, are
+  refused.** The defaults ran with the file never opened, and colour was
+  off whatever `--color` asked, with no word of either; each pair is now
+  exit 2 with a line that names both. Upgrading: give one of the two.
+
+### Fixed
+
+- **`FORCE_COLOR=false` turns colour off**, as `FORCE_COLOR=0` does, on a
+  terminal too. It forced colour on, into a pipe as well, where Node itself
+  and `supports-color` read it as off. Any other value that is not empty
+  still forces colour on, and `NO_COLOR`, `--color` and `--no-color` win as
+  they did.
+
 ## 0.7.0
 
 An input that is set and names nothing is refused, exit 2, by a line that
