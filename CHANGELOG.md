@@ -11,7 +11,13 @@ release that can turn a run red. This is the family's policy, recorded in
 releases up to 0.2.7 came before it, and several of their patches changed
 what a run reports.
 
-## Unreleased
+## 0.8.0
+
+An option is refused, exit 2, where taking it would tell someone what is
+not so: `init --strict`, `init --config`, `--color` on a command that
+prints none, and `--config` beside `--no-config`. Each ran as the line
+without it does. An option that asks a command to leave out what it never
+does is still taken. And `FORCE_COLOR=false` turns colour off.
 
 ### Changed
 

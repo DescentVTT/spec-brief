@@ -142,6 +142,8 @@ function untrue(command: string, option: string): boolean {
       return command === 'init' || command === 'new' || command === 'list';
     case 'color':
       return command === 'init' || command === 'new';
+    // Each caller asks only whether the answer is true, so the mutant that
+    // leaves this case out, and answers nothing, is equivalent.
     default:
       return false;
   }
@@ -163,6 +165,8 @@ function alreadySo(command: string, option: string): boolean {
       return command === 'init';
     case 'no-color':
       return command === 'init' || command === 'new';
+    // Each caller asks only whether the answer is true, so the mutant that
+    // leaves this case out, and answers nothing, is equivalent.
     default:
       return false;
   }

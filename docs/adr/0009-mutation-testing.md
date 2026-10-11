@@ -205,7 +205,16 @@ there, survives the full sweep as it always has, and is called equivalent
 beside the code. For 0.7.0 the sweep of fba3c1e (run 37827733882) read
 99.33% over 7,041 and, for the core, 99.36% over 5,289: the 78 mutants the
 refusals of that release made were all killed, no survivor is new, and one
-is gone, the check that the variable is set in `today()`.
+is gone, the check that the variable is set in `today()`. For 0.8.0 the
+sweep of 85e6ae9 (run 38128320340), the first for a release with a mutant's
+quickest test files first, read 99.32% over 7,165 and, for the core, 99.39%
+over 5,289. The refusals of that release made 124 mutants and left two:
+the `default` of each of the two functions that say what an option would
+tell (`src/cli.ts`), which answers nothing where it answered false, to
+callers that ask only whether the answer is true. Each is equivalent, and
+said so beside the code. No other survivor is new. In the core two of
+0.7.0's 31 timed out, the anchor of `NOTE_START` and `!read.ok` held false
+in `src/glob.ts`; both survive the full sweep as they did.
 
 Reading them was a review again, and found what no test had:
 
