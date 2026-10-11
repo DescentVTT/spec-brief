@@ -142,11 +142,11 @@ function untrue(command: string, option: string): boolean {
       return command === 'init' || command === 'new' || command === 'list';
     case 'color':
       return command === 'init' || command === 'new';
-    // Each caller asks only whether the answer is true, so the mutant that
-    // leaves this case out, and answers nothing, is equivalent.
-    default:
-      return false;
   }
+  // After the switch and not as its `default`: a `default` with its return
+  // taken out answers nothing, which each caller reads as false, and no test
+  // can tell that mutant from the code (ADR-0009).
+  return false;
 }
 
 /**
@@ -165,11 +165,9 @@ function alreadySo(command: string, option: string): boolean {
       return command === 'init';
     case 'no-color':
       return command === 'init' || command === 'new';
-    // Each caller asks only whether the answer is true, so the mutant that
-    // leaves this case out, and answers nothing, is equivalent.
-    default:
-      return false;
   }
+  // After the switch, for the reason `untrue` has.
+  return false;
 }
 
 /** Options by their names on the command line, as a sentence lists them. */
