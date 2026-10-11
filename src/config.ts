@@ -17,6 +17,7 @@ import { dirname, join } from 'node:path';
 
 import { parseGlob } from './glob.js';
 import { normalisePath } from './links.js';
+import { literal } from './literal.js';
 import { type Schema, toJsonSchema, validate } from './schema.js';
 import { inWords, templateHoles } from './text.js';
 import type { SeveritySetting } from './types.js';
@@ -279,24 +280,59 @@ export const DEFAULT_CONFIG: Config = {
   plugins: [],
 };
 
-type Raw = Record<string, unknown>;
+/**
+ * What a section, a plugin and a configuration hold once `CONFIG_SCHEMA` has
+ * passed them. Each is cast once, on the name its keys are read from: a key
+ * read under an `as` of its own is a key no mutant is made of, and no test
+ * was held to its being read at all (ADR-0009, amended 2026-10-12).
+ */
+interface RawSection {
+  readonly name: string;
+  readonly aliases?: string[];
+  readonly mustContain?: string[];
+  readonly checklist?: boolean;
+  readonly optional?: boolean;
+  readonly hint?: string;
+}
+
+interface RawPlugin {
+  readonly module: string;
+  readonly options?: unknown;
+}
+
+interface RawConfig {
+  /** The objects that merge over their defaults are read by a name held in a variable. */
+  readonly [key: string]: unknown;
+  readonly briefs?: string;
+  readonly archive?: string;
+  readonly files?: string;
+  readonly exclude?: string[];
+  readonly template?: string | null;
+  readonly sections?: unknown[];
+  readonly sectionOrder?: boolean;
+  readonly types?: Record<string, { readonly sections?: unknown[] }>;
+  readonly placeholders?: string[];
+  readonly fields?: string[];
+  readonly rules?: Record<string, SeveritySetting>;
+  readonly plugins?: unknown[];
+}
 
 function sectionFrom(raw: unknown): SectionRule {
   if (typeof raw === 'string') return section(raw);
-  const r = raw as Raw;
-  return section(r['name'] as string, {
-    aliases: (r['aliases'] as string[] | undefined) ?? [],
-    mustContain: (r['mustContain'] as string[] | undefined) ?? [],
-    checklist: (r['checklist'] as boolean | undefined) ?? false,
-    optional: (r['optional'] as boolean | undefined) ?? false,
-    hint: r['hint'] as string | undefined,
+  const r = raw as RawSection;
+  return section(r['name'], {
+    aliases: r['aliases'] ?? [],
+    mustContain: r['mustContain'] ?? [],
+    checklist: r['checklist'] ?? false,
+    optional: r['optional'] ?? false,
+    hint: r['hint'],
   });
 }
 
 function pluginFrom(raw: unknown): PluginReference {
   if (typeof raw === 'string') return { module: raw, options: undefined };
-  const r = raw as Raw;
-  return { module: r['module'] as string, options: r['options'] };
+  const r = raw as RawPlugin;
+  return { module: r['module'], options: r['options'] };
 }
 
 export class ConfigError extends Error {
@@ -317,34 +353,34 @@ export class ConfigError extends Error {
 export function resolveConfig(raw: unknown, file = 'configuration'): Config {
   const problems = validate(CONFIG_SCHEMA, raw);
   if (problems.length > 0) throw new ConfigError(file, problems);
-  const r = raw as Raw;
+  const r = raw as RawConfig;
   const d = DEFAULT_CONFIG;
   const merged = <T extends object>(key: string, base: T): T => ({ ...base, ...((r[key] as Partial<T>) ?? {}) });
   const archiving = merged('archiving', d.archiving);
   const config: Config = {
-    briefs: (r['briefs'] as string | undefined) ?? d.briefs,
-    archive: (r['archive'] as string | undefined) ?? (r['briefs'] === undefined ? d.archive : `${r['briefs'] as string}/archive`),
-    files: (r['files'] as string | undefined) ?? d.files,
-    exclude: (r['exclude'] as string[] | undefined) ?? d.exclude,
-    template: r['template'] === undefined ? d.template : (r['template'] as string | null),
+    briefs: r['briefs'] ?? d.briefs,
+    archive: r['archive'] ?? (r['briefs'] === undefined ? d.archive : `${r['briefs']}/archive`),
+    files: r['files'] ?? d.files,
+    exclude: r['exclude'] ?? d.exclude,
+    template: r['template'] === undefined ? d.template : r['template'],
     id: merged('id', d.id),
     status: merged('status', d.status),
-    sections: r['sections'] === undefined ? d.sections : (r['sections'] as unknown[]).map(sectionFrom),
-    sectionOrder: (r['sectionOrder'] as boolean | undefined) ?? d.sectionOrder,
+    sections: r['sections'] === undefined ? d.sections : r['sections'].map(sectionFrom),
+    sectionOrder: r['sectionOrder'] ?? d.sectionOrder,
     types:
       r['types'] === undefined
         ? d.types
         : Object.fromEntries(
-            Object.entries(r['types'] as Record<string, Raw>).map(([name, type]) => [
+            Object.entries(r['types']).map(([name, type]) => [
               name,
-              ((type['sections'] as unknown[] | undefined) ?? []).map(sectionFrom),
+              (type['sections'] ?? []).map(sectionFrom),
             ]),
           ),
-    placeholders: (r['placeholders'] as string[] | undefined) ?? d.placeholders,
-    fields: (r['fields'] as string[] | undefined) ?? d.fields,
+    placeholders: r['placeholders'] ?? d.placeholders,
+    fields: r['fields'] ?? d.fields,
     archiving,
-    rules: { ...d.rules, ...((r['rules'] as Record<string, SeveritySetting> | undefined) ?? {}) },
-    plugins: ((r['plugins'] as unknown[] | undefined) ?? []).map(pluginFrom),
+    rules: { ...d.rules, ...(r['rules'] ?? {}) },
+    plugins: (r['plugins'] ?? []).map(pluginFrom),
   };
   const semantic = checkConfig(config);
   if (semantic.length > 0) throw new ConfigError(file, semantic);
@@ -383,7 +419,7 @@ function checkConfig(config: Config): string[] {
   // Named by the statuses that share a word: a 0.1 configuration that spelt
   // another status "deferred" meets the default for the new one here.
   const sharing = new Map<string, { word: string; keys: string[] }>();
-  for (const key of ['draft', 'active', 'deferred', 'archived'] as const) {
+  for (const key of literal(['draft', 'active', 'deferred', 'archived'])) {
     const word = config.status[key];
     if (word === null) continue;
     const group = sharing.get(word.toLowerCase()) ?? { word, keys: [] };
@@ -396,7 +432,7 @@ function checkConfig(config: Config): string[] {
     problems.push(`the status words must differ: "${word}" is the word for ${inWords(keys)}; give ${keys.length === 2 ? 'one of them' : 'all but one'} another word${orNull}`);
   }
   // A pattern that does not parse would match nothing, and a run over no briefs reads as clean.
-  for (const [key, pattern] of [['files', config.files], ...config.exclude.map((e) => ['exclude', e] as const)] as const) {
+  for (const [key, pattern] of literal([['files', config.files], ...config.exclude.map((e) => literal(['exclude', e]))])) {
     const parsed = parseGlob(pattern);
     if (!parsed.ok) problems.push(`"${key}" pattern "${pattern}": ${parsed.error}`);
   }

@@ -157,7 +157,7 @@ const UNMEASURED: Readonly<Record<Unmeasured['reason'], { readonly why: string; 
  * scope has nothing to check either way, so it gets none.
  */
 function unmeasuredScope(brief: Brief, request: ArchiveRequest, severity: Severity): Finding | null {
-  const unmeasured = request.unmeasured ?? (request.changes === undefined ? { reason: 'revision' as const } : undefined);
+  const unmeasured = request.unmeasured ?? (request.changes === undefined ? ({ reason: 'revision' } satisfies Unmeasured) : undefined);
   const fields = [
     ...(brief.protectedFiles.length > 0 ? ['protectedFiles'] : []),
     ...(brief.affectedFiles.length > 0 ? ['affectedFiles'] : []),
@@ -216,7 +216,7 @@ function dispositioned(scanned: Scan, line: number, end: number, markers: readon
   for (let i = line + 1; i < end; i += 1) {
     if (boxes.has(i)) return false;
     const written = scanned.lines[i] as string;
-    const above = scanned.lines[i - 1] as string;
+    const above = scanned.lines[i - 1]!;
     const startsNote = ITEM_START.test(written) || above.trim() === '' || SENTENCE_END.test(above);
     if (!startsNote) continue;
     const start = (NOTE_START.exec(written) as RegExpExecArray)[0].length;

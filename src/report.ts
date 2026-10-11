@@ -17,6 +17,7 @@ import type { Config, SectionRule } from './config.js';
 import type { CollisionReport, Overlap } from './collisions.js';
 import { idKey } from './corpus.js';
 import { summarise } from './lint.js';
+import { literal } from './literal.js';
 import { ARCHIVE_RULES, COLLISION_RULES, RULES } from './rules.js';
 import { type Breach, breachReasons, holds, moves, type Passed, reasons, type Schedule } from './schedule.js';
 import { witnessText } from './scope.js';
@@ -43,13 +44,13 @@ export interface Style {
 }
 
 /** The SGR code that turns each colour on, and the one that turns it off again. */
-const CODES = {
+const CODES = literal({
   red: [31, 39],
   yellow: [33, 39],
   cyan: [36, 39],
   dim: [2, 22],
   bold: [1, 22],
-} as const;
+});
 
 export function paint(style: Style, color: keyof typeof CODES, text: string): string {
   const [on, off] = CODES[color];

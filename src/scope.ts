@@ -116,7 +116,7 @@ export function meet(a: Scope, b: Scope, budget: number = WITNESS_BUDGET, files:
     for (const y of b.affected) {
       const witness = globWitness([x.glob, y.glob], avoid, budget);
       if (witness.kind === 'none') continue;
-      const patterns = [x.pattern, y.pattern] as const;
+      const patterns: readonly [string, string] = [x.pattern, y.pattern];
       const held = files === null ? undefined : heldInBoth(files, x.glob, y.glob, avoid);
       if (held !== undefined) overlaps.push({ patterns, witness: held, inTree: true });
       else if (witness.kind === 'found') overlaps.push({ patterns, witness: witness.path, inTree: files === null ? null : false });

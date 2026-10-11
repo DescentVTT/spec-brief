@@ -233,6 +233,25 @@ describe('sections', () => {
     expect((await findings({ [A]: draft })).map((f) => f.severity)).toEqual(['warning', 'warning']);
   });
 
+  it('takes the placeholders a configuration names in place of its own, for a section and for a trigger', async () => {
+    // A list in a configuration replaces the default one: a repository that
+    // marks unwritten work "PENDING" means that word, and "TBD" is then a
+    // word like another.
+    const cfg = config({ placeholders: ['PENDING'] });
+    const pending = goodBrief().replace('The tree is better.', 'Pending.');
+    const tbd = goodBrief().replace('The tree is better.', 'TBD');
+    expect((await findings({ [A]: pending }, cfg)).map((f) => `${f.rule}: ${f.message}`)).toEqual(['placeholder: the "Intent" section holds only a placeholder']);
+    expect(await findings({ [A]: tbd }, cfg)).toEqual([]);
+    // With no such key the defaults stand, and say the opposite of both.
+    expect(await findings({ [A]: pending })).toEqual([]);
+    expect((await findings({ [A]: tbd })).map((f) => f.rule)).toEqual(['placeholder']);
+    // A trigger is held to the same words.
+    const waiting = (trigger: string): string => goodBrief({ status: 'deferred', trigger });
+    expect((await findings({ [A]: waiting('pending') }, cfg)).map((f) => f.message)).toEqual(['the trigger "pending" is a placeholder, not an event']);
+    expect((await findings({ [A]: waiting('tbd') }, cfg)).map((f) => f.message)).toEqual([]);
+    expect((await findings({ [A]: waiting('tbd') })).map((f) => f.message)).toEqual(['the trigger "tbd" is a placeholder, not an event']);
+  });
+
   it('counts a sub-heading as structure and its text as content', async () => {
     const onlyHeading = goodBrief().replace('The tree is better.', '### Part');
     expect((await findings({ [A]: onlyHeading })).map((f) => f.rule)).toEqual(['empty-section']);

@@ -21,7 +21,8 @@ import { ConfigError } from './config.js';
 import type { Plugin } from './lint.js';
 import type { Rule } from './rules.js';
 
-const SEVERITIES = new Set(['off', 'note', 'warning', 'error']);
+/** Asked about whatever a module exported as a severity, so it is a set of anything. */
+const SEVERITIES: ReadonlySet<unknown> = new Set(['off', 'note', 'warning', 'error']);
 
 /** The conditions Node matches in "exports" when it imports a module. */
 const IMPORT_CONDITIONS = new Set(['node', 'import', 'module-sync', 'default']);
@@ -91,7 +92,8 @@ export function exportsTarget(exports: unknown, subpath: string): string | null 
 /** A package.json, `undefined` when there is none to read. */
 async function manifest(path: string): Promise<Record<string, unknown> | undefined> {
   try {
-    return JSON.parse(await readFile(path, 'utf8')) as Record<string, unknown>;
+    // The encoding decides nothing here either, for the reason `version` in cli.ts has.
+    return JSON.parse(await readFile(path, 'utf8'));
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === 'ENOENT' || (error as NodeJS.ErrnoException).code === 'ENOTDIR') return undefined;
     throw error;
@@ -144,7 +146,7 @@ function isRule(value: unknown): value is Rule {
     typeof rule['id'] === 'string' &&
     /^[a-z0-9][a-z0-9-]*$/.test(rule['id']) &&
     typeof rule['description'] === 'string' &&
-    SEVERITIES.has(rule['severity'] as string) &&
+    SEVERITIES.has(rule['severity']) &&
     typeof rule['check'] === 'function'
   );
 }

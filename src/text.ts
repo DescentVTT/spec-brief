@@ -111,7 +111,7 @@ export function slugify(title: string, maxLength = 80): string {
 
 /** `a`, `a and b`, `a, b and c`. */
 export function inWords(items: readonly string[]): string {
-  return items.length < 2 ? (items[0] ?? '') : `${items.slice(0, -1).join(', ')} and ${items[items.length - 1] as string}`;
+  return items.length < 2 ? (items[0] ?? '') : `${items.slice(0, -1).join(', ')} and ${items[items.length - 1]!}`;
 }
 
 /**

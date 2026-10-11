@@ -13,6 +13,11 @@ name: Mutation
 #
 # Both run a mutant's test files the quickest first (vitest.mutation.config.ts;
 # ADR-0009, amended 2026-10-11).
+#
+# A score is of the mutants a sweep made, and Stryker makes none of what stands
+# under a TypeScript `as`. After each sweep its report is read for such places
+# (scripts/mutation-unmeasured.mjs), and one that is not recorded there fails
+# the job (ADR-0009, amended 2026-10-12).
 on:
   push:
     branches: [main]
@@ -56,6 +61,11 @@ jobs:
       - name: Core mutation sweep
         run: npm run test:mutation
 
+      # Where the sweep failed its own gate too: the report is what it read.
+      - name: Count what stood under an as, which no mutant is made of
+        if: ${{ !cancelled() }}
+        run: node scripts/mutation-unmeasured.mjs reports/mutation-core/mutation.json
+
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
         with:
@@ -86,6 +96,11 @@ jobs:
 
       - name: Full mutation sweep
         run: npm run test:mutation:full
+
+      # Where the sweep failed its own gate too: the report is what it read.
+      - name: Count what stood under an as, which no mutant is made of
+        if: ${{ !cancelled() }}
+        run: node scripts/mutation-unmeasured.mjs reports/mutation/mutation.json
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()

@@ -173,7 +173,7 @@ function alreadySo(command: string, option: string): boolean {
 /** Options by their names on the command line, as a sentence lists them. */
 function listed(names: readonly string[]): string {
   const options = names.map((name) => `--${name}`);
-  return options.length === 1 ? (options[0] as string) : `${options.slice(0, -1).join(', ')} and ${options.at(-1) as string}`;
+  return options.length === 1 ? (options[0] as string) : `${options.slice(0, -1).join(', ')} and ${options.at(-1)!}`;
 }
 
 /**
@@ -221,7 +221,7 @@ function formatsHelp(): string {
     const formats = spec.formats.join(', ');
     groups.set(formats, [...(groups.get(formats) ?? []), command]);
   }
-  const rows = [...groups].map(([formats, commands]) => [commands.join(', '), formats] as const);
+  const rows = [...groups].map(([formats, commands]): readonly [string, string] => [commands.join(', '), formats]);
   const width = Math.max(...rows.map(([commands]) => commands.length));
   return rows.map(([commands, formats]) => `  ${commands.padEnd(width)}  ${formats}`).join('\n');
 }
@@ -328,12 +328,16 @@ export function parse(argv: readonly string[]): Parsed {
   }
   let parsed: { values: Values; positionals: string[] };
   try {
-    parsed = parseArgs({
+    const read = parseArgs({
       args: [...argv],
       options: { ...GLOBAL, ...(spec?.options ?? {}) },
       allowPositionals: true,
       strict: true,
-    }) as { values: Values; positionals: string[] };
+    });
+    // The cast stands on the name, with nothing under it: Stryker makes no
+    // mutant of what an `as` holds, and the call above is what the parser
+    // is asked (ADR-0009).
+    parsed = read as { values: Values; positionals: string[] };
   } catch (error) {
     throw new UsageError((error as Error).message);
   }
@@ -372,7 +376,10 @@ function integer(values: Values, key: string, minimum: number): number | undefin
 }
 
 async function version(): Promise<string> {
-  const pkg = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8')) as { version: string };
+  // `JSON.parse` reads a file's bytes as it reads their text in UTF-8, so the
+  // encoding says what the manifest is and decides nothing: with none named,
+  // the version read is the same, and no test can tell the two apart.
+  const pkg: { version: string } = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'));
   return pkg.version;
 }
 
@@ -632,7 +639,9 @@ export async function main(argv: readonly string[] = process.argv.slice(2), io: 
     const spec = COMMANDS.get(command) as CommandSpec;
     const refusal = unread(command, spec, values);
     if (refusal !== null) throw new UsageError(refusal);
-    const format = (text(values, 'format') ?? 'pretty') as Format;
+    const asked = text(values, 'format') ?? 'pretty';
+    // Cast on the name, as in `parse`. The check below is what makes it true.
+    const format = asked as Format;
     if (!spec.formats.includes(format)) {
       err(`--format for ${command} is one of ${spec.formats.join(', ')}, not "${format}"`);
       return EXIT_ERROR;

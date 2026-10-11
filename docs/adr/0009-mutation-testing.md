@@ -211,10 +211,15 @@ quickest test files first, read 99.32% over 7,165 and, for the core, 99.39%
 over 5,289. The refusals of that release made 124 mutants and left two:
 the `default` of each of the two functions that say what an option would
 tell (`src/cli.ts`), which answers nothing where it answered false, to
-callers that ask only whether the answer is true. Each is equivalent, and
-said so beside the code. No other survivor is new. In the core two of
-0.7.0's 31 timed out, the anchor of `NOTE_START` and `!read.ok` held false
-in `src/glob.ts`; both survive the full sweep as they did.
+callers that ask only whether the answer is true. Each was equivalent, and
+neither is there now: the two switches are written with no `default` and
+their `return false` after them, and the sweep of that change (run
+38136701661, of e887422) read 99.34% over 7,163, with 44 survivors and 3
+without coverage. No other survivor was new. In the core two of 0.7.0's
+31 timed out, the anchor of `NOTE_START` and `!read.ok` held false in
+`src/glob.ts`; both survive the full sweep as they did, and the core sweep
+since it has the full sweep's clock, where it reads 99.34% over 5,289 with
+32 survivors (amended 2026-10-11, below).
 
 Reading them was a review again, and found what no test had:
 
@@ -642,3 +647,181 @@ in all of them.
 | 38136701661, e887422 | quickest first | 3 s | 9.6 s | 25 + 10 | 29 | 13m46s | 85.7 |
 | 38139011628, 88ff45c | quickest first | 20 s | 8.8 s | 29 + 3 | 32 | 12m41s | 86.7 |
 | 38140522710, e91857e | quickest first | 20 s | 9.3 s | 29 + 3 | 32 | 13m43s | 88.9 |
+
+## Amended 2026-10-12: nothing a mutator reads stands under an `as`
+
+**A score is of the mutants a sweep makes, and Stryker makes none under a
+TypeScript `as`.** Read from the source of Stryker 10.0.0: `shouldSkip` in
+its instrumenter's `babel-transformer.js` asks `isTypeNode`, whose list
+holds `TSAsExpression`, and the whole subtree is passed over. A table
+written `{ ... } as const`, the `i - 1` of `lines[i - 1] as string` and the
+comparator of `[...found].sort((a, b) => ...)[0] as Brief` were read by no
+mutator. No report says so: a mutant that is not made is in no column, and
+the score was of the rest. `satisfies` and `!` are not on that list.
+
+**What stood there.** `scripts/mutation-unmeasured.mjs` reads each source as
+a sweep's report holds it, with the parser Stryker reads it with, and counts
+under every outermost `as` the nodes one of Stryker's mutators has a site
+at. A site is a place a mutator applies, not a mutant: each makes one to
+three. The last full sweep of main's source is that of e887422 (run
+38136701661), whose `src/` is main's; no full sweep has run on main since
+the one for 0.8.0. In it, 47 of the 150 `as` expressions had a site under
+them, 82 sites in all, and not one of the report's 7,163 mutants stands
+inside any of the 47.
+
+| File | Sites | Beside mutants | What stood under an `as` |
+| --- | ---: | ---: | --- |
+| `config.ts` | 32 | 471 | Every key a configuration, a section and a plugin is read by, as `r['key'] as T` (21); the four status keys the check for a shared word goes through (5); the patterns the check of `files` and `exclude` goes through (6). |
+| `cli.ts` | 15 | 717 | The call that asks the argument parser, with all it passes (7); the option a format is read from and its fallback (3); the path and the encoding of the package's manifest (2); a row of the help's formats (2); the last option a refusal lists (1). |
+| `corpus.ts` | 6 | 287 | Where a cycle's path starts: the copy, the sort and the whole of its comparator. |
+| `report.ts` | 6 | 673 | The colour codes. |
+| `rules.ts` | 4 | 810 | The two scope fields three rules go through (3); the section before, in `section-order` (1). |
+| `git.ts` | 3 | 189 | The tab of a numstat record; the trim and the separator of a commit's author and date. |
+| `lint.ts` | 3 | 119 | Finding a built-in rule by its id. |
+| `schedule.ts` | 3 | 331 | The dependency an unplaced brief waits on (2); a pair of patterns turned round for a finding (1). |
+| `archive.ts` | 2 | 744 | The reason a scope went unmeasured; the line above a note that disposes of a box. |
+| `plugins.ts` | 2 | 374 | A manifest's encoding; the `severity` of a plugin's rule. |
+| `schema.ts` | 2 | 337 | Two index reads of the edit distance behind "did you mean". |
+| `brief.ts`, `markdown.ts`, `scope.ts`, `text.ts` | 1 each | 235, 123, 80, 155 | The `wave` entry; the line a heading stands on; a pair of patterns that meet; the last item of a list in words. |
+
+**Each was taken out from under its `as`, and none is left there.** The 108
+`as` expressions the sources still have hold a name, a call or an index
+read, and nothing a mutator applies to.
+
+| Way | `as` | Sites | Where |
+| --- | ---: | ---: | --- |
+| The cast on a name | 25 | 34 | The 21 keys of `config.ts`, by one cast on each of the three objects they are read from, typed as what the schema has passed; four values hoisted to a constant, in `cli.ts` and `git.ts`. |
+| `!` | 11 | 19 | Where the cast only dropped `undefined` from an index read or a `find`. |
+| `literal` | 4 | 20 | The tables that took their literal types from `as const`: the colour codes, the scope fields and the two lists `checkConfig` goes through. `literal`, in `src/literal.ts`, is a function with a `const` type parameter that returns its argument, and infers the same readonly literal types. |
+| An annotation | 6 | 8 | A declaration's type or an arrow's return type in place of the cast, where it says the same: a pair of strings, what `JSON.parse` returns, a set asked about a value of any type. |
+| `satisfies` | 1 | 1 | The reason a scope went unmeasured, held to `Unmeasured`. |
+| Left under an `as` | 0 | 0 | |
+
+**The compiler's types are what they were, and so is every answer.** The
+build emits every declaration file main's does, byte for byte, 47 with the
+vendored spec-core's, and one more, for `literal.ts`. Seven of the emitted
+modules differ: a constant a value is hoisted to, a call of `literal`, an
+import, and comments. Through the built
+launcher of main and of the branch, 153 command lines in five scratch trees
+gave the same exit code and the same bytes on stdout and on stderr, and the
+sixteen that write left the same files: every command in each format it
+writes, the refusals of 0.7.0 and 0.8.0, a configuration that sets every
+key and names two plugins, sixteen configurations that do not load, and a
+repository with a round to archive.
+
+**What the sweeps read.** Main's source is the full sweep of e887422 and
+main's own core sweep; the rewrite is 7bf8ff7; the last row of each is
+2c07e60, which adds the two tests below.
+
+| Sweep | Run, commit | Mutants | Killed | Timed out | Survived | No coverage | Score | Static |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Full, main's source | 38136701661, e887422 | 7,163 | 7,076 | 40 | 44 | 3 | 99.34% | 726 |
+| Full, the rewrite | 38159283061, 7bf8ff7 | 7,250 | 7,159 | 39 | 49 | 3 | 99.28% | 738 |
+| Full, with two tests | 38160965717, 2c07e60 | 7,250 | 7,161 | 39 | 47 | 3 | 99.31% | 738 |
+| Core, main | 38142281754, faa9cf6 | 5,289 | 5,222 | 32 | 32 | 3 | 99.34% | 586 |
+| Core, the rewrite | 38159283061, 7bf8ff7 | 5,356 | 5,286 | 32 | 35 | 3 | 99.29% | 596 |
+| Core, with two tests | 38160965717, 2c07e60 | 5,356 | 5,288 | 32 | 33 | 3 | 99.33% | 596 |
+
+The full sweep makes 87 mutants more: 86 at the 82 sites, and the body of
+`literal`. The core sweep makes 67 more: 66 at the 62 sites its modules
+had, and that body. Set beside the sweep of main's source mutant for
+mutant, 7,079 of the full sweep's are the same mutant with the same
+verdict, 83 were made again with the text of a line the rewrite changed
+and are killed as they were, and one changed sides: `stack.push(v)` taken out in `src/corpus.ts`, which is
+killed or ends at the hit limit by which of its tests runs first (amended
+2026-10-11, above). The core sweep reads main's verdict for every mutant
+main's core sweep made, 63 of them made again.
+
+**What the new mutants found.** Written into the source by hand, one at a
+time, 82 of the 87 failed a test that was already there and five failed
+none; the first sweep, run beside that replay, left the same five. Two
+were behaviours no test held:
+
+- **A configuration's `placeholders` could be dropped.** With the key read
+  as `r['']` every test passed: one test gives the key the default list,
+  and none a list of its own. A repository that marks unwritten work
+  with a word of its own is now a test, for a section and for a deferral's
+  trigger, with the default words no placeholders there.
+- **Where a cycle's path starts was held by half of its comparator.** A
+  comparator that answers "before" for every pair reads a component
+  backwards, which starts at the brief the search came into the cycle by.
+  Briefs are searched in the order of their paths, so in every cycle the
+  tests had, that brief was the first by path as well: the test named for
+  "whatever order the search visits them in" hands its files over in
+  another order, and `buildCorpus` sorts them before any search. A cycle
+  the search comes into from a brief outside it is now a test.
+
+Three are equivalent, and say so beside the code: the same comparator with
+`<=`, between two briefs that are never one file, as the sort of the corpus
+already has it; and the encoding named for each of the two manifests handed
+to `JSON.parse`, the package's own in `src/cli.ts` and a plugin package's
+in `src/plugins.ts`, since `JSON.parse` reads a file's bytes as it reads
+their text in UTF-8. The full sweep's survivors are main's 44 and those
+three; the core's are main's 32 and the comparator's.
+
+**What the rewrite made static, and what that costs.** A table built when
+its module loads is static to Stryker, as the amendment of 2026-09-26 says,
+and twelve of the 87 are: the six of the colour codes, the three of the
+scope fields, two in a row of the help's formats, which `HELP` builds as
+`src/cli.ts` loads, and the body of `literal`, which those tables call
+then. The colour codes are a table by their type: `paint` takes
+`keyof typeof CODES`, and a function in the table's place would change a
+declaration this change leaves byte for byte. The scope fields could be a
+function, as the rule in `src/cli.ts` is, and it would gain nothing: every
+lint of a brief reads them, so nearly every test would cover it, and its
+mutants would run the files a static mutant runs. In the two full sweeps
+the twelve ran 387 and 91 tests, of the 76,524 and 84,472 their sweeps'
+mutants ran: the eleven in tables 5 to 15 each, and the body of `literal`
+305 and 9, by how many files its worker ran ahead of the first to resolve
+a configuration. Two sweeps differ by more than that with nothing between
+them: those two, of one source and the same 7,250 mutants, are 7,948 tests
+apart.
+
+| Sweep | Run | Initial run | Sweep | Sweep / initial run |
+| --- | --- | ---: | ---: | ---: |
+| Full, main's source | 38136701661 | 16.0 s | 22m57s | 86.1 |
+| Full, the rewrite | 38159283061 | 10.3 s | 15m19s | 89.2 |
+| Full, with two tests | 38160965717 | 12.3 s | 16m54s | 82.4 |
+| Core, main | 38142281754 | 9.1 s | 12m56s | 85.2 |
+| Core, the rewrite | 38159283061 | 9.7 s | 14m12s | 87.8 |
+| Core, with two tests | 38160965717 | 7.3 s | 10m17s | 85.0 |
+
+Beside its own initial run the full sweep read 89.2 and then 82.4, where
+the eight full sweeps under quickest first before it read 75.5 to 86.1;
+the core read 87.8 and then 85.0, where the three with the full sweep's
+clock read 85.2 to 88.9. The mutants are 1.2% more, and two sweeps of one
+source are further apart than that: the rewrite does not show in the
+minutes.
+
+**Held from here on.** `scripts/mutation-unmeasured.mjs` records the sites
+that may stay under an `as`, by file, and records none. The mutation
+workflow runs it after each sweep on the report that sweep wrote, and a
+file with more sites than its record, or fewer, fails the job with each
+place listed; an `as` the report does have a mutant inside counts as
+measured, so a Stryker that comes to mutate there fails nothing.
+`tests/mutation-unmeasured.test.ts` holds the count to a source small
+enough to count by hand and this repository's sources to none, so a pull
+request that puts a site under an `as` fails before any sweep; it reads
+the sources as text, which in a sweep's sandbox is Stryker's copy, and is
+in neither sweep's suite. The script needs `@babel/parser`, which Stryker
+brings and this package does not ask for: a copy pinned here could read a
+source otherwise than the sweep did, and where it is not installed the
+script says so and exits 2.
+
+The gates stay at 97: with every timeout lost the two sweeps read 98.77%
+and 98.73%.
+
+Seen on the way, and left:
+
+- The count is of sites, by the script's own reading of Stryker's mutators:
+  an estimate, 82 for the 86 mutants the sweep then made there. What it
+  holds is that the number is none.
+- Stryker passes over an `enum` declaration as it does an `as`. No source
+  here declares one, and the script does not look for one.
+- `inWords` in `src/text.ts` has no test in `tests/text.test.ts`: its
+  mutants, the one of its last item among them, are killed by the tests of
+  the messages it words, a configuration's refusal first, and by no test
+  of its own module.
+- The test named for the order the search visits a cycle in, above, says
+  more than it does. It still fails a path that starts at the last brief
+  the search reached.

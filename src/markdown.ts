@@ -24,7 +24,7 @@
  * within them.
  */
 
-import { type Link, linesOf, type MarkdownScan, scanMarkdown, type ScannedLine } from './vendor/spec-core/markdown/index.js';
+import { type Link, linesOf, type MarkdownScan, scanMarkdown } from './vendor/spec-core/markdown/index.js';
 import { textOfLines } from './text.js';
 
 export interface Heading {
@@ -109,7 +109,7 @@ function written(core: MarkdownScan, at: number, inText: boolean, found: Link[])
 /** Scans a brief's lines, which carry no byte-order mark. */
 export function scan(lines: readonly string[]): Scan {
   const core = scanMarkdown(textOfLines(lines));
-  const unquoted = (line: number): boolean => (core.lines[line - 1] as ScannedLine).quoteDepth === 0;
+  const unquoted = (line: number): boolean => core.lines[line - 1]!.quoteDepth === 0;
   return {
     lines,
     prose: linesOf(core, 'prose'),

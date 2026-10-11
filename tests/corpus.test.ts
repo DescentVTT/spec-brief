@@ -123,6 +123,19 @@ describe('cycles', () => {
     expect(dependencyCycles(corpus).map((c) => c.map((b) => b.id))).toEqual([['003', '007', '009', '003']]);
   });
 
+  it('starts from the first brief by path where the search comes into the cycle at another', () => {
+    // 001 is searched first and depends on 005, so the cycle of 004 and 005
+    // is met at 005. The brief a search came in by is where a component
+    // read backwards starts, which for every other cycle here is its first
+    // by path too.
+    const corpus = corpusOf({
+      'briefs/001_a.md': goodBrief({ dependsOn: '[005]' }),
+      'briefs/004_d.md': goodBrief({ dependsOn: '[005]' }),
+      'briefs/005_e.md': goodBrief({ dependsOn: '[004]' }),
+    });
+    expect(dependencyCycles(corpus).map((c) => c.map((b) => b.id))).toEqual([['004', '005', '004']]);
+  });
+
   it('follows the dependencies that lead back, past an archived one and past live ones that lead nowhere', () => {
     const corpus = corpusOf({
       'briefs/001_a.md': goodBrief({ dependsOn: '[900, 004, 002]' }),
