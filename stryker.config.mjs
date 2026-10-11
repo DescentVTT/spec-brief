@@ -40,8 +40,14 @@ export default {
   jsonReporter: { fileName: 'reports/mutation/mutation.json' },
   clearTextReporter: { allowColor: false, maxTestsToLog: 0, reportScoreTable: true },
 
-  // A hung mutant is a real detection - a mutated loop bound can run forever
-  // - but each one holds a worker for the whole budget.
+  // A hung mutant is a real detection, and this is what a mutant is allowed
+  // over its tests' own time before it is called hung, in both sweeps. Few
+  // wait for it: a loop that no longer ends passes its own switch until
+  // Stryker's hit limit ends the run, and of the full sweep's 39 to 41
+  // timeouts five or six are this clock's, about half a minute of a sweep
+  // between them. A shorter clock returns seconds of that and costs verdicts:
+  // at three seconds the core sweep scored mutants that survive, and mutants
+  // a test kills, as timed out (ADR-0009, amended 2026-10-11).
   timeoutMS: 20000,
   // Workers are left to Stryker, which sizes them to the host. A fixed eight
   // on the four-core hosted runner slowed every mutant enough that 85 of the

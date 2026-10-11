@@ -27,9 +27,15 @@ export default {
     '!src/plugins.ts',
     '!src/vendor/**',
   ],
-  // Unit tests finish in milliseconds; a mutant still running after a few
-  // seconds is one that will not finish.
-  timeoutMS: 3000,
+  // No clock of its own: a mutant is allowed here what the full sweep allows
+  // it (`timeoutMS` in stryker.config.mjs). This sweep had three seconds, on
+  // the ground that a unit test still running after a few is one that will
+  // not finish. A mutant that runs the whole unit suite beside three other
+  // workers did not finish in them either: each sweep scored as timed out
+  // between one and three mutants that survive, and three sweeps scored so
+  // seventy static mutants of src/trigger.ts, one after another, that a test
+  // kills (ADR-0009, amended 2026-10-11).
+
   // A regression guard below the measurement, never a target to argue down
   // to: 95.75 on 2026-09-24, 97.83 on 2026-09-26, 99.38 on 2026-10-07 (98.68
   // with every timeout lost), and the rule for moving it is in ADR-0009.
