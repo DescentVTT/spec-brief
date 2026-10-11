@@ -28,8 +28,7 @@ async function run(cwd: string, args: string[], env: Record<string, string | und
   const stderr = new Sink();
   // A directory with no repository gets --no-git, so the suite does not spawn
   // git to learn what it already knows. The engine tests cover discovery.
-  // init is handed none: it asks git nothing, and refuses the option.
-  const git = existsSync(join(cwd, '.git')) || args.includes('--no-git') || args.includes('init') || cwd === process.cwd() ? [] : ['--no-git'];
+  const git = existsSync(join(cwd, '.git')) || args.includes('--no-git') || cwd === process.cwd() ? [] : ['--no-git'];
   const code = await main([...args, ...git], { stdout, stderr, cwd, env: { SOURCE_DATE_EPOCH: '1790208000', ...env } });
   return { code, out: stdout.text, err: stderr.text };
 }
@@ -470,20 +469,21 @@ describe('an input that names nothing', () => {
   });
 });
 
-describe('an option a command reads nothing of', () => {
+describe('an option that would tell someone what is not so', () => {
   // `init --strict`, `init --config team.json`, `new T --color`, `list --strict`:
   // each ran as the line without the option does and exited 0, which told
   // someone the briefs were set up strictly, or the configuration written
-  // where it was not.
+  // where it was not. An option that asks a command to leave out what it
+  // never does, `init --no-git`, asks for what is already so, and is taken.
   const OFFERED = ['root', 'config', 'no-config', 'format', 'strict', 'no-git', 'color', 'no-color'] as const;
 
-  /** The table in the README: what each command refuses, and in its refusal what it reads. */
+  /** The table in the README: what each command refuses, and in its refusal what it reads and what it takes besides. */
   const COMMANDS: Record<string, { line: string[]; refuses: readonly string[]; reads: string }> = {
-    init: { line: ['init'], refuses: ['config', 'no-config', 'strict', 'no-git', 'color'], reads: '--root, --format, --briefs and --archive' },
+    init: { line: ['init'], refuses: ['config', 'strict', 'color'], reads: '--root, --format, --briefs and --archive, and takes --no-config, --no-git and --no-color' },
     new: {
       line: ['new', 'T'],
       refuses: ['strict', 'color'],
-      reads: '--root, --config, --no-config, --format, --no-git, --id, --type, --wave, --depends-on and --date',
+      reads: '--root, --config, --no-config, --format, --no-git, --id, --type, --wave, --depends-on and --date, and takes --no-color',
     },
     list: { line: ['list'], refuses: ['strict'], reads: '--root, --config, --no-config, --format, --no-git, --color, --no-color, --ready and --archived' },
     lint: { line: ['lint'], refuses: [], reads: '' },
@@ -514,7 +514,7 @@ describe('an option a command reads nothing of', () => {
     expect([...offered.matchAll(/--([a-z-]+)/g)].map((m) => m[1] as string).filter((name, i, all) => all.indexOf(name) === i)).toEqual([...OFFERED, 'help', 'version']);
   });
 
-  it.each(Object.keys(COMMANDS))('%s refuses each option it reads nothing of, by both names, and runs with every other', async (command) => {
+  it.each(Object.keys(COMMANDS))('%s refuses each option that would say of it what is not so, by both names, and runs with every other', async (command) => {
     const { line, refuses, reads } = COMMANDS[command] as { line: string[]; refuses: readonly string[]; reads: string };
     const root = command === 'init' ? '' : await tree(`cli-unread-${command}`);
     for (const option of OFFERED) {
@@ -537,24 +537,42 @@ describe('an option a command reads nothing of', () => {
 
   it('names the first such option as the line was typed, and an option of the command before a format it does not write', async () => {
     const empty = dir('cli-unread-order');
-    const reads = '--root, --format, --briefs and --archive';
+    const reads = '--root, --format, --briefs and --archive, and takes --no-config, --no-git and --no-color';
     expect((await run(empty, ['init', '--color', '--strict'])).err).toBe(`spec-brief: init does not read --color; it reads ${reads}\n`);
     expect((await run(empty, ['init', '--strict', '--color'])).err).toBe(`spec-brief: init does not read --strict; it reads ${reads}\n`);
     expect((await run(empty, ['--strict', 'init', '--briefs', 'specs', '--color'])).err).toBe(`spec-brief: init does not read --strict; it reads ${reads}\n`);
     expect((await run(empty, ['init', '--format', 'sarif', '--strict'])).err).toBe(`spec-brief: init does not read --strict; it reads ${reads}\n`);
+    // An option that is taken is passed over for the one that is not, wherever it stands.
+    expect((await run(empty, ['init', '--no-config', '--no-color', '--config', 'team.json'])).err).toBe(`spec-brief: init does not read --config; it reads ${reads}\n`);
     // An argument init does not take is said first, as it was: the line is read before the command is asked.
     expect((await run(empty, ['init', 'mydir', '--strict'])).err).toMatch(/^spec-brief: init takes no argument, not "mydir"/);
     expect(readdirSync(empty)).toEqual([]);
   });
 
-  it('takes --no-color on the two commands that print no colour, where it asks for what is so', async () => {
-    const empty = dir('cli-unread-no-color');
-    expect(await run(empty, ['init', '--no-color'])).toEqual({
-      code: EXIT_OK,
-      out: 'wrote .spec-brief.json\nwrote briefs/.gitkeep\nwrote briefs/archive/.gitkeep\nnext: spec-brief new "<title>"\n',
-      err: '',
-    });
-    expect(await run(empty, ['new', 'T', '--no-color'])).toEqual({ code: EXIT_OK, out: 'wrote briefs/001_t.md\n', err: '' });
+  it('takes an option that asks a command to leave out what it never does, and runs as without it', async () => {
+    // init opens no configuration file, asks git nothing and prints no colour;
+    // new prints none. A script that runs every command in a tree without
+    // git passes --no-git to each, as this suite does.
+    const wrote = { code: EXIT_OK, out: 'wrote .spec-brief.json\nwrote briefs/.gitkeep\nwrote briefs/archive/.gitkeep\nnext: spec-brief new "<title>"\n', err: '' };
+    const files = (root: string): string[] => (readdirSync(root, { recursive: true }) as string[]).map((path) => path.replaceAll('\\', '/')).filter((path) => !path.startsWith('.git/') && path !== '.git').sort();
+    // The line with none of them, in a repository, where the suite hands it no --no-git.
+    const bare = dir('cli-already-so-bare');
+    initRepo(bare);
+    expect(await run(bare, ['init'])).toEqual(wrote);
+    const configuration = readFileSync(join(bare, '.spec-brief.json'), 'utf8');
+    for (const options of [['--no-git'], ['--no-config'], ['--no-color'], ['--no-config', '--no-git', '--no-color']]) {
+      const root = dir(`cli-already-so${options.join('')}`);
+      // Wherever they stand; the directory is given a .git of its own so that the line is as written here.
+      mkdirSync(join(root, '.git'));
+      expect(await run(root, [...options.slice(1), 'init', ...options.slice(0, 1)]), options.join(' ')).toEqual(wrote);
+      expect(files(root), options.join(' ')).toEqual(files(bare));
+      expect(readFileSync(join(root, '.spec-brief.json'), 'utf8'), options.join(' ')).toBe(configuration);
+    }
+    // --no-config has init open no configuration, which it never does; it still writes over none.
+    expect(await run(bare, ['init', '--no-config'])).toEqual({ code: EXIT_ERROR, out: '', err: 'spec-brief: .spec-brief.json already exists here; edit it instead\n' });
+    expect(readFileSync(join(bare, '.spec-brief.json'), 'utf8')).toBe(configuration);
+    // new prints no colour, and takes --no-color; the others it reads.
+    expect(await run(bare, ['new', 'T', '--no-color'])).toEqual({ code: EXIT_OK, out: 'wrote briefs/001_t.md\n', err: '' });
   });
 
   it('refuses --config beside --no-config, and --color beside --no-color, of which one went unread', async () => {
@@ -581,9 +599,12 @@ describe('an option a command reads nothing of', () => {
     const esc = String.fromCharCode(27);
     expect((await run(root, ['lint', '--color'])).out).toContain(esc);
     expect((await run(root, ['lint', '--no-color'], { FORCE_COLOR: '1' })).out).not.toContain(esc);
-    // On a command that reads neither of a pair, what it does not read is said first.
+    // Where a command refuses one of a pair for itself, that is what it says.
     expect((await run(dir('cli-unread-pairs-init'), ['init', '--no-config', '--config', 'team.json'])).err).toBe(
-      'spec-brief: init does not read --no-config; it reads --root, --format, --briefs and --archive\n',
+      'spec-brief: init does not read --config; it reads --root, --format, --briefs and --archive, and takes --no-config, --no-git and --no-color\n',
+    );
+    expect((await run(root, ['new', 'T', '--no-color', '--color'])).err).toBe(
+      'spec-brief: new does not read --color; it reads --root, --config, --no-config, --format, --no-git, --id, --type, --wave, --depends-on and --date, and takes --no-color\n',
     );
   });
 
@@ -618,16 +639,16 @@ describe('an option a command reads nothing of', () => {
     expect(await run(cwd, ['lint', '--color', '--no-color', '-v'])).toEqual({ code: EXIT_OK, out: `${pkg.version}\n`, err: '' });
   });
 
-  it('says in the help which command reads which option, and what else is refused', () => {
+  it('says in the help which command an option is not for, and the rule', () => {
     expect(HELP).toContain(
       [
         'Options for every command, except where a line says otherwise:',
         '  --root <dir>          run from this directory instead of the current one; it must exist, unless init makes it',
         '  --config <file>       use this configuration file; not for init, which writes .spec-brief.json',
-        '  --no-config           use the defaults, ignoring any configuration file; not for init',
+        '  --no-config           use the defaults, ignoring any configuration file',
         "  --format <format>     the output format, pretty by default; each command's are below",
         '  --strict              treat warnings as errors; not for init, new or list, which have none',
-        '  --no-git              leave git out; read the files on disk instead; not for init, which asks git nothing',
+        '  --no-git              leave git out; read the files on disk instead',
         '  --color, --no-color   force colour on or off; --color not for init or new, which print none',
         '',
       ].join('\n'),
@@ -635,9 +656,11 @@ describe('an option a command reads nothing of', () => {
     expect(HELP).toContain(
       [
         'An option given an empty value, a list that names nothing and an argument a',
-        'command does not take are refused, not read as if they were not there. So are',
-        'an option a command reads nothing of, as init --strict, and --config beside',
-        '--no-config or --color beside --no-color, of which one would go unread.',
+        'command does not take are refused, not read as if they were not there. So is',
+        'an option where taking it would say what is not so, as init --strict, and so',
+        'are --config beside --no-config and --color beside --no-color, of which one',
+        'would go unread. An option that asks a command to leave out what it never',
+        'does is taken, as init --no-git: it asks for what is already so.',
         '',
       ].join('\n'),
     );
