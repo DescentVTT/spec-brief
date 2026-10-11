@@ -138,4 +138,14 @@ describe('the suites that run in this order', () => {
     expect(vitestCore.test?.exclude).toContain('tests/mutation-order.test.ts');
     expect(vitestMutation.test?.exclude).toContain('tests/mutation-order.test.ts');
   });
+
+  it('allow a mutant the same time, so that neither calls timed out what the other lets run to its end', () => {
+    // A timeout is scored as a detection. With three seconds of its own the
+    // core sweep scored so mutants that survive the full sweep, and static
+    // mutants a test kills once a file the worker had not timed gets its turn
+    // (ADR-0009, amended 2026-10-11).
+    expect(strykerCore.timeoutMS).toBe(stryker.timeoutMS);
+    // Longer only costs minutes; shorter is a measurement first.
+    expect(stryker.timeoutMS).toBeGreaterThanOrEqual(20_000);
+  });
 });
