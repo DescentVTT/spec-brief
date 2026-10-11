@@ -54,7 +54,10 @@ it spawns git for every CLI mutant and runs weekly in CI rather than per
 change. See [ADR-0009](docs/adr/0009-mutation-testing.md) for both, and for
 why a unit test that belongs in the core suite must not read the disk or
 spawn a process: under per-test coverage, one that does is run for every
-mutant it reaches.
+mutant it reaches. Both sweeps run a mutant's test files the quickest first
+(`vitest.mutation.config.ts`), and a static mutant that survives runs them
+all: `tests/mutation-order.test.ts` holds the order, and `npm test` does not
+run in it.
 
 The coverage floors in `vitest.config.ts` and the mutation `break` in both
 `stryker.core.config.mjs` and `stryker.config.mjs` sit below the last

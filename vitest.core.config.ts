@@ -1,5 +1,7 @@
 import { defineConfig } from 'vitest/config';
 
+import { QuickestFirst } from './vitest.mutation.config.js';
+
 /**
  * The unit suite: every test that reads no disk and spawns no process.
  *
@@ -9,6 +11,10 @@ import { defineConfig } from 'vitest/config';
  * full sweep measured 20 hours on a Windows workstation at that rate. Held to
  * the unit suite alone, a core mutant is killed by the tests written for its
  * module, which is the stronger claim anyway.
+ *
+ * A mutant's files run quickest first, as in the full sweep and for its
+ * reason (`vitest.mutation.config.ts`). The test of that order reaches no
+ * module, and is left out here as it is there.
  */
 export default defineConfig({
   test: {
@@ -19,6 +25,7 @@ export default defineConfig({
       'tests/engine.test.ts',
       'tests/io.test.ts',
       'tests/io-faults.test.ts',
+      'tests/mutation-order.test.ts',
       'tests/names.test.ts',
       'tests/npm.test.ts',
       'tests/runner-images.test.ts',
@@ -28,5 +35,6 @@ export default defineConfig({
     ],
     environment: 'node',
     testTimeout: 30_000,
+    sequence: { sequencer: QuickestFirst },
   },
 });
