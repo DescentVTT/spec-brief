@@ -6,9 +6,13 @@ name: Mutation
 # runs on every push to main, and its `break` in stryker.core.config.mjs is the gate.
 #
 # The full sweep mutates everything, the CLI and the engine included, against
-# the whole suite. Its tests spawn git and write to disk, so it is slower by an
-# order of magnitude; it runs weekly and on request, and its `break` in
-# stryker.config.mjs is set from the first hosted run (ADR-0009).
+# the whole suite. Its tests spawn git and write to disk, so it is the slower,
+# by an order of magnitude on a Windows workstation; it runs weekly and on
+# request, and its `break` in stryker.config.mjs is set from the first hosted
+# run (ADR-0009).
+#
+# Both run a mutant's test files the quickest first (vitest.mutation.config.ts;
+# ADR-0009, amended 2026-10-11).
 on:
   push:
     branches: [main]
@@ -62,9 +66,11 @@ jobs:
   full:
     if: github.event_name == 'schedule' || inputs.full
     runs-on: ubuntu-24.04
-    # Headroom for a bad runner, not a budget: the hosted full sweeps took 22 to
-    # 25 minutes. A sweep that keeps passing 45 wants shards, not this number
-    # raising.
+    # Headroom for a bad runner, not a budget: the hosted full sweeps took 18 to
+    # 28 minutes in vitest's order of test files, and 13 and 21 with the quickest
+    # first (ADR-0009, amended 2026-10-11), on runners whose first run of the
+    # suite took from 10 to 15 seconds. A sweep that keeps passing 45 wants
+    # shards, not this number raising.
     timeout-minutes: 90
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

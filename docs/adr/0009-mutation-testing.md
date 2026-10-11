@@ -289,3 +289,148 @@ The hold is the family's and is lifted in spec-core first, by the steps in
 it is held. When the bump comes here, its pull request measures nothing:
 dispatch `mutation.yml` on the branch with `full` ticked, and hold both
 sweeps to that ADR's two conditions before merging.
+
+## Amended 2026-10-11: a mutant's quickest test files first
+
+**Both sweeps run a mutant's test files quickest first.** Stryker's vitest
+runner runs a mutant's files one after another in one worker and stops at
+the first test that fails, and vitest's own sequencer puts a file that
+failed in the last run first and then the longest. spec-harness measured
+what that costs a sweep whose longest file takes most of a minute, and
+halved its sweep with an order of its own
+([its ADR-0010](https://github.com/DescentVTT/spec-harness/blob/main/docs/adr/0010-toolchain-and-verification.md),
+amended 2026-10-09). Here the whole suite takes eight seconds before any
+mutant, so the first question was whether there is anything to gain.
+
+**What the last sweep under vitest's order said** (run 37827733882, of
+fba3c1e, from which main had moved in no source and no test):
+
+- The 726 static mutants, a tenth of the 7,041, took 6.1 of the sweep's 24.4
+  minutes.
+- 99 of them were killed only after another file's tests had run to their
+  end, and 600 of the 6,312 others, which run the files of the tests that
+  cover them: 47,370 tests ahead of the file that killed, of the 81,120 the
+  killed mutants ran.
+- Longest first, the files ahead were `tests/glob.test.ts`,
+  `tests/cli.test.ts` and `tests/schedule.test.ts`, three fifths of the
+  suite's time between them. Priced by each file's share of the initial run,
+  the tests ahead cost between 1.7 and 3.2 of the 24.4 minutes, and each
+  file ahead a quarter of a second more before its first test.
+
+That bounded the gain at a few minutes and could not say how much of it
+another order keeps: quickest first, a mutant that only a long file kills
+waits for more files, each cheaper. So the order was written and the sweeps
+run.
+
+**The order** is `QuickestFirst` in `vitest.mutation.config.ts`, which
+`vitest.core.config.ts` reads too: a file that failed in the worker's last
+run first, as vitest has it, then the quickest, and a file the worker has
+not timed after those, the smaller first. It reads what vitest recorded of
+each file by the key vitest files it under. `tests/mutation-order.test.ts`
+sets it beside vitest's own sequencer, so that a key vitest stops using
+fails a test where the order would quietly have gone by size, and holds it
+to the two sweeps' suites and to no other run. That file reaches nothing
+under `src/` and is left out of both suites. No test left either run: the
+initial runs count 976 tests and 663, as before, and `npm test` runs as it
+did.
+
+**A hosted runner is one of several machines**, and a sweep's minutes say
+more about which one it drew than about the order: Stryker's initial run,
+the suite once before any mutant, took between 9.6 and 15.3 seconds in the
+full sweeps below, and between 5.7 and 9.8 in the core's. So each sweep is
+set beside its own initial run, as the seconds it took for each second of
+that.
+
+| Full sweep | Order | Initial run | Timeouts | Sweep | Sweep / initial run |
+| --- | --- | ---: | ---: | ---: | ---: |
+| 37535078122, 10f7e31 | vitest's | 14.1 s | 41 | 25m28s | 108.3 |
+| 37541947048, 9670753 | vitest's | 13.7 s | 40 | 25m06s | 110.1 |
+| 37697989079, 6decf9d | vitest's | 11.2 s | 40 | 19m14s | 102.6 |
+| 37791585328, d94da7d | vitest's | 11.2 s | 40 | 18m28s | 98.5 |
+| 37823599893, 52bd762 | vitest's | 14.7 s | 42 | 27m45s | 113.0 |
+| 37827733882, fba3c1e | vitest's | 15.0 s | 41 | 24m53s | 99.6 |
+| 38111383731, 9e7c806 | quickest first | 9.6 s | 39 | 13m16s | 83.2 |
+| 38114058527, b686bde | quickest first | 15.3 s | 40 | 21m27s | 84.2 |
+
+Both full sweeps in the new order read the score of the one before them,
+99.33% over 7,041, with the same 44 survivors and the same 3 without
+coverage, mutant for mutant. One or two of the 41 that had timed out were
+killed instead. The second drew a runner as slow as fba3c1e's and took
+21m27s where that sweep took 24m53s: its killed mutants ran 67,897 tests
+for 81,120, and its static mutants took 3.7 of its 21.0 minutes for 6.1 of
+24.4, where the other mutants took 17.3 for 18.3. The first, on the fastest
+runner of the eight, says the same against its initial run: the static
+mutants two fifths less, the others a tenth.
+
+| Core sweep | Order | Initial run | Timeouts | Sweep | Sweep / initial run |
+| --- | --- | ---: | ---: | ---: | ---: |
+| 37535078122, 10f7e31 | vitest's | 9.7 s | 38 | 16m19s | 101.2 |
+| 37541947048, 9670753 | vitest's | 8.7 s | 37 | 14m51s | 102.9 |
+| 37697989079, 6decf9d | vitest's | 9.7 s | 106 | 20m57s | 129.7 |
+| 37791585328, d94da7d | vitest's | 7.3 s | 34 | 12m03s | 99.2 |
+| 37823599893, 52bd762 | vitest's | 8.9 s | 33 | 13m34s | 91.8 |
+| 37827733882, fba3c1e | vitest's | 5.7 s | 34 | 9m59s | 105.2 |
+| 37832112651, 8574276 | vitest's | 5.8 s | 105 | 13m43s | 140.7 |
+| 38111072675, bffbb0e | vitest's | 9.2 s | 38 | 15m18s | 100.2 |
+| 38111383731, 9e7c806 | quickest first | 9.8 s | 36 | 14m21s | 88.0 |
+| 38114058527, b686bde | quickest first | 9.3 s | 36 | 13m20s | 86.0 |
+
+The core sweep gains less: 88.0 and 86.0, where the six sweeps under
+vitest's order that had no burst of timeouts read 91.8 to 105.2. Both read
+99.39% over 5,289, with 5,221 killed, 36 timed out, 29 survived and 3
+without coverage, and no survivor that is new. Two of the 31 that fba3c1e
+left timed out in both, which is two mutants changing sides and no test
+killing them:
+
+- the anchor of `NOTE_START`, which had changed sides between two sweeps of
+  one source under vitest's order already;
+- `!read.ok` held false in `src/glob.ts`, which survived the four sweeps
+  under vitest's order whose reports were read and timed out in both under
+  this one. Written into the source by hand, it fails none of the 471 tests
+  of the fifteen unit files that cover it, in the time the source as it
+  stands takes, and the full sweep, which allows a mutant twenty seconds,
+  leaves it surviving in either order. It is a survivor at the edge of what
+  the core sweep allows, and why this order takes it over the edge is not
+  known.
+
+**The bursts of timeouts were the order's.** In two of the eight core
+sweeps under vitest's order, 70 of the 82 static mutants of
+`src/trigger.ts` timed out one after another: the 106 timeouts for 34 that
+the amendment of 2026-10-07 records, and about four minutes of each of those
+sweeps. `tests/trigger.test.ts` is the quickest file of the suite, so
+vitest's order ran it last, and the first such mutant a worker met ran the
+whole unit suite before the file that kills it, 554 to 566 tests in the
+sweep of fba3c1e. With four workers on the runner's four cores that can
+pass what the core sweep allows a mutant. A mutant that times out takes its
+worker with it, and the worker that replaced it ran the longest files first
+again: the few mutants of the burst that were killed were killed by
+`tests/rules.test.ts`, after 107 tests. A timeout counts as a kill, so the
+score did not show a burst; the score with every timeout lost did, 97.39%
+where it reads 98.71%.
+
+Quickest first, neither core sweep had a burst, which two sweeps cannot
+prove of the next. What they show is the wait getting shorter and rarer:
+the first such mutants met that file after 38, 38 and 39 tests in one core
+sweep and after 31, 31 and 572 in the other. A worker that has not run a
+file has no time for it and runs it after every file it has, which is the
+572, and 749 and 792 tests in the full sweeps; a worker with no times at
+all runs the smaller files first, and that file is the third smallest.
+
+The gates stay at 97: an order changes no mutant's fate, and the two that
+changed sides are timeouts. The workflow's comment said the hosted full
+sweep takes 22 to 25 minutes, and now says what the table does.
+
+Seen on the way, and left:
+
+- A file the worker has not timed could run before the files it has
+  instead of after them, as vitest runs a file it does not know first. That
+  would end the waits above, at the price of a long file run first once in
+  each worker; it was not measured.
+- Five test files that reach no mutant, `names`, `npm`, `runner-images`,
+  `vendor` and `release`, 154 tests, are in the full sweep's suite, and a
+  static mutant now runs them before any slower file, where it ran them
+  last. Leaving them out is a test leaving the run, and a decision of its
+  own.
+- The 39 to 42 mutants that time out in the full sweep wait twenty seconds
+  each, `timeoutMS`, for a suite that takes eight: about four of its
+  minutes on four workers.
