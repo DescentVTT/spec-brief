@@ -85,7 +85,9 @@ function records(output: string): string[] {
 export function parseNumstat(output: string): FileChange[] {
   // `show --format=` leaves the empty header's newline in front of the first record.
   return records(output.replace(/^\n+/, '')).map((record) => {
-    const [added, deleted, ...path] = record.split('\t') as [string, string, ...string[]];
+    const fields = record.split('\t');
+    // Cast on the name: what stands under an `as` is not mutated (ADR-0009).
+    const [added, deleted, ...path] = fields as [string, string, ...string[]];
     return {
       path: path.join('\t'),
       insertions: added === '-' ? null : Number(added),
@@ -138,7 +140,9 @@ export class NodeGit implements Git {
     if (!sha.ok) return null;
     const hash = sha.stdout.trim();
     const show = await run(this.cwd, ['show', '-s', '--format=%an%x00%aI', hash]);
-    const [author, date] = show.stdout.trim().split('\0') as [string, string];
+    const fields = show.stdout.trim().split('\0');
+    // Cast on the name, as in `parseNumstat`.
+    const [author, date] = fields as [string, string];
     return { sha: hash, author, date };
   }
 

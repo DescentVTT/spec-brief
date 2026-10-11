@@ -170,7 +170,7 @@ function distance(a: string, b: string): number {
     const row = [i];
     for (let j = 1; j <= b.length; j += 1) {
       const cost = a.charAt(i - 1) === b.charAt(j - 1) ? 0 : 1;
-      row.push(Math.min((previous[j] as number) + 1, (row[j - 1] as number) + 1, (previous[j - 1] as number) + cost));
+      row.push(Math.min((previous[j] as number) + 1, row[j - 1]! + 1, previous[j - 1]! + cost));
     }
     previous = row;
   }

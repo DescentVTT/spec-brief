@@ -4,7 +4,7 @@
  */
 
 import type { Config } from './config.js';
-import { findEntry, isNull, keyName, readFrontMatter, type FrontMatter, type FrontMatterEntry, type YamlValue } from './frontmatter.js';
+import { findEntry, isNull, keyName, readFrontMatter, type FrontMatter, type YamlValue } from './frontmatter.js';
 import { scan, sectionsOf, titleOf, type Scan, type Section, type TaskItem } from './markdown.js';
 import { splitLines, stripBom } from './text.js';
 import type { Phase, Status } from './types.js';
@@ -136,7 +136,7 @@ export function parseBrief(file: string, text: string, config: Config, phase: Ph
   let wave: number | null = null;
   if (waveText !== null) {
     // Text was read, so there is an entry, and its value is a scalar.
-    const waveEntry = findEntry(frontMatter, 'wave') as FrontMatterEntry;
+    const waveEntry = findEntry(frontMatter, 'wave')!;
     const { quoted } = (waveEntry.value as Extract<YamlValue, { kind: 'scalar' }>).scalar;
     if (!quoted && /^\d{1,9}$/.test(waveText)) wave = Number(waveText);
     else problems.push({ field: 'wave', line: waveEntry.line, message: `"wave" must be a whole number, not "${waveText}"` });

@@ -13,6 +13,7 @@ import { type Config, type SectionRule, statusWords, typeSections } from './conf
 import { type Corpus, cycleSubject, dependencyCycles, duplicateIds, idKey, resolveDependency } from './corpus.js';
 import { findEntry } from './frontmatter.js';
 import { integrityOf } from './integrity.js';
+import { literal } from './literal.js';
 import { type Glob, hasExtension, held, isGlobSyntax, matchesAny, parseGlob, readingIn, treeOf, WITNESS_BUDGET, writtenAlternatives } from './glob.js';
 import { hasContent, type Section } from './markdown.js';
 import { closest } from './schema.js';
@@ -121,7 +122,7 @@ function live(check: (context: RuleContext) => RuleResult[]): (context: RuleCont
   return (context) => (context.brief.phase === 'live' ? check(context) : []);
 }
 
-const SCOPE_FIELDS = ['affectedFiles', 'protectedFiles'] as const;
+const SCOPE_FIELDS = literal(['affectedFiles', 'protectedFiles']);
 
 const quoted = (items: readonly string[]): string => inWords(items.map((item) => `"${item}"`));
 
@@ -468,7 +469,7 @@ export const RULES: readonly Rule[] = [
         .map((rule) => ({ rule, section: sectionsFilling(brief, rule)[0] }))
         .filter((p): p is { rule: SectionRule; section: Section } => p.section !== undefined);
       for (let i = 1; i < placed.length; i += 1) {
-        const before = placed[i - 1] as { rule: SectionRule; section: Section };
+        const before = placed[i - 1]!;
         const current = placed[i] as { rule: SectionRule; section: Section };
         if (current.section.heading.line < before.section.heading.line) {
           return [

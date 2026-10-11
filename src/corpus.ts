@@ -200,7 +200,7 @@ export function dependencyCycles(corpus: Corpus): Brief[][] {
   for (const brief of nodes) if (!index.has(brief)) connect(brief);
 
   return components.map((component) => {
-    const start = [...component].sort((a, b) => (a.file < b.file ? -1 : 1))[0] as Brief;
+    const start = [...component].sort((a, b) => (a.file < b.file ? -1 : 1))[0]!;
     return cyclePath(start, edges);
   });
 }

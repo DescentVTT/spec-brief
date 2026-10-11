@@ -193,7 +193,7 @@ export function schedule(corpus: Corpus, options: ScheduleOptions = {}): Schedul
   const cycles = dependencyCycles(corpus).filter((cycle) => cycle.every((b) => b.status !== 'deferred'));
   const inCycle = new Set(cycles.flat());
   const unplaced = pending.map((brief): Unplaced => {
-    const waitsOn = (dependencies.get(brief) as Brief[]).find((d) => !waveOf.has(d)) as Brief;
+    const waitsOn = (dependencies.get(brief) as Brief[]).find((d) => !waveOf.has(d))!;
     const because = waitsOn.status === 'deferred' ? 'deferred' : inCycle.has(waitsOn) ? 'cycle' : 'unplaced';
     return { brief, waitsOn, because };
   });
@@ -299,7 +299,7 @@ export function scheduleFindings(corpus: Corpus, s: Schedule): Finding[] {
     for (const p of s.placements) {
       for (const passed of p.passed) {
         if (passed.reason !== 'undecided') continue;
-        const theirsFirst = passed.patterns.map(([own, theirs]) => [theirs, own] as const);
+        const theirsFirst = passed.patterns.map(([own, theirs]): readonly [string, string] => [theirs, own]);
         findings.push(undecidedFinding(undecided, passed.brief, p.brief, theirsFirst, passed.wave));
       }
     }
