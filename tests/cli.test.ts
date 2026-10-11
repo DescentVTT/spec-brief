@@ -614,6 +614,26 @@ describe('lint', () => {
     expect((await run(root, ['lint', '--format', 'json', '--color'])).out).not.toContain(esc);
   });
 
+  it('reads FORCE_COLOR as off for exactly 0 and exactly false, and as on for any other word', async () => {
+    const root = plain('cli-lint-force-color', { 'briefs/001_a.md': goodBrief({ type: 'epic' }) });
+    const esc = String.fromCharCode(27);
+    // "false" forced colour on, into a pipe too, where Node itself and supports-color read it as off.
+    expect((await run(root, ['lint'], { FORCE_COLOR: 'false' })).out).not.toContain(esc);
+    expect((await run(root, ['lint'], { FORCE_COLOR: 'false' }, true)).out).not.toContain(esc);
+    expect((await run(root, ['lint'], { FORCE_COLOR: 'false', TERM: 'xterm-256color' }, true)).out).not.toContain(esc);
+    // --color still asks for colour over it, and NO_COLOR still wins over a word that forces it.
+    expect((await run(root, ['lint', '--color'], { FORCE_COLOR: 'false' })).out).toContain(esc);
+    expect((await run(root, ['lint'], { FORCE_COLOR: 'true', NO_COLOR: '1' }, true)).out).not.toContain(esc);
+  });
+
+  it.each(['true', '1', 'FALSE', 'False', 'no', '00', ' false', '2'])('reads FORCE_COLOR=%j as on, into a pipe and on a dumb terminal', async (value) => {
+    // Only the two spellings are off: "FALSE" is on here, though Node reads every word it does not know as off.
+    const root = plain('cli-lint-force-on', { 'briefs/001_a.md': goodBrief({ type: 'epic' }) });
+    const esc = String.fromCharCode(27);
+    expect((await run(root, ['lint'], { FORCE_COLOR: value })).out).toContain(esc);
+    expect((await run(root, ['lint'], { FORCE_COLOR: value, TERM: 'dumb' }, true)).out).toContain(esc);
+  });
+
   it('exits 2 for a configuration that does not load, a missing brief and a misspelt rule', async () => {
     const root = plain('cli-lint-config', { 'briefs/001_a.md': goodBrief() });
     writeTree(root, { '.spec-brief.json': '{"briefz": "x"}' });

@@ -314,8 +314,12 @@ function useColor(values: Values, io: CliIO): boolean {
   if (flag(values, 'color')) return true;
   const env = io.env ?? process.env;
   if ((env['NO_COLOR'] ?? '') !== '') return false;
+  // Off for exactly "0" and exactly "false": Node itself and supports-color
+  // read "false" as off, and here it forced colour on. Any other value that
+  // is not empty is on, "FALSE" too, which is the one reading the family's
+  // tools share (spec-core ADR-0005).
   const force = env['FORCE_COLOR'];
-  if (force !== undefined && force !== '') return force !== '0';
+  if (force !== undefined && force !== '') return force !== '0' && force !== 'false';
   // A terminal that says it is dumb has asked for no escape sequence, and
   // Node itself counts one colour for it: the family's tools read it alike.
   if (env['TERM'] === 'dumb') return false;
