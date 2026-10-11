@@ -333,41 +333,54 @@ files left behind.
   without colour: each as the line with one of the two, and no word of the
   other.
 
-**A command refuses an option it reads nothing of**: exit 2, before anything
-is opened or written, in one line that names the command, the option and
-what the command does read.
+**An option is refused where taking it would tell someone what is not so**:
+exit 2, before anything is opened or written, in one line that names the
+command, the option, what the command does read and what it takes besides.
 
-    spec-brief: init does not read --strict; it reads --root, --format, --briefs and --archive
+    spec-brief: init does not read --strict; it reads --root, --format, --briefs and --archive, and takes --no-config, --no-git and --no-color
 
-- `init` refuses `--config`, `--no-config`, `--strict`, `--no-git` and
-  `--color`: it writes `.spec-brief.json` and opens no other configuration,
-  asks git nothing, and prints no warning and no colour. `init --config
-  team.json` wrote `.spec-brief.json`, which is the pairing that most needed
-  a word.
-- `new` refuses `--strict` and `--color`, and `list` refuses `--strict`:
-  neither has a warning to fail on, and `new` prints no colour.
+- `init --strict` says the briefs were set up strictly, where nothing was
+  strict, and `new --strict` and `list --strict` that a warning would have
+  failed the run, where neither has one.
+- `init --config team.json` says the configuration was written there, where
+  `.spec-brief.json` was. It is the pairing that most needed a word.
+- `init --color` and `new --color` say colour was printed, where neither
+  prints any.
 - The option named is the first such on the line as it was typed.
 
 **Two options of which one would go unread are refused together**, by both
-names: `--config` beside `--no-config`, and `--color` beside `--no-color`.
-The file is not looked for first: the pair is refused whether or not it is
-there.
+names and for the same reason: `--config team.json --no-config` says the
+file was read, where the defaults ran, and `--color --no-color` that colour
+was forced on, where it was off. The file is not looked for first: the pair
+is refused whether or not it is there.
 
-What is taken, and why:
+**An option that asks a command to leave out what it never does is taken.**
+It asks for what is already so, and tells nobody anything else:
 
-- **`--no-color`, by every command.** On `init` and `new` it asks for what
-  is already so, and a script passes it to every command it runs: spec-guard
-  and spec-graph take it the same way, and spec-harness has run
-  `list --archived --format json --no-color` and
-  `archive <id> --dry-run --format json --no-color` since its 0.1.0. It is
-  the one exception. `--no-git` on `init` is as true of the run as
-  `--no-color` is, and is refused all the same: nothing is known to pass it
-  to every command, and one exception is a rule a person can keep in mind.
-- **An option a format has nothing to read for.** `--color` or `--no-color`
-  beside `--format json` changes nothing, and stays: that pairs an option
-  with the value of another, and a caller that asks for JSON passes
-  `--no-color` beside it. A test has held since 0.1.0 that `--format json
-  --color` writes no escape.
+- `--no-color` on `init` and `new`, which print no colour;
+- `--no-git` on `init`, which asks git nothing;
+- `--no-config` on `init`, which opens no configuration file. It writes over
+  none either: where a configuration is already there, `init --no-config`
+  stops as `init` does.
+
+A script that runs every command in a tree without git, or into a log,
+passes such an option to each of them. This repository's own suite passes
+`--no-git` to `init`; spec-harness has run
+`list --archived --format json --no-color` and
+`archive <id> --dry-run --format json --no-color` since its 0.1.0; and
+spec-guard takes `--no-color` on `query`, and spec-graph `--no-config` on
+`diff`, on the same ground. So of the ten pairings that ran as the line
+without the option does, six are refused and four are taken.
+
+What else is left as it is, and why:
+
+- **An option a format has nothing to read for.** `--color` beside
+  `--format json` says colour was printed, where JSON has none, and by the
+  rule above would be refused. It stays, with `--no-color` beside it: that
+  pairs an option with the value of another, a caller that asks for JSON
+  passes `--no-color` beside it, and a test has held since 0.1.0 that
+  `--format json --color` writes no escape. It is the one pairing left
+  taken that says what is not so.
 - **`--help` and `--version` answer first**, as they do over a `--format`
   the command does not write and a `--root` that is no directory: the
   refusal is asked where those two are, once a command is known.
@@ -377,17 +390,17 @@ What is taken, and why:
   archived brief is never ready. Both are read and the answer to the two
   together is true, so it is no pair of this kind.
 - **`archive --no-git --allow-dirty`**: without git no tree is measured, so
-  the option asks for what is already so. `--commit` or `--base` beside
-  `--no-git` was refused already, by name.
+  the option asks for what is already so, and is taken by the rule above.
+  `--commit` or `--base` beside `--no-git` was refused already, by name.
 - **An option given twice** is read as its last, `--format json --format
   pretty` as `pretty`. That is the parser's reading, and the one an alias
   with a default and a line that overrides it rely on.
 
-The check is a function of the command and the options given, asked once per
+The rule is two functions of the command and the option, asked once per
 run, and not a table beside the commands': a table built when the module
 loads is static to Stryker, and each of its mutants then runs the whole
-suite ([ADR-0009](0009-mutation-testing.md)). A test holds the table above
-to every pairing, the 56 that run and the 8 that are refused, and to the
+suite ([ADR-0009](0009-mutation-testing.md)). A test holds the rule to
+every pairing, the 58 that run and the 6 that are refused, and to the
 commands and options the help lists.
 
 Each refusal is input refused that was accepted, a minor release

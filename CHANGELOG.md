@@ -15,12 +15,16 @@ what a run reports.
 
 ### Changed
 
-- **An option a command reads nothing of is refused, not taken and
-  ignored.** `init` with `--config`, `--no-config`, `--strict`, `--no-git`
-  or `--color`, `new` with `--strict` or `--color`, and `list --strict` each
-  ran as the line without the option does, exit 0; each is now exit 2 with a
-  line that names the command, the option and what the command reads, and
-  writes nothing. `--no-color` is still taken by every command (ADR-0001,
+- **An option is refused where taking it would tell someone what is not
+  so.** `init` with `--config`, `--strict` or `--color`, `new` with
+  `--strict` or `--color`, and `list --strict` each ran as the line without
+  the option does, exit 0: `init --config team.json` wrote
+  `.spec-brief.json`, and `init --strict` set nothing up strictly. Each is
+  now exit 2 with a line that names the command, the option and what the
+  command reads, and writes nothing. An option that asks a command to
+  leave out what it never does is still taken, since it asks for what is
+  already so: `--no-color` by every command, and `--no-git` and
+  `--no-config` by `init` (ADR-0001,
   [An option a command does not read](README.md#an-option-a-command-does-not-read)).
   Upgrading: drop the option from that command's line; `init` writes
   `.spec-brief.json` and no other file, so a configuration kept under

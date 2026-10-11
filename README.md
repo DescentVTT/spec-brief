@@ -246,16 +246,16 @@ Reopens an archived brief: the banner and the hash come off, the status goes bac
 
 ### Every command
 
-Every command takes these, except where the last column names it: a command [refuses an option it reads nothing of](#an-option-a-command-does-not-read).
+Every command takes these, except where the last column names it: an option is [refused where taking it would tell someone what is not so](#an-option-a-command-does-not-read).
 
 | Flag | What it does | Not for |
 | --- | --- | --- |
 | `--root <dir>` | Runs from another directory, which must be there: only `init` makes one that is not. | |
 | `--config <file>` | Names the configuration. | `init`, which writes `.spec-brief.json` |
-| `--no-config` | Uses the defaults. | `init` |
+| `--no-config` | Uses the defaults. | |
 | `--format <format>` | `pretty` by default, or `json`; `lint`, `matrix` and `schedule`, which report findings, also write `sarif`, `github` and `gitlab`, and `--help` lists each command's formats. | |
 | `--strict` | Makes warnings fail the run. | `init`, `new` and `list`, which have none |
-| `--no-git` | Leaves git out even inside a repository: the tree is read from disk, and `archive` records no commit. | `init`, which asks git nothing |
+| `--no-git` | Leaves git out even inside a repository: the tree is read from disk, and `archive` records no commit. | |
 | `--color` | Colour, whatever the environment and the terminal say. | `init` and `new`, which print none |
 | `--no-color` | No colour, whatever they say. | |
 | `--help`, `--version` | Do what they say, whatever else is on the line. | |
@@ -284,20 +284,20 @@ An option, an argument or a path that is given and names nothing is refused: exi
 
 ### An option a command does not read
 
-An option that means nothing to a command is refused rather than taken and ignored: exit 2, one line that names the command, the option and what the command does read, nothing written. `init --strict` would otherwise tell someone the briefs had been set up strictly, and `init --config team.json` that the configuration had been written there.
+An option is refused where taking it would tell someone what is not so: exit 2, one line that names the command, the option, what the command does read and what it takes besides, nothing written. `init --strict` would otherwise say the briefs had been set up strictly, and `init --config team.json` that the configuration had been written there.
 
-| Command | Refuses | Because |
+| Command | Refuses | Because it would say |
 | --- | --- | --- |
-| `init` | `--config`, `--no-config`, `--strict`, `--no-git`, `--color` | It writes `.spec-brief.json` and opens no other configuration, asks git nothing, and prints no warning and no colour. |
-| `new` | `--strict`, `--color` | It has no warning to fail on, and prints no colour. |
-| `list` | `--strict` | It reports no finding, so nothing fails. |
+| `init` | `--config`, `--strict`, `--color` | That the configuration was written to the file named, where `.spec-brief.json` is; that something was strict, where `init` has no warning to fail on; that colour was printed, where it prints none. |
+| `new` | `--strict`, `--color` | That a warning would have failed it, where it has none; that colour was printed, where it prints none. |
+| `list` | `--strict` | That a warning would have failed it, where it reports no finding. |
 
 ```text
-spec-brief: init does not read --strict; it reads --root, --format, --briefs and --archive
+spec-brief: init does not read --strict; it reads --root, --format, --briefs and --archive, and takes --no-config, --no-git and --no-color
 ```
 
-- **Two options of which one would go unread** are refused together: `--config <file>` beside `--no-config`, where the defaults ran and the file was never opened, and `--color` beside `--no-color`, where colour was off. Give one of the two.
-- **`--no-color` is taken by every command**, `init` and `new` too: their output never has colour, so it asks for what is already so, and scripts pass it to every command they run.
+- **Two options of which one would go unread** are refused together, for the same reason: `--config <file>` beside `--no-config` says the file was read, where the defaults ran and it was never opened, and `--color` beside `--no-color` that colour was forced on, where it was off. Give one of the two.
+- **An option that asks a command to leave out what it never does is taken**, since it asks for what is already so: `--no-color` by `init` and `new`, which print no colour, `--no-git` by `init`, which asks git nothing, and `--no-config` by `init`, which opens no configuration file. A script that runs every command in a tree without git, or into a log, passes such an option to each of them. `init --no-config` still writes over no configuration: where one is there, it stops as `init` does.
 - **An option a format has nothing to read for is taken**: `--no-color` or `--color` beside `--format json` changes nothing, and a caller that asks for JSON passes `--no-color` beside it.
 - **`--help` and `--version` answer first**: `init --strict --help` prints the help.
 
