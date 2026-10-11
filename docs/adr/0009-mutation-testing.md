@@ -443,3 +443,202 @@ Seen on the way, and left:
 - The 39 to 42 mutants that time out in the full sweep wait twenty seconds
   each, `timeoutMS`, for a suite that takes eight: about four of its
   minutes on four workers.
+
+## Amended 2026-10-11: what the sweeps wait for
+
+**The core sweep has the full sweep's clock, and nothing else moves.** The
+amendment above left three things seen and not measured: twenty seconds for
+each mutant that times out in the full sweep, a test file a worker has not
+timed, and five test files that cover no mutant. Measured from the reports
+and logs of the sweeps since, none is worth its change, and each stays as
+it was. What the measuring found is the core sweep's own clock: three
+seconds, which scored as timed out mutants that survive and mutants a test
+kills.
+
+**A timeout is one of two verdicts, and the report says which.** Stryker
+counts how often a mutant's own switch runs, and ends the run where that
+passes a hundred times what the initial run counted: `Hit limit reached`,
+beside the verdict. A loop that no longer ends passes its switch on every
+turn and is over in the time the count takes. Any other run is over when
+its time is: one and a half times what its tests took in the initial run,
+and `timeoutMS`, and what the initial run took over its tests' own time,
+four to seven seconds on these runners. Its worker is then replaced.
+
+**The full sweep's clock decides six mutants.** In ten full sweeps, in
+either order, 39 to 41 mutants time out, and 33 to 35 of them end at the
+hit limit. The clock's are the same six each time: three promises nobody
+settles, the pause before a rename is tried again in `src/fs.ts` and git's
+answer in `src/git.ts`, twice, and three loops that stop passing their own
+switch, two in `src/corpus.ts` and one in `src/schedule.ts`. Six waits of
+twenty seconds are two minutes of one worker and half a minute of a sweep
+on four; with the rest of what a mutant is allowed, 30 to 64 seconds of
+sweeps that took 13 to 23 minutes, where the amendment above said about
+four minutes. The log agrees: in run 38128320340 the 39 timeouts fall in 16
+of its 79 ten-second intervals, seven of them in one, and the sweep tested
+as many mutants in those intervals as in the others. At five seconds the
+full sweep would return 19 to 23 seconds a sweep, and the core sweep shows
+what it would pay for them. Twenty stays.
+
+**The core sweep's clock decided more, and wrongly.** Three seconds gave a
+mutant that runs the whole unit suite fifteen, for a suite that takes ten
+alone on the runner and longer beside three busy workers. In each of the
+eleven core sweeps whose reports were read, three of the clock's timeouts
+are the three loops above. The others are set here beside what the same
+mutants read in a core sweep with the full sweep's clock (run 38139011628):
+
+| Core sweep | Timed out | At the hit limit | At the clock | Of the clock's: a loop above | the hit limit's | survives | a test kills |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 37827733882, fba3c1e | 34 | 28 | 6 | 3 | 1 | 1 | 1 |
+| 38116672624, 998eeb9 | 37 | 25 | 12 | 3 | 4 | 2 | 3 |
+| 38111383731, 9e7c806 | 36 | 26 | 10 | 3 | 3 | 3 | 1 |
+| 38114058527, b686bde | 36 | 26 | 10 | 3 | 3 | 3 | 1 |
+| 38118962074, f5f33a2 | 36 | 26 | 10 | 3 | 3 | 3 | 1 |
+| 38127993060, 9a6b0d0 | 38 | 25 | 13 | 3 | 4 | 3 | 3 |
+| 38128316870, 85e6ae9 | 34 | 25 | 9 | 3 | 4 | 2 | 0 |
+| 38128320340, 85e6ae9 | 34 | 25 | 9 | 3 | 3 | 3 | 0 |
+| 38129482709, 9f9747d | 105 | 25 | 80 | 3 | 4 | 3 | 70 |
+| 38129667388, b7fb20c | 33 | 25 | 8 | 3 | 4 | 1 | 0 |
+| 38136701661, e887422 | 35 | 25 | 10 | 3 | 4 | 3 | 0 |
+
+The mutants that survive are three, and the full sweep left each of them
+surviving every time: the memo of `indexOf` held empty in `src/glob.ts`,
+which the comment beside it calls time and no answer, timed out in all
+eleven; the anchor of `NOTE_START` in nine; and `!read.ok` held false in
+`src/glob.ts` in seven. The last two are the mutants the amendments above
+follow from side to side: survivors that the core's clock cut off in most
+sweeps under quickest first and in few under vitest's order. Why one order
+brings them nearer the clock than the other is still not known; what they
+were at the edge of was the clock, and the core sweep's score counted all
+three as detected. The hit limit's are the four mutants of one loop in
+`src/glob.ts`, which need 13 million turns to reach it.
+
+**The bursts were the clock's.** The amendment above laid them to vitest's
+order, and said two sweeps without one could not prove it of the next. The
+seventh core sweep under quickest first, main's of 9f9747d (run
+38129482709), had one: 105 timeouts, seventy of them among the 82 static
+mutants of `src/trigger.ts`, in 19m06s where the sweep of the commit before
+it took 13m01s.
+
+How one forms is in what a worker knows. The four workers start before the
+initial run and read then the times vitest keeps of each file, one
+`results.json` that all of them write after every run and none reads again.
+One worker makes the initial run and so times every file; the others time
+a file when a mutant first has them run it. No mutant but those of
+`src/trigger.ts` is covered by a test of `tests/trigger.test.ts`, and those
+are static, so a worker that did not make the initial run meets that file
+on such a mutant: not timed, so after every file that is, with the whole
+unit suite ahead of it. Beside three busy workers that run passed its
+fifteen seconds. A run that times out records no time, and its worker is
+replaced by one that reads what a worker last wrote; the core's clock
+replaced 8 to 13 workers a sweep. Once no worker and no file has the time,
+every mutant of the file runs out in turn. In that sweep
+`tests/trigger.test.ts` killed none of the 82, and `tests/rules.test.ts`,
+on the way, twelve.
+
+The full sweep has the same order, the same workers and the same file, and
+no burst in ten sweeps: there the first such mutant a worker meets runs 700
+to 800 tests, is killed, and the file that killed it runs first from then
+on.
+
+**With the full sweep's clock** the core sweep was run twice, of 88ff45c
+and of e91857e (runs 38139011628 and 38140522710). `stryker.core.config.mjs`
+now sets no clock of its own, and a test holds the two sweeps to one and
+fails a shorter one. Both sweeps read 99.34% over 5,289: 5,222 killed, 32
+timed out, 32 survived and 3 without coverage, with the same verdict for
+every mutant in the one as in the other.
+
+- The clock decides three mutants, the three loops, which it decides in
+  the full sweep too. The four of the loop in `src/glob.ts` end at the hit
+  limit.
+- The 32 survivors are the 29 the full sweep leaves of the 5,289 mutants
+  both sweeps make, and three that only tests outside the unit suite kill,
+  two in `src/lint.ts` and one in `src/scaffold.ts`. On every other mutant
+  the two sweeps agree on whether it is detected.
+- Set beside each of the eleven sweeps in the table, every mutant that
+  changed sides had been the clock's, but for one of the two below, and no
+  mutant an assertion killed ran out of the clock.
+- In the first of the two, a mutant of `src/trigger.ts` that a worker met
+  with no time for its file ran 571 tests and was killed.
+
+Two mutants of `src/corpus.ts` change sides between sweeps of one source
+under any clock, by which of their tests runs first: `stack.push(v)` taken
+out is killed by an assertion where a test that fails comes before the test
+that hangs, in three full sweeps of the ten, and a `||` made `&&` is killed
+after one test or ends at the hit limit.
+
+The longer clock costs seconds. Three mutants wait for it where eight to
+thirteen waited for the short one, seventeen seconds longer each: 51
+seconds of one worker, 13 of a sweep. The survivors and the loop in
+`src/glob.ts` now run to their end, which no report times. The two sweeps
+took 12m41s and 13m43s, 86.7 and 88.9 seconds for each second of their
+initial runs, where the eight sweeps under quickest first that had no burst
+read 83.2 to 88.0, a mean of 85.4, and the one that had it 120.0. A
+burst is four to six minutes, and three of the eighteen core sweeps in
+these tables that had the short clock had one.
+
+**The core's score reads lower for it, and is the same tests.** 99.34%
+where the sweeps above read 99.36% to 99.39%: 32 survivors for 29 to 31,
+each of the three recorded as equivalent beside its code already. With
+every timeout lost it reads 98.73%, where it read 98.68% to 98.75% and, in
+a burst, 97.41%. The gates stay at 97.
+
+**A file the worker has not timed still runs after those it has.** In the
+six full sweeps under quickest first that came before this change, the
+tests a killed mutant ran ahead of the file that killed it were set beside
+what the order accounts for: the tests of its files that are quicker than
+the killer's, by the times of the suite's own CI job (run 38129482640).
+Static mutants ran 1,630 to 4,838 tests more than that, 13 to 61 mutants a
+sweep, and the others 2,937 to 3,793, 226 to 241 mutants. Priced at the
+slower files' share of the initial run, that is 59 to 103 seconds of one
+worker: 15 to 26 seconds of a sweep, for everything the order does not
+explain, a file with no time and a long file whose last run in that worker
+was of a few of its tests alike. The mutants of `src/trigger.ts` are 2 to
+23 seconds of one worker in it. Running a file with no time first would
+move that wait, not end it: each worker that did not make the initial run
+would run every long file first, once. With one clock for both sweeps the
+wait costs a mutant a turn through the suite and no verdict, and no sweep
+could show the difference: the full sweeps under quickest first read 75.5
+to 86.1 seconds for each second of their initial runs.
+
+**The five files stay in the full sweep's suite.** No mutant in any report
+is covered or killed by a test of theirs. Of the 726 static mutants, under
+quickest first, 572 to 579 are killed by the first file they run and one
+survives; 65 to 78 run 154 tests or more before the file that kills them,
+which is as many as the five files hold. So at most 79 mutants a sweep run
+all five. Their
+tests take 0.43 seconds in the suite's CI job, 0.33 of them `npm`'s, and a
+file a quarter of a second before its first test: at most 33 seconds of a
+sweep for all five. Two may leave, by what the five reach under `src/`,
+read from a trace of every path each run asks the file system for there:
+`names` reads every source as text, `vendor` hashes the vendored copy,
+which is how the first hosted full sweep was caught rewriting it, and `npm`
+lists the directories. `runner-images` and `release` ask for nothing under
+`src/`: 37 tests and 23 milliseconds between them, at most ten seconds of a
+sweep.
+
+**The sweeps read for this amendment** that the tables above do not have,
+each beside its own initial run. The full sweep's configuration is the same
+in all of them.
+
+| Full sweep | Order | Initial run | Timeouts, at the hit limit and at the clock | Sweep | Sweep / initial run |
+| --- | --- | ---: | ---: | ---: | ---: |
+| 38116672624, 998eeb9 | vitest's | 15.8 s | 34 + 6 | 30m11s | 114.5 |
+| 38127993060, 9a6b0d0 | quickest first | 17.6 s | 33 + 6 | 23m00s | 78.3 |
+| 38128320340, 85e6ae9 | quickest first | 9.8 s | 34 + 5 | 13m35s | 83.5 |
+| 38129667388, b7fb20c | quickest first | 15.8 s | 34 + 6 | 21m59s | 83.7 |
+| 38136701661, e887422 | quickest first | 16.0 s | 34 + 6 | 22m57s | 86.1 |
+| 38139011628, 88ff45c | quickest first | 15.3 s | 34 + 6 | 21m21s | 83.8 |
+| 38140522710, e91857e | quickest first | 13.3 s | 34 + 5 | 16m47s | 75.5 |
+
+| Core sweep | Order | Clock | Initial run | Timeouts, at the hit limit and at the clock | Survived | Sweep | Sweep / initial run |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| 38116672624, 998eeb9 | vitest's | 3 s | 10.1 s | 25 + 12 | 30 | 15m55s | 94.5 |
+| 38118962074, f5f33a2 | quickest first | 3 s | 9.9 s | 26 + 10 | 29 | 13m56s | 84.1 |
+| 38127993060, 9a6b0d0 | quickest first | 3 s | 9.6 s | 25 + 13 | 29 | 13m58s | 87.1 |
+| 38128316870, 85e6ae9 | quickest first | 3 s | 9.3 s | 25 + 9 | 30 | 13m01s | 83.7 |
+| 38128320340, 85e6ae9 | quickest first | 3 s | 9.7 s | 25 + 9 | 29 | 13m27s | 83.2 |
+| 38129482709, 9f9747d | quickest first | 3 s | 9.6 s | 25 + 80 | 29 | 19m06s | 120.0 |
+| 38129667388, b7fb20c | quickest first | 3 s | 9.2 s | 25 + 8 | 31 | 13m08s | 85.2 |
+| 38136701661, e887422 | quickest first | 3 s | 9.6 s | 25 + 10 | 29 | 13m46s | 85.7 |
+| 38139011628, 88ff45c | quickest first | 20 s | 8.8 s | 29 + 3 | 32 | 12m41s | 86.7 |
+| 38140522710, e91857e | quickest first | 20 s | 9.3 s | 29 + 3 | 32 | 13m43s | 88.9 |
