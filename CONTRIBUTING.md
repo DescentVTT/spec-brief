@@ -28,6 +28,7 @@ files -> brief.ts -> corpus.ts -> rules.ts / collisions.ts / schedule.ts / archi
 | Module | Responsibility |
 | --- | --- |
 | `text.ts` | Lines, line endings, section-name normalisation, slugs, templates. |
+| `literal.ts` | A table's literal types without `as const`, under which no mutant is made. |
 | `frontmatter.ts` | spec-core's front-matter reader over a brief's lines: the flat YAML subset, one key edited without touching the rest, and which blocks can be written into. |
 | `markdown.ts` | spec-core's scanner in spec-brief's dialect: ATX headings and sections outside block quotes, GFM task boxes, the link destinations archival rewrites. |
 | `glob.ts` | Scope patterns over spec-core's `path` dialect: spec-brief's refusals, reading a literal from the tree, where each brace alternative is written, the 0.1 library functions. |

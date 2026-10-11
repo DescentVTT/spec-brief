@@ -64,6 +64,14 @@ The coverage floors in `vitest.config.ts` and the mutation `break` in both
 measurement. They move up with the
 measurement and never down to make a change pass.
 
+Nothing a mutator reads stands under a TypeScript `as`: Stryker makes no
+mutant there, `as const` included, so a score says nothing of it. Put the
+cast on a name, or write `!`, `satisfies`, an annotation, or `literal` from
+`src/literal.ts` for a table's literal types.
+`tests/mutation-unmeasured.test.ts` fails a source that has such a place,
+and the mutation workflow reads each sweep's report for one
+(`scripts/mutation-unmeasured.mjs`; ADR-0009, amended 2026-10-12).
+
 Vitest stays on 4 while Stryker's runner runs no test against a mutant on 5,
 where a sweep reads 4%: Dependabot proposes no major of it,
 `tests/source.test.ts` fails one made by hand, and ADR-0009 has the reason
