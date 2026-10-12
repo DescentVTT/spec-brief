@@ -72,6 +72,13 @@ cast on a name, or write `!`, `satisfies`, an annotation, or `literal` from
 and the mutation workflow reads each sweep's report for one
 (`scripts/mutation-unmeasured.mjs`; ADR-0009, amended 2026-10-12).
 
+A sweep counts a test that failed, and a test file that did not load has
+none: a mutant under which a module throws as it loads is killed only by a
+test of a file that still loads. `tests/literal.test.ts` imports `literal`
+and nothing else under `src/` for that reason, which `tests/source.test.ts`
+holds, and `tests/catalogue.test.ts` imports the CLI inside a test
+(ADR-0009, amended 2026-10-12).
+
 Vitest stays on 4 while Stryker's runner runs no test against a mutant on 5,
 where a sweep reads 4%: Dependabot proposes no major of it,
 `tests/source.test.ts` fails one made by hand, and ADR-0009 has the reason
