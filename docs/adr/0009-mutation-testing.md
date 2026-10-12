@@ -825,3 +825,152 @@ Seen on the way, and left:
 - The test named for the order the search visits a cycle in, above, says
   more than it does. It still fails a path that starts at the last brief
   the search reached.
+
+## Amended 2026-10-12: a file that does not load fails no test
+
+**A sweep counts a test that failed, and a test file that did not load has
+none.** Read from the source of Stryker 10.0.0's vitest runner: `run` in its
+`vitest-test-runner.js` goes through the tests vitest collected, and a run
+has failed where one of them has. A module that throws as it loads takes
+with it every test file that imports it. None of their tests exists, none
+fails, and where no test of another file fails either, the mutant is scored
+as survived although nothing works. spec-harness's full sweep for its 0.15.0
+counted one so, the body of its `literal()` emptied
+([its ADR-0010](https://github.com/DescentVTT/spec-harness/blob/main/docs/adr/0010-toolchain-and-verification.md)).
+The same was asked here, of every mutant it can be asked of.
+
+**It can be asked of a static mutant only.** The runner's `stryker-setup.js`
+puts a mutant Stryker calls static in force as each test file starts, and
+any other in a `beforeAll`, when the file's imports have run. A module that
+a test imports inside its own body loads after that, and what it throws is
+that test's failure. The static mutants are 738 of the full sweep's 7,250
+and 596 of the core's 5,356: the same 596, and the 142 of `src/cli.ts`,
+`src/fs.ts` and `src/plugins.ts`.
+
+**No survivor is a file that did not load.** The newest sweeps were those of
+run 38160965717, of 2c07e60, whose `src/` and `tests/` are main's, and
+main's own core sweep of fd66edd (run 38163494908), which reads another
+verdict for one mutant, `stack.push(v)` of `src/corpus.ts` (amended
+2026-10-11, above).
+
+| Sweep | Static mutants | Killed | Survived | The survivors, written by hand: a test fails | a file does not load | nothing happens |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Full, 38160965717 | 738 | 737 | 1 | 0 | 0 | 1 |
+| Core, 38160965717 and 38163494908 | 596 | 595 | 1 | 0 | 0 | 1 |
+
+The one is the same mutant in all three: the anchor of `NOTE_START` in
+`src/archive.ts`, equivalent by the comment beside it. It was written into
+the source all the same. Every file of both suites loads and no test fails:
+997 tests in the full sweep's 29 files and 665 in the unit suite's 21, as a
+Windows workstation runs them.
+
+**Twelve static mutants do stop a module loading, and each is killed by a
+test of a file that still loads.** A mutant that is killed can be one under
+which files do not load, and its kill then holds for as long as the file
+that kills it stays clear of the module. Each of the 738 was written into a
+copy of the sources, where Node imported every module in a process of its
+own. Under twelve a module throws as it loads, and each of the twelve was
+then run against the suites by hand:
+
+| Mutants | What throws as it loads | Test files that do not load | Tests that fail |
+| --- | --- | --- | --- |
+| Eleven of `src/cli.ts`: each of the table's eight commands emptied, and three expressions of `formatsHelp` | `src/cli.ts`, where `HELP` is built from the table | Two of the full suite's 30, `cli` and `report`, with 144 tests | One, of the 855 that run |
+| One of `src/config.ts`: `DEFAULT_CONFIG` emptied | `src/scaffold.ts`, which reads its sections | Six of the full suite's 30, `cli`, `dialects`, `edges`, `engine`, `regressions` and `report`; of the unit suite's 22, the four of those it has | 227 in ten files, of the 675 that run in the full suite and of the 512 in the unit suite |
+
+The eleven hang on one test. `tests/catalogue.test.ts` has imported the CLI
+inside a test's body since 2026-09-30, with the reason beside it, and that
+test is the one that fails, by hand and in the sweep, which names it for
+each of the eleven. Without it the 112 tests of `tests/cli.test.ts` would
+not run under these mutants and each would be scored as survived. The
+twelfth is killed by the tests of its own module: `tests/config.test.ts`
+loads no `scaffold.ts`.
+
+**The body of `literal` emptied stops no module loading, as the sources
+stand.** `literal` (`src/literal.ts`; amended 2026-10-12, above) is the
+function three modules build their tables through, and with its body
+emptied each of those tables is nothing. Two are built as their modules
+load, the colour codes and the scope fields, and every one is read inside a
+function. So each module loads, and the tests that reach a table fail: 270
+of the 997 in 14 of the full suite's files, 184 of the 665 in 12 of the
+unit suite's. The sweep killed the mutant by a test that resolves a
+configuration, the first to fail in the order of the worker that drew it:
+one of `tests/edges.test.ts` in the full sweep, the ninth test of that run,
+and one of `tests/dialects.test.ts` in the core, the thirty-seventh.
+
+Both files import the modules that build the tables, and neither would load
+under the mutant once one of those modules read a table as it loads. That
+is one line, and it was written by hand beside the emptied body, into two
+modules in turn:
+
+| A table read as this module loads | Suite | Test files that do not load | Tests that fail | in `tests/literal.test.ts` | in any other file |
+| --- | --- | ---: | ---: | ---: | ---: |
+| `src/rules.ts` | Full | 14 of 30 | 8 | 2 | 6, of `tests/config.test.ts` |
+| | Core | 12 of 22 | 8 | 2 | 6, of `tests/config.test.ts` |
+| `src/config.ts` | Full | 18 of 30 | 2 | 2 | 0 |
+| | Core | 14 of 22 | 2 | 2 | 0 |
+
+Every test file that reaches the function reaches `src/config.ts`. With a
+table read as that module loads none of them loads, and the files that do
+load reach no table: the two tests that fail are those of the file below,
+and without it the function emptied is scored as survived, which is
+spec-harness's case. The lines alone, with `literal` as it stands, fail
+nothing.
+
+**`tests/literal.test.ts` loads the function alone.** It imports `literal`
+and nothing else under `src/`, so it loads whatever the modules that call
+the function do as they load, and its failure is a test's: with the body
+emptied both of its tests fail, in either suite, and in the last two rows
+above they are the only tests that do. It reads no disk and starts no
+process, and both suites run it, since both sweeps make the mutant. Its
+second test holds the types the function is for, by the compiler: with a
+type parameter that is not `const`, `npm run lint` fails there, as it does
+in the two modules that index by a table's literal types.
+
+No sweep can say that the file stopped being the one that loads alone, so
+`tests/source.test.ts` holds it: the file imports the function and nothing
+else of this repository, `src/literal.ts` imports nothing, and each sweep
+runs the one and mutates the other. Seven changes made by hand each fail
+it: an import in the test file, written either way, an import in
+`literal.ts`, the file in either suite's `exclude`, and the module left out
+of either sweep's `mutate`.
+
+**What the sweeps read.** Run 38192433556, of 3952188, beside the sweeps
+before it.
+
+| Sweep | Run, commit | Mutants | Killed | Timed out | Survived | No coverage | Score | Static | Test files | Initial run | Sweep | Sweep / initial run |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Full, before | 38160965717, 2c07e60 | 7,250 | 7,161 | 39 | 47 | 3 | 99.31% | 738 | 29 | 12.3 s | 16m54s | 82.4 |
+| Full, with the test | 38192433556, 3952188 | 7,250 | 7,160 | 40 | 47 | 3 | 99.31% | 738 | 30 | 15.6 s | 21m50s | 84.1 |
+| Core, before | 38160965717, 2c07e60 | 5,356 | 5,288 | 32 | 33 | 3 | 99.33% | 596 | 21 | 7.3 s | 10m17s | 85.0 |
+| Core, main | 38163494908, fd66edd | 5,356 | 5,289 | 31 | 33 | 3 | 99.33% | 596 | 21 | 6.5 s | 9m08s | 83.9 |
+| Core, with the test | 38192433556, 3952188 | 5,356 | 5,288 | 32 | 33 | 3 | 99.33% | 596 | 22 | 9.9 s | 14m36s | 88.8 |
+
+No source changed, and the mutants are the same 7,250 and 5,356. Set beside
+the sweep before it mutant for mutant, the full sweep reads the same
+verdict for 7,249: the one that changed sides is `stack.push(v)` of
+`src/corpus.ts` again, killed there and at the hit limit here. The core
+sweep reads that run's verdict for all 5,356. The survivors are the same 47
+and 33, with the same three without coverage, and the one static survivor
+is the anchor of `NOTE_START`. The initial runs count two tests more, 1,004
+and 667.
+
+The body of `literal` is killed in both, and in both the two new tests are
+among those that cover it. In the full sweep `tests/literal.test.ts` killed
+it, the sixth test of its run. In the core sweep `tests/dialects.test.ts`
+did again, the thirty-seventh: a worker that has not timed a file runs it
+after those it has (amended 2026-10-11, above), and this file's tests cover
+no other mutant, so few workers have. With every timeout lost the sweeps
+read 98.76% and 98.73%. The gates stay at 97.
+
+Seen on the way, and left:
+
+- The eleven mutants of `src/cli.ts` hang on where one test file imports
+  the CLI, and no test holds `tests/catalogue.test.ts` to it as
+  `tests/source.test.ts` now holds `tests/literal.test.ts`. An import of the
+  module at the top of that file would show as eleven survivors in the next
+  full sweep, and not before.
+- The twelve were found by loading the modules, not the test files. A test
+  file that calls into a module while vitest collects it can throw there
+  under a static mutant with every module loaded. No survivor is one, since
+  the only static survivor fails nothing; among the killed it was not
+  looked for.
