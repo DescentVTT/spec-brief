@@ -10,6 +10,10 @@ import { matchGlob, parseGlob } from '../src/glob.js';
 import { dirOf, isRelativeTarget, resolveFrom, splitTarget } from '../src/links.js';
 import { ARCHIVE_RULES, COLLISION_RULES, RULES } from '../src/rules.js';
 import { scanMarkdown } from '../src/vendor/spec-core/markdown/index.js';
+import strykerCore from '../stryker.core.config.mjs';
+import stryker from '../stryker.config.mjs';
+import vitestCore from '../vitest.core.config.js';
+import vitestMutation from '../vitest.mutation.config.js';
 
 /**
  * Claims the repository makes about itself, checked rather than trusted: a
@@ -143,6 +147,49 @@ describe('the toolchain', () => {
     for (const range of ['^5.0.0', '5.0.3', '>=4.1.11', '>4', '^4.1.11 || ^5.0.0', '*', 'latest', '', undefined]) {
       expect(onTheFourLine(range), String(range)).toBe(false);
     }
+  });
+});
+
+/** Whether a list of patterns holds a file: one of them names it, and none written after a `!` does. */
+function holds(patterns: readonly string[], file: string): boolean {
+  const names = (pattern: string): boolean => {
+    const parsed = parseGlob(pattern);
+    return parsed.ok && matchGlob(parsed.glob, file);
+  };
+  return patterns.some((pattern) => !pattern.startsWith('!') && names(pattern)) && !patterns.some((pattern) => pattern.startsWith('!') && names(pattern.slice(1)));
+}
+
+describe('the test that loads `literal` alone', () => {
+  // With the function emptied, every table built through it is nothing. A
+  // module that read one as it loaded would throw, each test file that
+  // imports the module would end before it had a test, and a sweep counts a
+  // test that failed: the mutant is scored as survived unless a file that
+  // still loads fails for it. No sweep can say that this one stopped being
+  // that file (ADR-0009, amended 2026-10-12).
+  const imported = (text: string): string[] => [...text.matchAll(/from '([^']+)'|import\('([^']+)'\)/g)].map((m) => (m[1] ?? m[2]) as string);
+  const mutatedBy = (sweep: typeof stryker): string[] => (sweep.mutate ?? []).filter((pattern) => pattern !== undefined);
+  const suiteOf = (config: typeof vitestCore): string[] => [...(config.test?.include ?? []), ...(config.test?.exclude ?? []).map((pattern) => `!${pattern}`)];
+
+  it('imports the function and nothing else of this repository, and the function imports nothing', () => {
+    expect(imported(code('tests/literal.test.ts'))).toEqual(['vitest', '../src/literal.js']);
+    expect(imported(code('src/literal.ts'))).toEqual([]);
+    // The reading finds an import written either way.
+    expect(imported("import { paint } from './report.js';\nconst { HELP } = await import('../src/cli.js');")).toEqual(['./report.js', '../src/cli.js']);
+  });
+
+  it('runs in each sweep, and each sweep makes the mutant it is for', () => {
+    for (const [sweep, suite] of [
+      [strykerCore, vitestCore],
+      [stryker, vitestMutation],
+    ] as const) {
+      expect(holds(mutatedBy(sweep), 'src/literal.ts')).toBe(true);
+      expect(holds(suiteOf(suite), 'tests/literal.test.ts')).toBe(true);
+    }
+    // The reading says no where it is no: an edge the core sweep leaves to
+    // the full one, and this file, which neither suite runs.
+    expect(holds(mutatedBy(strykerCore), 'src/cli.ts')).toBe(false);
+    expect(holds(mutatedBy(stryker), 'src/cli.ts')).toBe(true);
+    for (const suite of [vitestCore, vitestMutation]) expect(holds(suiteOf(suite), 'tests/source.test.ts')).toBe(false);
   });
 });
 
