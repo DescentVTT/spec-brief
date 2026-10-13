@@ -60,6 +60,44 @@ description, add a row to the table between the markers in `README.md`
 (a test checks the two agree), and add a test for the case that fires and the
 case that must not.
 
+## A pull request and the sweeps
+
+Every pull request runs both mutation sweeps, on its merge into main:
+two more checks, `core` and `full`, and about seventeen minutes where the
+suite takes one or two
+([ADR-0009](docs/adr/0009-mutation-testing.md), amended 2026-10-14). Every
+push to a pull request runs them again and ends the run before it. Nothing
+is filtered by path: a test, the lockfile and the vendored spec-core move a
+verdict as a source does.
+
+Each of the two checks ends with a summary, *undetected mutants new against
+main*: the mutants no test detects in that sweep which main's newest sweep
+that passed did not have. The check does not fail for them, so the pull
+request answers for them. Its description lists each one a summary names
+and says what it is:
+
+- killed, by a test the pull request adds, which the next push shows;
+- equivalent, with the reason in a comment beside the code;
+- or not of this change: a mutant main took after the commit the summary
+  names, or one whose verdict differs between two sweeps of one source,
+  which ADR-0009 records by name.
+
+A mutant is its file, its mutator, the text it replaces and what replaces
+it, never its line, so one whose own text was edited is listed as new. The
+core sweep's list can hold a mutant the full sweep's does not: one that only
+a test outside the unit suite kills. Where a summary says *not compared*,
+main had no report to fetch, and nothing is known of new survivors:
+download the two runs' `mutation-core` or `mutation-full` artifacts and
+compare them with the same script,
+`node scripts/mutation-compare.mjs <main's mutation.json> <this sweep's mutation.json>`.
+The same list is in the log of the step *Name the undetected mutants that
+are new against main*, with the mutants of main that are gone.
+
+A source added under `src/` is mutated by both sweeps without anything
+being written. A file left out of either list fails
+`tests/mutation-sweeps.test.ts` unless Stryker makes no mutant of it, or,
+for the core sweep, it is one of the five edges.
+
 ## Releasing
 
 Versions are published by CI from a tag, never from a workstation

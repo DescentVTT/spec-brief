@@ -49,9 +49,14 @@ npm run selfcheck       # spec-brief lints this repository's own briefs
 npm run test:mutation   # the core sweep: pure modules against the unit suite
 ```
 
-`npm run test:mutation:full` mutates the edges too, against the whole suite;
-it spawns git for every CLI mutant and runs weekly in CI rather than per
-change. See [ADR-0009](docs/adr/0009-mutation-testing.md) for both, and for
+`npm run test:mutation:full` mutates the edges too, against the whole suite,
+and spawns git for every CLI mutant. CI runs both sweeps for every pull
+request and every push to main. Each sweep's job names the undetected mutants that main's newest
+sweep did not have, by file, mutator, text and replacement, and fails for
+none: the pull request lists each and says whether a test it adds kills it,
+a comment beside the code calls it equivalent, or it is not of the change
+(`CONTRIBUTING.md`; ADR-0009, amended 2026-10-14). See
+[ADR-0009](docs/adr/0009-mutation-testing.md) for both sweeps, and for
 why a unit test that belongs in the core suite must not read the disk or
 spawn a process: under per-test coverage, one that does is run for every
 mutant it reaches. Both sweeps run a mutant's test files the quickest first

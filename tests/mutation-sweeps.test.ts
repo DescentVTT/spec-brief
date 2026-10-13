@@ -28,6 +28,7 @@ import stryker from '../stryker.config.mjs';
 import vitestCore from '../vitest.core.config.js';
 import vitestMutation from '../vitest.mutation.config.js';
 import { instrumenter } from './instrumenter.js';
+import { under, written } from './workflows.js';
 
 const ROOT = join(import.meta.dirname, '..');
 const read = (path: string): string => readFileSync(join(ROOT, path), 'utf8');
@@ -104,5 +105,47 @@ describe('what the sweeps mutate', () => {
   it('keeps this file out of both sweeps, where it would read the sources as Stryker wrote them', () => {
     expect(vitestCore.test?.exclude).toContain('tests/mutation-sweeps.test.ts');
     expect(vitestMutation.test?.exclude).toContain('tests/mutation-sweeps.test.ts');
+  });
+});
+
+describe('when the sweeps run', () => {
+  const workflow = read('.github/workflows/mutation.yml');
+  const lines = written(workflow);
+  const jobs = under(lines, 'jobs');
+  const INPUT = ['  inputs:', '    full:', '      description: Run the full sweep as well', '      type: boolean', '      default: true'];
+
+  it('is for every pull request and every push to main, whatever either changes, beside the schedule and a dispatch', () => {
+    expect(under(lines, 'on')).toEqual([
+      // Bare: every pull request, to any branch, for any file.
+      'pull_request:',
+      'push:',
+      '  branches: [main]',
+      'schedule:',
+      "  - cron: '0 3 * * 1'",
+      'workflow_dispatch:',
+      ...INPUT,
+    ]);
+    // A workflow that a filter skipped leaves its checks pending, and a
+    // change the filter did not foresee merges unswept.
+    expect(workflow).not.toMatch(/^\s*(?:paths|paths-ignore|branches-ignore|tags|tags-ignore|types):/m);
+  });
+
+  it('is both sweeps each time: no event but a dispatch can leave the full sweep out, and none the core sweep', () => {
+    expect(jobs.filter((line) => !line.startsWith(' '))).toEqual(['core:', 'full:']);
+    const condition = (job: string): string[] => under(jobs, job).filter((line) => line.startsWith('if:'));
+    expect(condition('core')).toEqual([]);
+    expect(condition('full')).toEqual(["if: github.event_name != 'workflow_dispatch' || inputs.full"]);
+    // What each job runs is the sweep its name says.
+    const runs = (job: string): string[] => under(jobs, job).flatMap((line) => /^\s+(?:- )?run: (npm run test:mutation\S*)$/.exec(line)?.[1] ?? []);
+    expect(runs('core')).toEqual(['npm run test:mutation']);
+    expect(runs('full')).toEqual(['npm run test:mutation:full']);
+    const scripts = (JSON.parse(read('package.json')) as { scripts: Record<string, string> }).scripts;
+    expect([scripts['test:mutation'], scripts['test:mutation:full']]).toEqual(['stryker run stryker.core.config.mjs', 'stryker run']);
+  });
+
+  it("ends a pull request's older sweep when it is pushed to again, and no sweep of another pull request, of main, of the schedule or of a dispatch", () => {
+    // The ref of a pull request's run is its merge branch, a group of its
+    // own, and the event keeps main's push, the schedule and a dispatch apart.
+    expect(under(lines, 'concurrency')).toEqual(['group: mutation-${{ github.workflow }}-${{ github.ref }}-${{ github.event_name }}', 'cancel-in-progress: true']);
   });
 });
