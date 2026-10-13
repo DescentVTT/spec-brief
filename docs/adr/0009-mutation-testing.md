@@ -974,3 +974,238 @@ Seen on the way, and left:
   under a static mutant with every module loaded. No survivor is one, since
   the only static survivor fails nothing; among the killed it was not
   looked for.
+
+## Amended 2026-10-14: a change is swept before it merges
+
+**Until now no sweep ran on a pull request.** Read from the workflow and the
+two configurations at 146d5b0, with what each sweep mutates taken from the
+reports of main's own sweeps of that commit (run 38237119766):
+
+| Sweep | Mutates | Against | A pull request | A push to main | Monday | A dispatch | A release |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Core | 21 modules | the unit suite, 22 files | no | yes | yes | yes | no |
+| Full | those and the five edges, 26 | the whole suite, 30 files | no | no | yes | with `full` ticked, which was not its default | no |
+
+Twenty-eight files under `src/` are this repository's own, so two were in
+neither list. `types.ts` declares types alone. `index.ts` was left out as
+re-exports, by a comment in the configuration, and declares `definePlugin`:
+asked as a library, the instrumenter of the Stryker installed makes one
+mutant of the file, that function's body emptied, and none of `types.ts`.
+
+What that left, in the 60 pull requests merged from 2026-09-26 to
+2026-10-12: every one merged with no sweep having read it. After the merge
+the core sweep read the 21. The edges, which 12 of the 60 changed, were
+read when someone dispatched the workflow on the branch, 19 of its 98 runs,
+or on a Monday, three of them. And each of the six releases from 0.5.0 to
+0.8.0 was tagged on a commit of which the core sweep alone had run: the
+full sweep recorded for 0.8.0 is of the commit before, dispatched by hand,
+and the tagged commit differs from it in `src/cli.ts`, by the two comments
+that call a mutant equivalent.
+
+**Both sweeps now run for every pull request and for every push to main**,
+whatever either changes, beside Monday's run and a dispatch, whose `full`
+is now ticked unless someone unticks it. Both mutate `index.ts`: 27 files
+for the full sweep and 22 for the core, with one mutant more in each, which
+`tests/report.test.ts` kills in the unit suite.
+
+**The whole of both, and no split by path.** spec-harness sweeps a pull
+request in full only where it changes a module its core sweep does not
+reach
+([its ADR-0010](https://github.com/DescentVTT/spec-harness/blob/main/docs/adr/0010-toolchain-and-verification.md),
+amended 2026-10-12), where a full sweep is nine jobs and two hours of
+runners. Here the minutes say otherwise. Each job from its start to its
+end, the install and the upload with the sweep, over the last five that
+passed:
+
+| Job | The five | Median | Runs |
+| --- | --- | ---: | --- |
+| `core` | 9m19s to 14m53s | 14m01s | 38237119766, 38197575644, 38196507833, 38192433556, 38163494908 |
+| `full` | 15m13s to 22m02s | 17m02s | 38237119766, 38192433556, 38160965717, 38159283061, 38140522710 |
+
+The two run side by side, so a pull request waits for the longer. In the
+four of those runs that started both at once, the full job ended 1m07s to
+7m09s after the core job, and the two took 28 to 37 minutes of runners
+between them. A minute to seven is all a split would give back to a pull
+request that changes no edge. By the 60 merged it would have swept 22 in
+full, the 12 and ten that changed only what the sweeps are made of; left to
+the core sweep nine that changed a pure module, which the tests of the
+edges run every line of; and left to it 24 that changed tests, the vendored
+spec-core, the manifest or the lockfile and no source of this repository,
+each of which can move a verdict of the full sweep. The pull request that
+took vitest to 5, under which a sweep reads 4% (amended 2026-10-07, above),
+changed `package.json` and the lockfile and passed every check it had. Five
+of the 60 changed documents, another workflow or Dependabot's configuration
+alone, and are now swept for nothing. The price of the split is a list of
+paths that has to be kept true, and checks that could never be required,
+below.
+
+The suite's own CI took 1m03s to 6m30s for the last five pull requests'
+runs that passed, a median of 1m05s, and 1m31s over the 38 listed. So a
+pull request has 15 checks where it had 13, and has its last one about 17
+minutes after a push where it had it after one or two. From 2026-09-23 to
+2026-10-12 CI ran 79 times for a pull request and 66 times for a push to
+main: at most 145 runs of the two jobs, fewer by each a newer push ended,
+where the workflow ran 98 times.
+
+What GitHub does with the workflow, from its documentation as read on
+2026-10-14:
+
+- *Workflow syntax for GitHub Actions*, under
+  `on.<push|pull_request|pull_request_target>.<paths|paths-ignore>`, and
+  *Troubleshooting required status checks*, under *Handling skipped but
+  required checks*: a check of a workflow that a filter of paths or
+  branches, or a commit message, skipped stays pending, and a pull request
+  that requires it cannot merge; a job that a condition skips reports
+  success. What follows: with no filter on either event, `core` and `full`
+  can be required of a pull request, which a split by path could not be.
+  Main's ruleset requires no check today, so what holds a merge until the
+  sweeps end is whoever merges. The second page, under *Checks from some
+  workflow jobs are not evaluated*: the checks of a run that a dispatch
+  started on a pull request's branch are not among the pull request's
+  checks and satisfy no required one. So the dispatches by hand, above,
+  were never a check of the pull request they were for.
+- *Events that trigger workflows*, under `pull_request`: the commit a run
+  checks out is the pull request's merge into its base, its ref is
+  `refs/pull/<number>/merge`, and no workflow runs while the pull request
+  has a merge conflict. So a sweep is of what main would be, and a pull
+  request in conflict is not swept until it is mended. The same section: a
+  pull request from a fork, and one of Dependabot's, has a token that can
+  only read.
+- *Workflow syntax*, under `concurrency`: one run of a group at a time, and
+  with `cancel-in-progress` a new run ends the one in progress. *Reusing
+  workflow configurations*, under *`github` context* and *Supported
+  keywords for jobs that call a reusable workflow*: a called workflow has
+  its caller's `github` context, and its caller's name in
+  `github.workflow`. So the group is the workflow's name, the ref and the
+  event: a newer push to a pull request ends the sweep of the push before
+  it and no other run's, and a release's sweep is in a group of its own.
+- *Workflow syntax*, under `permissions`: a job that names a permission has
+  none it does not name, and a pull request from a fork may be given a
+  permission to read. *Permissions required for GitHub Apps*, under
+  *Repository permissions for "Actions"*: listing a workflow's runs and
+  downloading an artifact each take read access to Actions. That page has
+  it for a private repository and leaves a public one to each endpoint's
+  own page, and *REST API endpoints for GitHub Actions artifacts*, under
+  *Download an artifact*, names no way without. So each of the two jobs
+  names `contents: read` and `actions: read`, and no other.
+- *Reusing workflow configurations*, under *Supported keywords for jobs
+  that call a reusable workflow*: a called workflow can lower what its
+  caller's job hands it and cannot raise it. So the job of `release.yml`
+  that calls the sweeps names the same two.
+- *Store and share data with workflow artifacts*, under *Configuring a
+  custom artifact retention period*: an upload's `retention-days` cannot
+  pass the limit of its repository or organisation. Asked of the API, this
+  repository keeps an artifact fourteen days and may keep it no longer, and
+  every report listed expires fourteen days after its run. A sweep for
+  every push to main, and one each Monday, leave a report of main inside
+  that.
+- *Using GitHub CLI in workflows*: the CLI is on every hosted runner and
+  takes its token from `GH_TOKEN`, which the one step sets. *Workflow
+  commands for GitHub Actions*, under *Step isolation and limits*: a
+  step's summary may hold 1 MiB, and one that passes it is not uploaded.
+  The comparison lists 150 rows there and every row in the log.
+- *GitHub Actions billing*: standard hosted runners are free for a public
+  repository, which this is. *Actions limits*, under *Job concurrency
+  limits for GitHub-hosted runners*: an account on the Free plan runs 20
+  jobs at once, five of them on macOS. What follows: the sweeps cost no
+  money and do cost places in that queue, which the family's five
+  repositories share.
+
+**Each sweep names the undetected mutants that are new.** A score does not:
+50 undetected of 7,250 read 99.31%, 52 would read 99.28%, and both pass a
+`break` of 97. Until now a sweep's survivors were set beside main's by
+hand, release by release, which is where every "no survivor is new" above
+comes from. `scripts/mutation-compare.mjs` does it in the job that has the
+report: it asks GitHub for main's newest run of this workflow that passed
+and still has the artifact, a sweep of main itself by a push, the schedule
+or a dispatch, and lists what this sweep leaves undetected, survived or
+reached by no test, that the other did not. A mutant is its file, its
+mutator, the text it replaces and what replaces it, never its line;
+mutants the same in all four are told apart by how many there are. The
+list goes to the job's summary and to its log, with the files only one of
+the two sweeps mutated, and fails the job for none of it: a new survivor
+may be equivalent, and is then said so beside its code, and the `break`
+still gates the score. Where there is no report to fetch it says that
+nothing was compared, as a warning, and never that none is new. The core
+sweep's job does the same against main's core report, so a mutant that
+only a test outside the unit suite kills is named too.
+
+Run by hand on reports kept from the sweeps above, it reads what those
+amendments record:
+
+| Main's report | This sweep's | New | Gone | What they are |
+| --- | --- | ---: | ---: | --- |
+| Full, 38136701661, e887422 | Full, 38159283061, 7bf8ff7 | 5 | 0 | The five the rewrite left: `'placeholders'`, the comparator held true and with `<=`, and `'utf8'` twice. |
+| Full, 38159283061, 7bf8ff7 | Full, 38160965717, 2c07e60 | 0 | 2 | The two the two tests kill. |
+| Full, 38128320340, 85e6ae9 | Full, 38136701661, e887422 | 0 | 2 | The `default` of each of the two switches, one row at two lines. |
+| Full, 38192433556, 3952188 | Full, 38237119766, 146d5b0 | 0 | 0 | One source, swept twice. |
+| Core, 38163494908, fd66edd | Core, 38197575644, 146d5b0 | 0 | 0 | The same. |
+| Full, 38237119766 | Core, 38237119766 | 3 | 17 | The three that only tests outside the unit suite kill, and the edges' 17. |
+
+What a list can hold that the change did not make: a mutant whose own text
+was edited, which is another mutant; one of anything main took after the
+commit its report is of; and a verdict that differs between two sweeps of
+one source, as `stack.push(v)` of `src/corpus.ts` does, though between
+killed and timed out, which are both detected and on no list. The pull
+request says which each is (`CONTRIBUTING.md`).
+
+**A release sweeps the commit it publishes.** `release.yml` calls this
+workflow as it calls CI, and for the same reason: main's sweep is ended
+when a newer push arrives, and a tag can be pushed before it has finished.
+`pack` waits for both, so nothing is packed, staged or released from a
+commit either sweep has failed. A tag can still be pushed on any commit of
+main; what it cannot do is publish one unswept. That is about seventeen
+minutes more for a release, and for a rehearsal, which runs them too
+([ADR-0010](0010-releases-are-published-by-ci.md), amended 2026-10-14).
+
+**The arrangement is held to the sources.** `tests/mutation-sweeps.test.ts`
+asks the instrumenter of each file the full sweep's list leaves out, and
+fails one of which it makes a mutant; holds what the core sweep leaves out
+to the five edges; and holds the workflow to both events with no filter, to
+one condition, the dispatch's, and to the release's call. A module added to
+`src/` is mutated by both sweeps with nothing written, since both lists are
+patterns, and a list that comes to leave one out fails the suite. Thirty-
+three changes made by hand to the workflows and the four configurations
+each fail it or the tests of the comparison.
+
+**The count of what stands under an `as` is held to the Stryker
+installed.** The count was the script's own reading of Stryker's mutators,
+"an estimate" above. It is now set beside the instrumenter: over a source
+written with every kind of site, Stryker makes no mutant under a cast, and
+with the casts taken away it mutates exactly the places counted, 60 of them
+in 13 expressions, and so for 19 sources more, each for something Stryker
+leaves alone. That moved one rule: a choice between two values is no site
+of its own, since Stryker holds its test true or false at the comparison.
+The report of e887422, which read 82 sites under 47 expressions, reads 81
+under the same 47. An `enum` is counted as an `as` is, a source Stryker's
+parser refuses is refused by name where it had been recovered from and
+counted, and the parser is the one Stryker's own `@babel/core` resolves.
+
+**The eleven static mutants of `src/cli.ts` cost seconds, and are left.**
+They "hang on" one test in the sense of the amendment above: it is the one
+that kills them. None runs out a clock. In each of the last five full
+sweeps all eleven are killed by that test of `tests/catalogue.test.ts`,
+after 15 to 575 of the suite's thousand tests, 1,890 to 2,962 tests
+between them: two to three runs' worth of a suite that one worker runs in
+ten to sixteen seconds. No static mutant timed out in any of the five, and
+the clock's five or six are the ones the amendment of 2026-10-11 names.
+There is nothing to mend.
+
+Seen on the way, and left:
+
+- Main's ruleset requires no check. Requiring `core` and `full` there would
+  make "swept before it merges" something GitHub holds; it is a setting of
+  the repository, and was not changed.
+- `briefs/002_a-mutation-gate-on-pull-requests.md` has as an invariant that
+  a pull request which changes no source file runs no sweep. This change
+  does the opposite, for the pull request above that changed none and moved
+  every verdict. The brief is as it was written.
+- Monday's run started at 10:15 and 10:33 UTC on its last two Mondays,
+  where its schedule says 03:00, and in the second the full job started 33
+  minutes after that.
+- spec-core's ADR-0008 says of this repository's dispatch that `full` is
+  not its default. It is now.
+- A report expires fourteen days after its run, which a longer
+  `retention-days` cannot change here. Two Mondays without a sweep of main
+  that passes, and no push, would leave a pull request's comparison with
+  nothing to compare with, and it would say so.
