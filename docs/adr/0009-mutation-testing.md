@@ -31,7 +31,9 @@ which measured between 0.3 and 1.5 seconds a process on that host.
   claim. It runs in about ten minutes on the workstation above.
 - **The full sweep** (`npm run test:mutation:full`) mutates everything
   against the whole suite. It runs weekly in CI and on request, and its gate
-  was set from its first hosted run (amended 2026-09-27, below).
+  was set from its first hosted run (amended 2026-09-27, below). Since
+  2026-10-14 both sweeps run for every pull request and every push to
+  main, in CI and not on a workstation (amended that day, below).
 
 **The core gate is `break: 93`**, below the measurement, and moves up with it,
 never down to let a change pass.
@@ -120,7 +122,8 @@ A change to a core module is measured in minutes. A change that makes a unit
 test read the disk or spawn a process moves that test out of the core suite,
 because under per-test coverage it would be rerun for every mutant it reaches.
 The edges are measured weekly rather than per change until the hosted runner's
-cost is known.
+cost is known. It is known, and they are measured per change (amended
+2026-10-14, below).
 
 ## Amended 2026-09-26
 
@@ -302,7 +305,9 @@ The hold is the family's and is lifted in spec-core first, by the steps in
 (amended 2026-10-07), which also records what vitest 4 still receives while
 it is held. When the bump comes here, its pull request measures nothing:
 dispatch `mutation.yml` on the branch with `full` ticked, and hold both
-sweeps to that ADR's two conditions before merging.
+sweeps to that ADR's two conditions before merging. (Since 2026-10-14 the
+pull request runs both sweeps itself, and nothing is dispatched: amended
+that day, below.)
 
 ## Amended 2026-10-11: a mutant's quickest test files first
 
@@ -1042,8 +1047,10 @@ below.
 
 The suite's own CI took 1m03s to 6m30s for the last five pull requests'
 runs that passed, a median of 1m05s, and 1m31s over the 38 listed. So a
-pull request has 15 checks where it had 13, and has its last one about 17
-minutes after a push where it had it after one or two. From 2026-09-23 to
+pull request has 15 checks where it had 13, and has its last one when the
+full sweep's job ends, where it had it after one or two: 17 minutes after
+a push by the median of those five, and 22 by each of this change's own
+three sweeps, below. From 2026-09-23 to
 2026-10-12 CI ran 79 times for a pull request and 66 times for a push to
 main: at most 145 runs of the two jobs, fewer by each a newer push ended,
 where the workflow ran 98 times.
@@ -1155,8 +1162,9 @@ workflow as it calls CI, and for the same reason: main's sweep is ended
 when a newer push arrives, and a tag can be pushed before it has finished.
 `pack` waits for both, so nothing is packed, staged or released from a
 commit either sweep has failed. A tag can still be pushed on any commit of
-main; what it cannot do is publish one unswept. That is about seventeen
-minutes more for a release, and for a rehearsal, which runs them too
+main; what it cannot do is publish one unswept. That is 15 to 23 minutes
+more for a release, by the eight full sweeps here, and for a rehearsal,
+which runs them too
 ([ADR-0010](0010-releases-are-published-by-ci.md), amended 2026-10-14).
 
 **The arrangement is held to the sources.** `tests/mutation-sweeps.test.ts`
@@ -1202,6 +1210,8 @@ request's merge into 146d5b0, beside main's own sweeps of that commit (run
 | Full, this change | 38453488907 | 27 | 7,251 | 7,161 | 40 | 47 | 3 | 99.31% | 738 | 21m41s |
 | Core, main | 38237119766 | 21 | 5,356 | 5,288 | 32 | 33 | 3 | 99.33% | 596 | 14m01s |
 | Core, this change | 38453488907 | 22 | 5,357 | 5,289 | 32 | 33 | 3 | 99.33% | 596 | 14m24s |
+| Full, its second push | 38459347686 | 27 | 7,251 | 7,161 | 40 | 47 | 3 | 99.31% | 738 | 22m37s |
+| Core, its second push | 38459347686 | 22 | 5,357 | 5,290 | 31 | 33 | 3 | 99.33% | 596 | 15m22s |
 
 Each sweep makes one mutant more, the body of `definePlugin`, and kills it
 by the one test that covers it, of `tests/report.test.ts`, the first it
@@ -1210,11 +1220,22 @@ runs. No test joined either suite: the initial runs count 1,004 tests and
 `src/index.ts` is mutated here and not there, and listed nothing new and
 nothing gone. In the full sweep `stack.push(v)` of `src/corpus.ts` changed
 sides once more, killed in main's and timed out here, which is on neither
-list. The full sweep drew a runner at the slow end, 16 seconds for its
-initial run, and the pull request had the last check of the two 21m46s
-after the push. The suite's three macOS jobs started ten minutes after
-the push; what else the account's macOS runners were doing then was not
-read.
+list. The suite's three macOS jobs started ten minutes after the first
+push; what else the account's macOS runners were doing then was not read.
+
+**What a pull request waits, as it was measured.** Two figures, of two
+sets of runs. The median of the full job over the five runs before this
+change is 17m02s, in the table above. The three full sweeps of the change
+itself took 21m41s, 22m37s and, called by the trial below, 22m40s, and the
+pull request had its last check 21m46s after its first push and 22m43s
+after its second. Each of the three drew a runner whose initial run took
+15.6 to 16.7 seconds, toward the slow end of the 9.6 to 17.6 the full
+sweeps above record, and read 77.0 to 85.8 seconds for each second of it,
+where the full sweeps under this order before them read 75.5 to 89.2: the
+runner, and not the one mutant more or the two seconds the comparison
+takes. Over all eight the job took 15m13s to 22m40s, with 17m08s and
+21m41s in the middle. So the documents say 15 to 23 minutes, and not the
+17 this amendment first had from the five.
 
 **The call the release makes was tried once, and the release was not
 run.** A workflow of the release's shape, calling this one from a job that
@@ -1227,15 +1248,41 @@ ran beside them to their end. What it could not try is a tag, and a
 rehearsal: under a rehearsal the full sweep's condition reads the called
 workflow's own `full`, which is ticked by its default.
 
+**The brief this round was for now says what was decided.**
+`briefs/002_a-mutation-gate-on-pull-requests.md`, of 2026-09-24, had as
+an invariant that a pull request which changes no source file runs no
+sweep, and this change decides against it. Whether it could be kept was
+measured: one run of the whole suite with every read of a document
+traced. Six test files read a document of this repository. Four are in
+neither sweep's suite, or cover no mutant. `tests/bin.test.ts`, in
+neither, starts the built launcher here, where it reads the briefs. And
+one test of the full sweep's suite, of `tests/engine.test.ts`, opens this
+repository and asserts that it has a live brief: in the sweep above it
+covers 665 mutants and was the test that killed 28. So a brief alone can
+move a verdict, and no other document can as the suites stand. A filter
+that left those other documents out would have left unswept three of the
+60 merged pull requests, 20, 38 and 40, three runs of 79, and would leave
+both checks pending wherever it applied, which rules out requiring them.
+No filter, then; the brief has the numbers, its second invariant is
+marked rejected with the reason, the one that holds is beside it, and
+its scope names what the round touched. The repository's own
+`archive 002 --dry-run` now refuses it for one thing, its dependency on
+brief 001, which is not done.
+
+**A sweep is a check, not a step run by hand.** `CLAUDE.md` listed the
+core sweep among what passes before a change is called done. It is not
+run on a workstation: both sweeps are checks of every pull request, on
+the image their gates were measured on, and `CLAUDE.md` says so.
+
 Seen on the way, and left:
 
 - Main's ruleset requires no check. Requiring `core` and `full` there would
   make "swept before it merges" something GitHub holds; it is a setting of
   the repository, and was not changed.
-- `briefs/002_a-mutation-gate-on-pull-requests.md` has as an invariant that
-  a pull request which changes no source file runs no sweep. This change
-  does the opposite, for the pull request above that changed none and moved
-  every verdict. The brief is as it was written.
+- The amendment of 2026-10-07 left the full sweep in one job, unsharded,
+  as a sweep that ran "outside the path of a change". It is in that path
+  now, the 15 to 23 minutes above. What shards would give back of them
+  was not measured.
 - Monday's run started at 10:15 and 10:33 UTC on its last two Mondays,
   where its schedule says 03:00, and in the second the full job started 33
   minutes after that.
