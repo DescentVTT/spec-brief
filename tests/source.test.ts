@@ -126,8 +126,9 @@ function onTheFourLine(range: unknown): boolean {
 describe('the toolchain', () => {
   // On vitest 5, Stryker's runner (10.0.0) runs no test against a mutant a
   // test covers and scores it as survived, with every test green. No sweep
-  // runs on a pull request here, so such a bump failed nothing until main's
-  // sweep. It fails here instead, with its reason.
+  // ran on a pull request here when this was written, so such a bump failed
+  // nothing until main's sweep. Both sweeps run on one now, and would read
+  // 4% with no word of why: it still fails here first, with its reason.
   const HELD = [
     'vitest is held on 4 until a released @stryker-mutator/vitest-runner reads vitest 5.',
     'On 5 the runner runs no test against a mutant a test covers, so every one survives and the sweep reads about 4%:',
