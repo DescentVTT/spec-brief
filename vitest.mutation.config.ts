@@ -63,7 +63,7 @@ export class QuickestFirst implements TestSequencer {
  * coverage on every one of thousands of mutant runs is a number nobody reads.
  *
  * The CLI tests drive `main()` in process rather than spawning the binary, so
- * they load the mutated source and can kill mutants. Four files are left out.
+ * they load the mutated source and can kill mutants. Six files are left out.
  * `bin.test.ts` spawns the built binary, which a mutant never reaches.
  * `source.test.ts` reads the source as text, and in the sandbox that text is
  * Stryker's instrumented copy, which says `process` in every file.
@@ -71,11 +71,22 @@ export class QuickestFirst implements TestSequencer {
  * `src/`, so no mutant can fail it, and every static mutant would run it.
  * `mutation-unmeasured.test.ts` counts what stands under an `as` in the
  * sources as text, which is that copy again, and no mutant's to fail.
+ * `mutation-sweeps.test.ts` asks Stryker which sources it makes a mutant of,
+ * of that copy too, and `mutation-compare.test.ts` tests a script under
+ * `scripts/`, where no mutant is.
  */
 export default defineConfig({
   test: {
     include: ['tests/**/*.test.ts'],
-    exclude: ['tests/bin.test.ts', 'tests/source.test.ts', 'tests/mutation-order.test.ts', 'tests/mutation-unmeasured.test.ts', '**/node_modules/**'],
+    exclude: [
+      'tests/bin.test.ts',
+      'tests/source.test.ts',
+      'tests/mutation-compare.test.ts',
+      'tests/mutation-order.test.ts',
+      'tests/mutation-sweeps.test.ts',
+      'tests/mutation-unmeasured.test.ts',
+      '**/node_modules/**',
+    ],
     environment: 'node',
     // The git tests spawn git a dozen times. That is milliseconds on a Linux
     // runner and, measured on a Windows workstation with real-time scanning,

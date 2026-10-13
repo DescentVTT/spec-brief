@@ -19,7 +19,6 @@ export default {
   mutate: [
     'src/**/*.ts',
     '!src/types.ts',
-    '!src/index.ts',
     '!src/cli.ts',
     '!src/engine.ts',
     '!src/fs.ts',

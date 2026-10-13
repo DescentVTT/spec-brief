@@ -18,10 +18,13 @@ export default {
   // Only the tests that reached a mutated line run for it.
   coverageAnalysis: 'perTest',
 
-  // types.ts is type-only and index.ts is re-exports: nothing to mutate.
+  // types.ts is type-only: Stryker makes no mutant of it, and a test holds
+  // that of every file left out here (tests/mutation-sweeps.test.ts).
+  // index.ts is re-exports and one function, `definePlugin`, whose body is
+  // its one mutant; it was left out as re-exports alone until 2026-10-14.
   // cli.ts is mutated with the rest: the CLI tests drive main() in process.
   // The vendored spec-core is mutated in spec-core, where its oracle is.
-  mutate: ['src/**/*.ts', '!src/types.ts', '!src/index.ts', '!src/vendor/**'],
+  mutate: ['src/**/*.ts', '!src/types.ts', '!src/vendor/**'],
 
   // Stryker's sandbox rewrites a tsconfig that reaches outside the project,
   // and the rewriter calls a TypeScript API that TypeScript 7's native
