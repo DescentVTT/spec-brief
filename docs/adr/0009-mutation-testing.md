@@ -995,8 +995,9 @@ mutant of the file, that function's body emptied, and none of `types.ts`.
 What that left, in the 60 pull requests merged from 2026-09-26 to
 2026-10-12: every one merged with no sweep having read it. After the merge
 the core sweep read the 21. The edges, which 12 of the 60 changed, were
-read when someone dispatched the workflow on the branch, 19 of its 98 runs,
-or on a Monday, three of them. And each of the six releases from 0.5.0 to
+read when someone dispatched the workflow, 29 of its 98 runs and 19 of
+those on a branch, or on a Monday, three of them. And each of the six
+releases from 0.5.0 to
 0.8.0 was tagged on a commit of which the core sweep alone had run: the
 full sweep recorded for 0.8.0 is of the commit before, dispatched by hand,
 and the tagged commit differs from it in `src/cli.ts`, by the two comments
@@ -1165,7 +1166,7 @@ to the five edges; and holds the workflow to both events with no filter, to
 one condition, the dispatch's, and to the release's call. A module added to
 `src/` is mutated by both sweeps with nothing written, since both lists are
 patterns, and a list that comes to leave one out fails the suite. Thirty-
-three changes made by hand to the workflows and the four configurations
+seven changes made by hand to the workflows and the four configurations
 each fail it or the tests of the comparison.
 
 **The count of what stands under an `as` is held to the Stryker
@@ -1190,6 +1191,41 @@ between them: two to three runs' worth of a suite that one worker runs in
 ten to sixteen seconds. No static mutant timed out in any of the five, and
 the clock's five or six are the ones the amendment of 2026-10-11 names.
 There is nothing to mend.
+
+**What the sweeps of this change read.** Run 38453488907, of the pull
+request's merge into 146d5b0, beside main's own sweeps of that commit (run
+38237119766):
+
+| Sweep | Run | Files | Mutants | Killed | Timed out | Survived | No coverage | Score | Static | Job |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Full, main | 38237119766 | 26 | 7,250 | 7,161 | 39 | 47 | 3 | 99.31% | 738 | 15m13s |
+| Full, this change | 38453488907 | 27 | 7,251 | 7,161 | 40 | 47 | 3 | 99.31% | 738 | 21m41s |
+| Core, main | 38237119766 | 21 | 5,356 | 5,288 | 32 | 33 | 3 | 99.33% | 596 | 14m01s |
+| Core, this change | 38453488907 | 22 | 5,357 | 5,289 | 32 | 33 | 3 | 99.33% | 596 | 14m24s |
+
+Each sweep makes one mutant more, the body of `definePlugin`, and kills it
+by the one test that covers it, of `tests/report.test.ts`, the first it
+runs. No test joined either suite: the initial runs count 1,004 tests and
+667, as before. Each job's comparison fetched main's report, said that
+`src/index.ts` is mutated here and not there, and listed nothing new and
+nothing gone. In the full sweep `stack.push(v)` of `src/corpus.ts` changed
+sides once more, killed in main's and timed out here, which is on neither
+list. The full sweep drew a runner at the slow end, 16 seconds for its
+initial run, and the pull request had the last check of the two 21m46s
+after the push. The suite's three macOS jobs started ten minutes after
+the push; what else the account's macOS runners were doing then was not
+read.
+
+**The call the release makes was tried once, and the release was not
+run.** A workflow of the release's shape, calling this one from a job that
+names the same two permissions, ran on the pull request (run 38453489165)
+and was taken out again. GitHub took the call; both sweeps ran and read
+the counts above; each fetched main's report with the permission handed
+down; the job after them started four seconds after the second ended; and
+the pull request's own sweeps, in another group by the workflow's name,
+ran beside them to their end. What it could not try is a tag, and a
+rehearsal: under a rehearsal the full sweep's condition reads the called
+workflow's own `full`, which is ticked by its default.
 
 Seen on the way, and left:
 

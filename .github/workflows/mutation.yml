@@ -83,10 +83,10 @@ jobs:
     # is another measurement: spec-core's ADR-0008 says what moving takes.
     runs-on: ubuntu-24.04
     timeout-minutes: 60
-    # The comparison below fetches the report of another run, main's, and
-    # GitHub hands a run's artifact only to a token that may read Actions. A
-    # job that names its permissions has no other, so the one every job has
-    # is said again.
+    # The comparison below fetches the report of another run, main's, which
+    # by GitHub's table of what each endpoint takes is for a token that may
+    # read Actions. A job that names its permissions has no other, so the
+    # one every job has is said again.
     permissions:
       contents: read
       actions: read

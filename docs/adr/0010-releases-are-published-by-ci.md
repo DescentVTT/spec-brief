@@ -160,7 +160,9 @@ No other job has more than it had, and `publish` is still the one job with
 last five full sweeps, and so does a rehearsal, which runs the sweeps too.
 The call was not rehearsed when it was written: a rehearsal is a dispatch
 of the release, which the change that wrote it did not make. It was tried
-by a workflow of the same shape on the pull request, and removed.
+by a workflow of the same shape on the pull request (run 38453489165), and
+that workflow removed: both sweeps ran from the call and the job after them
+started when they had passed. The first rehearsal after it shows the rest.
 
 ## Consequences
 
