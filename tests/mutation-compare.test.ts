@@ -145,6 +145,8 @@ describe('one mutant in two reports', () => {
     const both = compare(one(twice), one(twice, second, first));
     expect(both).toMatchObject({ new: 2, added: [{ count: 2 }] });
     expect(rowLine(both.added[0]!)).toBe('src/corpus.ts  StringLiteral  \'utf8\'  ->  ""  (survived and no test reaches it; 2 alike, lines 1 and 2)');
+    // And the other way about, both are gone: two mutants, on one row.
+    expect(compare(one(twice, first, second), one(twice))).toMatchObject({ new: 0, lost: 2, gone: [{ count: 2 }] });
   });
 
   it('counts each report: its mutants, and those undetected of each kind', () => {
@@ -164,6 +166,8 @@ describe('one mutant in two reports', () => {
         WAITING,
         [
           mutant(WAITING, "', '", 'StringLiteral', '""'),
+          // On the third line, under a mutator whose name comes before one of the second line.
+          mutant(WAITING, 'wave > 1', 'ConditionalExpression', 'true'),
           mutant(WAITING, 'open.length === 0', 'EqualityOperator', 'open.length !== 0'),
           NONE_OPEN,
           mutant(WAITING, 'open.length === 0', 'ConditionalExpression', 'false'),
@@ -176,6 +180,7 @@ describe('one mutant in two reports', () => {
       'src/corpus.ts 2 ConditionalExpression false',
       'src/corpus.ts 2 ConditionalExpression true',
       'src/corpus.ts 2 EqualityOperator open.length !== 0',
+      'src/corpus.ts 3 ConditionalExpression true',
       'src/corpus.ts 3 StringLiteral ""',
       'src/schedule.ts 2 ConditionalExpression true',
     ]);
@@ -404,6 +409,11 @@ describe("main's report", () => {
     ]);
   });
 
+  it.each(['push', 'schedule', 'workflow_dispatch'])('is that of a sweep of main that a %s started', (event) => {
+    const { gh } = github({ workflow_runs: [sweep(8, '2026-10-12T10:33:00Z', { event }), sweep(5, '2026-10-11T09:25:00Z', { event: 'pull_request' })] }, { 8: '{}', 5: '{}' });
+    expect(fetch(`by-${event}`, gh)).toMatchObject({ run: '8' });
+  });
+
   it('is of the sweep it is asked for, the core sweep by the name its job uploads its report under', () => {
     const { gh, asked } = github({ workflow_runs: [sweep(8, '2026-10-12T10:33:00Z')] }, { 8: '{}' });
     fetch('core', gh, '99', 'mutation-core');
@@ -489,6 +499,13 @@ describe('the script', () => {
     }
   };
 
+  /** The script called on reports named by hand, outside a job: its exit code and each thing it said. Every process started is seconds on a loaded machine. */
+  const byHand = (argv: readonly string[]): { code: number; out: string[] } => {
+    const out: string[] = [];
+    const code = main(argv, { env: {}, gh: () => '', log: (text) => out.push(text), fail: (text) => out.push(text) });
+    return { code, out };
+  };
+
   /** The script as a job runs it, with a `gh` that answers as `runs` and `reports` say. */
   const inJob = (name: string, argv: readonly string[], runs: unknown, reports: Record<number, string>, actions = true): { code: number; out: string; summary: string; asked: string[][] } => {
     const out: string[] = [];
@@ -512,9 +529,9 @@ describe('the script', () => {
     // Which sweep it is, where a person names two files, is the directory the report is in.
     expect(out).toContain(`\nmutation-full: 2 undetected mutants are new against ${mains}. The run is not failed for them: `);
     expect(code).toBe(0);
-    const same = run([here, here]);
-    expect(same.out).toContain("\nnew against main's: 0\n");
-    expect(same.out).not.toContain('The run is not failed');
+    const same = byHand([here, here]);
+    expect(same.out.join('\n')).toContain("\nnew against main's: 0\n");
+    expect(same.out.join('\n')).not.toContain('The run is not failed');
     expect(same.code).toBe(0);
   });
 
@@ -568,17 +585,12 @@ describe('the script', () => {
   });
 
   it('exits 2 for a report named by hand that cannot be read, and for anything but two reports, or --main with an artifact and one', () => {
-    expect(run([join(directory, 'missing.json'), here])).toMatchObject({ code: 2 });
-    expect(run([save('broken.json', '{'), here])).toMatchObject({ code: 2 });
-    expect(run([save('unfiled.json', '{}'), here])).toEqual({ code: 2, out: 'mutation-compare: main\'s report is no mutation report: it has no "files"\n' });
+    expect(byHand([join(directory, 'missing.json'), here])).toMatchObject({ code: 2 });
+    expect(byHand([save('broken.json', '{'), here])).toMatchObject({ code: 2 });
+    expect(byHand([save('unfiled.json', '{}'), here])).toEqual({ code: 2, out: ['mutation-compare: main\'s report is no mutation report: it has no "files"'] });
     const usage = "usage: node scripts/mutation-compare.mjs <main's mutation.json> <this sweep's mutation.json>\n       node scripts/mutation-compare.mjs --main <artifact> <this sweep's mutation.json>";
-    const said = (argv: readonly string[]): { code: number; out: string[] } => {
-      const out: string[] = [];
-      const code = main(argv, { env: {}, gh: () => '', log: (text) => out.push(text), fail: (text) => out.push(text) });
-      return { code, out };
-    };
     for (const argv of [[], [here], [mains, here, here], ['--main'], ['--main', here], ['--main', 'mutation-full'], ['--main', 'mutation-full', here, here], ['--main', '--main', here], ['--other', here], [mains, '--main'], ['', here], [mains, '']]) {
-      expect(said(argv), argv.join(' ')).toEqual({ code: 2, out: [usage] });
+      expect(byHand(argv), argv.join(' ')).toEqual({ code: 2, out: [usage] });
     }
     // And through the door a person comes in by.
     expect(run([here])).toEqual({ code: 2, out: `${usage}\n` });
