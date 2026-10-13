@@ -35,7 +35,9 @@ on:
   # No filter of paths, here or under `push`: a workflow that a filter skips
   # leaves its checks pending, which a ruleset that required them would wait
   # on for ever, and a list of the paths that matter is one more thing to keep
-  # true. tests/mutation-sweeps.test.ts holds both events to that.
+  # true. tests/mutation-sweeps.test.ts holds both events to that, and
+  # briefs/002 has what a filter of documents would have saved: three pull
+  # requests of sixty.
   pull_request:
   # Main's own head, so that the next pull request has a report of main to be
   # set beside, and a release is tagged on a commit both sweeps have read.
@@ -135,9 +137,9 @@ jobs:
     # condition skips reports success, so no other event is given the choice.
     if: github.event_name != 'workflow_dispatch' || inputs.full
     runs-on: ubuntu-24.04
-    # Headroom for a bad runner, not a budget: the last five hosted full sweeps
-    # took 15 to 22 minutes (ADR-0009, amended 2026-10-14), on runners whose
-    # first run of the suite took from 10 to 16 seconds. A sweep that keeps
+    # Headroom for a bad runner, not a budget: the eight hosted full sweeps
+    # under 2026-10-14 in ADR-0009 took 15 to 23 minutes, on runners whose
+    # first run of the suite took from 10 to 17 seconds. A sweep that keeps
     # passing 45 wants shards, not this number raising.
     timeout-minutes: 90
     # As the core sweep's job has them, and for its reason.

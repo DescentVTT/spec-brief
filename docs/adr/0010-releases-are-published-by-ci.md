@@ -156,8 +156,10 @@ has failed. The job names `contents: read` and `actions: read`: a called
 workflow is handed no more than its caller's job names, and the sweeps read
 Actions to fetch main's report and name the undetected mutants that are new.
 No other job has more than it had, and `publish` is still the one job with
-`id-token: write`. A release takes about seventeen minutes longer, by the
-last five full sweeps, and so does a rehearsal, which runs the sweeps too.
+`id-token: write`. A release takes 15 to 23 minutes longer, and so does a
+rehearsal, which runs the sweeps too: the full sweep took a median of 17
+minutes over the five runs before this change and 22 in each of the three
+of the change itself (ADR-0009, under the same date).
 The call was not rehearsed when it was written: a rehearsal is a dispatch
 of the release, which the change that wrote it did not make. It was tried
 by a workflow of the same shape on the pull request (run 38453489165), and
