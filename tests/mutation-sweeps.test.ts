@@ -114,7 +114,7 @@ describe('when the sweeps run', () => {
   const jobs = under(lines, 'jobs');
   const INPUT = ['  inputs:', '    full:', '      description: Run the full sweep as well', '      type: boolean', '      default: true'];
 
-  it('is for every pull request and every push to main, whatever either changes, beside the schedule and a dispatch', () => {
+  it('is for every pull request and every push to main, whatever either changes, beside the schedule, a dispatch and the release', () => {
     expect(under(lines, 'on')).toEqual([
       // Bare: every pull request, to any branch, for any file.
       'pull_request:',
@@ -123,6 +123,8 @@ describe('when the sweeps run', () => {
       'schedule:',
       "  - cron: '0 3 * * 1'",
       'workflow_dispatch:',
+      ...INPUT,
+      'workflow_call:',
       ...INPUT,
     ]);
     // A workflow that a filter skipped leaves its checks pending, and a
@@ -143,9 +145,26 @@ describe('when the sweeps run', () => {
     expect([scripts['test:mutation'], scripts['test:mutation:full']]).toEqual(['stryker run stryker.core.config.mjs', 'stryker run']);
   });
 
-  it("ends a pull request's older sweep when it is pushed to again, and no sweep of another pull request, of main, of the schedule or of a dispatch", () => {
+  it("ends a pull request's older sweep when it is pushed to again, and no sweep of another pull request, of main, of the schedule, of a dispatch or of a release", () => {
     // The ref of a pull request's run is its merge branch, a group of its
-    // own, and the event keeps main's push, the schedule and a dispatch apart.
+    // own. The event keeps main's push, the schedule and a dispatch apart,
+    // and the workflow's name is the caller's where the release calls this.
     expect(under(lines, 'concurrency')).toEqual(['group: mutation-${{ github.workflow }}-${{ github.ref }}-${{ github.event_name }}', 'cancel-in-progress: true']);
+  });
+
+  it('is before a release packs, on the commit it publishes, in a job handed what the sweeps ask for and no more', () => {
+    const release = under(written(read('.github/workflows/release.yml')), 'jobs');
+    expect(under(release, 'sweep')).toEqual(['uses: ./.github/workflows/mutation.yml', 'permissions:', '  contents: read', '  actions: read']);
+    expect(under(release, 'pack')[0]).toBe('needs: [ci, sweep]');
+    // Nothing is published or released that did not come through the pack.
+    expect(under(release, 'publish')[0]).toBe('needs: pack');
+    expect(under(release, 'github-release')[0]).toBe('needs: [pack, publish]');
+    // A called workflow's job may name no permission its caller's job does not hand down.
+    const handed = under(under(release, 'sweep'), 'permissions');
+    for (const job of ['core', 'full']) {
+      const asked = under(under(jobs, job), 'permissions');
+      expect(asked.length, job).toBeGreaterThan(0);
+      expect(asked.filter((permission) => !handed.includes(permission)), job).toEqual([]);
+    }
   });
 });

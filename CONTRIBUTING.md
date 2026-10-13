@@ -115,8 +115,10 @@ Versions are published by CI from a tag, never from a workstation
    git push origin v<x.y.z>
    ```
 
-The release workflow runs CI again, packs, stages the version on npm with
-provenance and makes the GitHub release. Then a maintainer releases it with a
+The release workflow runs CI again and both mutation sweeps, on the tagged
+commit, and packs nothing until they pass: about seventeen minutes more than
+the suite alone. Then it packs, stages the version on npm with provenance
+and makes the GitHub release. Then a maintainer releases it with a
 second factor: `npm stage list @descent-vtt/spec-brief`, `npm stage view <id>`,
 `npm stage approve <id>`. A prerelease (`0.3.0-rc.1`) goes out under the `next`
 dist-tag. To try the workflow without publishing, run it by hand from main

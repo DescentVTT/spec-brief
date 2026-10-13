@@ -51,7 +51,8 @@ npm run test:mutation   # the core sweep: pure modules against the unit suite
 
 `npm run test:mutation:full` mutates the edges too, against the whole suite,
 and spawns git for every CLI mutant. CI runs both sweeps for every pull
-request and every push to main. Each sweep's job names the undetected mutants that main's newest
+request and every push to main, and the release runs them on the commit it
+publishes. Each sweep's job names the undetected mutants that main's newest
 sweep did not have, by file, mutator, text and replacement, and fails for
 none: the pull request lists each and says whether a test it adds kills it,
 a comment beside the code calls it equivalent, or it is not of the change

@@ -38,7 +38,7 @@ on:
   # true. tests/mutation-sweeps.test.ts holds both events to that.
   pull_request:
   # Main's own head, so that the next pull request has a report of main to be
-  # set beside.
+  # set beside, and a release is tagged on a commit both sweeps have read.
   push:
     branches: [main]
   # Weekly, for what moves under a commit that does not: the runner's image
@@ -52,12 +52,23 @@ on:
         description: Run the full sweep as well
         type: boolean
         default: true
+  # The release workflow sweeps the commit it publishes. A called workflow
+  # reads its own inputs and not its caller's, so the input is said again,
+  # for a rehearsal, which is a dispatch.
+  workflow_call:
+    inputs:
+      full:
+        description: Run the full sweep as well
+        type: boolean
+        default: true
 
 # A newer push to a pull request ends the sweep of the push before it, and
 # no other's: for a pull request the ref is its merge branch,
 # refs/pull/<number>/merge. A push to main ends the sweep of the push before
 # it, whose commit it holds. The event keeps the schedule's run and a
-# dispatch on main apart from a push there.
+# dispatch on main apart from a push there, and the workflow's name, which
+# for a called workflow is its caller's, keeps a release's sweep apart from
+# all of them.
 concurrency:
   group: mutation-${{ github.workflow }}-${{ github.ref }}-${{ github.event_name }}
   cancel-in-progress: true
