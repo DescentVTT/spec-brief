@@ -36,7 +36,8 @@ export interface Measured {
 
 export declare const LEFT: Readonly<Record<string, number>>;
 export declare class UnmeasuredError extends Error {}
-export declare function parser(): Promise<Parse>;
+/** `from` is where the search for Stryker's parser starts: this script, unless a test says otherwise. */
+export declare function parser(from?: string): Promise<Parse>;
 export declare function unmeasured(source: string, parse: Parse): Unmeasured[];
 export declare function measure(report: Report, parse: Parse): Measured;
 export declare function gate(measured: Measured, left?: Readonly<Record<string, number>>): string[];

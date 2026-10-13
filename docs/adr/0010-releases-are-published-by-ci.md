@@ -143,6 +143,29 @@ end. So npmjs.com does give a rehearsal dispatched from main a token.
 spec-guard's ADR-0019 has the same day's dry run under 12.2.0, which read the
 same as far as a dry run goes.
 
+*Amended 2026-10-14.* A fifth job, `sweep`, beside CI and before `pack`: both
+mutation sweeps on the tagged commit. `mutation.yml` is callable as `ci.yml`
+is, and for the same reason: main's sweep is ended when a newer push arrives,
+and a tag can be pushed before it has finished. Each of the six releases from
+0.5.0 to 0.8.0 was tagged on a commit of which the core sweep alone had run,
+and for 0.8.0 the commit differs in `src/cli.ts`, by two comments, from the
+one its full sweep was of
+([ADR-0009](0009-mutation-testing.md), amended 2026-10-14). `pack` needs
+both, so nothing is packed, staged or released from a commit either sweep
+has failed. The job names `contents: read` and `actions: read`: a called
+workflow is handed no more than its caller's job names, and the sweeps read
+Actions to fetch main's report and name the undetected mutants that are new.
+No other job has more than it had, and `publish` is still the one job with
+`id-token: write`. A release takes 15 to 23 minutes longer, and so does a
+rehearsal, which runs the sweeps too: the full sweep took a median of 17
+minutes over the five runs before this change and 22 in each of the three
+of the change itself (ADR-0009, under the same date).
+The call was not rehearsed when it was written: a rehearsal is a dispatch
+of the release, which the change that wrote it did not make. It was tried
+by a workflow of the same shape on the pull request (run 38453489165), and
+that workflow removed: both sweeps ran from the call and the job after them
+started when they had passed. The first rehearsal after it shows the rest.
+
 ## Consequences
 
 - A maintainer sets up npmjs.com once. In the package's settings, add a

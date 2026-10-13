@@ -2,14 +2,14 @@ name: Mutation
 
 # Two sweeps, recorded in docs/adr/0009-mutation-testing.md.
 #
-# The core sweep mutates the pure modules and holds them to the unit suite. It
-# runs on every push to main, and its `break` in stryker.core.config.mjs is the gate.
+# The core sweep mutates the pure modules and holds them to the unit suite;
+# its `break` in stryker.core.config.mjs is the gate.
 #
 # The full sweep mutates everything, the CLI and the engine included, against
 # the whole suite. Its tests spawn git and write to disk, so it is the slower,
-# by an order of magnitude on a Windows workstation; it runs weekly and on
-# request, and its `break` in stryker.config.mjs is set from the first hosted
-# run (ADR-0009).
+# by an order of magnitude on a Windows workstation and by a few minutes on a
+# hosted runner; its `break` in stryker.config.mjs is set from the first
+# hosted run (ADR-0009).
 #
 # Both run a mutant's test files the quickest first (vitest.mutation.config.ts;
 # ADR-0009, amended 2026-10-11).
@@ -18,9 +18,34 @@ name: Mutation
 # under a TypeScript `as`. After each sweep its report is read for such places
 # (scripts/mutation-unmeasured.mjs), and one that is not recorded there fails
 # the job (ADR-0009, amended 2026-10-12).
+#
+# A score also does not say which mutants are undetected. After each sweep its
+# report is set beside that of main's newest sweep that passed
+# (scripts/mutation-compare.mjs), and the undetected mutants main's did not
+# have are named in the job's summary and its log (ADR-0009, amended
+# 2026-10-14).
 on:
+  # Every pull request, whatever it changes, so that nothing merges without
+  # both sweeps having read it: a source, a test, the lockfile and the
+  # vendored spec-core can each move a verdict, and the pull request that
+  # took vitest to 5, under which a sweep reads 4%, changed package.json and
+  # the lockfile alone (ADR-0009, amended 2026-10-07). The sweep is of the
+  # pull request merged into main, the commit GitHub checks out for one.
+  #
+  # No filter of paths, here or under `push`: a workflow that a filter skips
+  # leaves its checks pending, which a ruleset that required them would wait
+  # on for ever, and a list of the paths that matter is one more thing to keep
+  # true. tests/mutation-sweeps.test.ts holds both events to that, and
+  # briefs/002 has what a filter of documents would have saved: three pull
+  # requests of sixty.
+  pull_request:
+  # Main's own head, so that the next pull request has a report of main to be
+  # set beside, and a release is tagged on a commit both sweeps have read.
   push:
     branches: [main]
+  # Weekly, for what moves under a commit that does not: the runner's image
+  # and its Node. It also leaves a report of main inside the fourteen days an
+  # artifact is kept for here.
   schedule:
     - cron: '0 3 * * 1'
   workflow_dispatch:
@@ -28,12 +53,29 @@ on:
       full:
         description: Run the full sweep as well
         type: boolean
-        default: false
+        default: true
+  # The release workflow sweeps the commit it publishes. A called workflow
+  # reads its own inputs and not its caller's, so the input is said again,
+  # for a rehearsal, which is a dispatch.
+  workflow_call:
+    inputs:
+      full:
+        description: Run the full sweep as well
+        type: boolean
+        default: true
 
+# A newer push to a pull request ends the sweep of the push before it, and
+# no other's: for a pull request the ref is its merge branch,
+# refs/pull/<number>/merge. A push to main ends the sweep of the push before
+# it, whose commit it holds. The event keeps the schedule's run and a
+# dispatch on main apart from a push there, and the workflow's name, which
+# for a called workflow is its caller's, keeps a release's sweep apart from
+# all of them.
 concurrency:
-  group: mutation-${{ github.ref }}-${{ github.event_name }}
+  group: mutation-${{ github.workflow }}-${{ github.ref }}-${{ github.event_name }}
   cancel-in-progress: true
 
+# Nothing here writes to the repository.
 permissions:
   contents: read
 
@@ -43,6 +85,13 @@ jobs:
     # is another measurement: spec-core's ADR-0008 says what moving takes.
     runs-on: ubuntu-24.04
     timeout-minutes: 60
+    # The comparison below fetches the report of another run, main's, which
+    # by GitHub's table of what each endpoint takes is for a token that may
+    # read Actions. A job that names its permissions has no other, so the
+    # one every job has is said again.
+    permissions:
+      contents: read
+      actions: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -66,6 +115,16 @@ jobs:
         if: ${{ !cancelled() }}
         run: node scripts/mutation-unmeasured.mjs reports/mutation-core/mutation.json
 
+      # Where the score is under the `break` too, which is when the list is
+      # wanted most, and not where the sweep wrote no report. It fails the
+      # job for no mutant, and where main has no report to fetch it says
+      # that nothing was compared.
+      - name: Name the undetected mutants that are new against main
+        if: ${{ !cancelled() && hashFiles('reports/mutation-core/mutation.json') != '' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/mutation-compare.mjs --main mutation-core reports/mutation-core/mutation.json
+
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
         with:
@@ -74,14 +133,19 @@ jobs:
           if-no-files-found: ignore
 
   full:
-    if: github.event_name == 'schedule' || inputs.full
+    # Only a dispatch can leave this sweep out, by its input. A job that a
+    # condition skips reports success, so no other event is given the choice.
+    if: github.event_name != 'workflow_dispatch' || inputs.full
     runs-on: ubuntu-24.04
-    # Headroom for a bad runner, not a budget: the hosted full sweeps took 18 to
-    # 28 minutes in vitest's order of test files, and 13 and 21 with the quickest
-    # first (ADR-0009, amended 2026-10-11), on runners whose first run of the
-    # suite took from 10 to 15 seconds. A sweep that keeps passing 45 wants
-    # shards, not this number raising.
+    # Headroom for a bad runner, not a budget: the eight hosted full sweeps
+    # under 2026-10-14 in ADR-0009 took 15 to 23 minutes, on runners whose
+    # first run of the suite took from 10 to 17 seconds. A sweep that keeps
+    # passing 45 wants shards, not this number raising.
     timeout-minutes: 90
+    # As the core sweep's job has them, and for its reason.
+    permissions:
+      contents: read
+      actions: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -101,6 +165,13 @@ jobs:
       - name: Count what stood under an as, which no mutant is made of
         if: ${{ !cancelled() }}
         run: node scripts/mutation-unmeasured.mjs reports/mutation/mutation.json
+
+      # As in the core sweep's job.
+      - name: Name the undetected mutants that are new against main
+        if: ${{ !cancelled() && hashFiles('reports/mutation/mutation.json') != '' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/mutation-compare.mjs --main mutation-full reports/mutation/mutation.json
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()

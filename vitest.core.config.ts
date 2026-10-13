@@ -14,8 +14,10 @@ import { QuickestFirst } from './vitest.mutation.config.js';
  *
  * A mutant's files run quickest first, as in the full sweep and for its
  * reason (`vitest.mutation.config.ts`). The test of that order reaches no
- * module, and is left out here as it is there; so is the test of what a
- * sweep leaves unmeasured, which reads the sources as text.
+ * module, and is left out here as it is there; so are the tests of what a
+ * sweep leaves unmeasured and of which sweep reads what, which read the
+ * sources as text, and the test of the comparison with main's report, which
+ * writes to disk and starts a process.
  */
 export default defineConfig({
   test: {
@@ -26,7 +28,9 @@ export default defineConfig({
       'tests/engine.test.ts',
       'tests/io.test.ts',
       'tests/io-faults.test.ts',
+      'tests/mutation-compare.test.ts',
       'tests/mutation-order.test.ts',
+      'tests/mutation-sweeps.test.ts',
       'tests/mutation-unmeasured.test.ts',
       'tests/names.test.ts',
       'tests/npm.test.ts',

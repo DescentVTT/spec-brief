@@ -44,8 +44,20 @@ jobs:
   ci:
     uses: ./.github/workflows/ci.yml
 
+  # Both mutation sweeps, on the commit being published and for the same
+  # reason: main's sweep is cancelled when a newer push arrives, and a tag
+  # can be pushed before it has finished. Nothing is packed from a commit
+  # either sweep has failed (ADR-0009, amended 2026-10-14). A called workflow
+  # is handed no more than its caller's job names, and the sweeps read
+  # Actions to fetch main's report, so that is named here, for this job alone.
+  sweep:
+    uses: ./.github/workflows/mutation.yml
+    permissions:
+      contents: read
+      actions: read
+
   pack:
-    needs: ci
+    needs: [ci, sweep]
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     outputs:
