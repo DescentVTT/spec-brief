@@ -1,5 +1,7 @@
-import { describe, expect, it } from 'vitest';
-import { BaseSequencer, type TestSpecification, type Vitest } from 'vitest/node';
+import { join } from 'node:path';
+
+import { describe, expect, it, vi } from 'vitest';
+import { BaseSequencer, resolveConfig, type TestSpecification, type Vitest } from 'vitest/node';
 
 import strykerCore from '../stryker.core.config.mjs';
 import stryker from '../stryker.config.mjs';
@@ -14,10 +16,12 @@ import vitestMutation, { QuickestFirst } from '../vitest.mutation.config.js';
  * The order is the sweeps' and no mutant is under it. This file reaches
  * nothing under src/, so it cannot kill one, and it loads vitest's node side
  * to set the order beside vitest's own: it is left out of both sweeps'
- * suites, where every static mutant would run it.
+ * suites, where every static mutant would run it. What the sweeps report is
+ * held here too, as vitest resolves it from the same two files.
  */
 
 const ROOT = '/work/spec-brief';
+const REPOSITORY = join(import.meta.dirname, '..');
 
 /** What a worker knows of a file after its last run, by the key vitest files it under. */
 type Timed = Record<string, { duration: number; failed: boolean }>;
@@ -147,5 +151,36 @@ describe('the suites that run in this order', () => {
     expect(strykerCore.timeoutMS).toBe(stryker.timeoutMS);
     // Longer only costs minutes; shorter is a measurement first.
     expect(stryker.timeoutMS).toBeGreaterThanOrEqual(20_000);
+  });
+});
+
+describe('what the sweeps report', () => {
+  /**
+   * The reporters vitest gives a run of a suite on a GitHub runner, where
+   * every step has GITHUB_ACTIONS set to true, resolved by vitest itself, as
+   * Stryker's runner has it resolve them: it names none of its own.
+   */
+  async function onARunner(suite: typeof vitestConfig): Promise<string[]> {
+    vi.stubEnv('GITHUB_ACTIONS', 'true');
+    try {
+      const { vitestConfig: resolved } = await resolveConfig({ ...suite.test, config: false, root: REPOSITORY });
+      return resolved.reporters.map((reporter) => (Array.isArray(reporter) ? String(reporter[0]) : 'inline'));
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  }
+
+  it("is vitest's default reporter alone, in both sweeps, so that no mutant's run adds a summary to the step's", async () => {
+    // Where a suite names none, vitest adds its github-actions reporter on a
+    // runner, and it appends a summary of every run to the step's own: the
+    // core sweep's came to 1,049k and the full sweep's to 1,403k on main's
+    // push of cab7f8b, where GitHub uploads 1MiB a step, and each job ended
+    // on an error annotation that said so (vitest.mutation.config.ts).
+    expect(await onARunner(vitestMutation)).toEqual(['default']);
+    expect(await onARunner(vitestCore)).toEqual(['default']);
+  });
+
+  it('and not the suite `npm test` runs, whose run on a runner keeps the annotations and the summary vitest gives it', async () => {
+    expect(await onARunner(vitestConfig)).toContain('github-actions');
   });
 });

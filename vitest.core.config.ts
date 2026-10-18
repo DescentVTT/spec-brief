@@ -42,5 +42,7 @@ export default defineConfig({
     environment: 'node',
     testTimeout: 30_000,
     sequence: { sequencer: QuickestFirst },
+    // Named, for the reason `vitest.mutation.config.ts` gives.
+    reporters: ['default'],
   },
 });
