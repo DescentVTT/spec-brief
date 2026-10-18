@@ -94,5 +94,15 @@ export default defineConfig({
     testTimeout: 120_000,
     hookTimeout: 120_000,
     sequence: { sequencer: QuickestFirst },
+    // Named, so that vitest adds none of its own. A suite that names none
+    // gets vitest's github-actions reporter beside the default one on a
+    // runner, and it appends a summary of each run to the step's: one a
+    // mutant, about 200 bytes each, which came to 1,049k in the core sweep
+    // and 1,403k in this one on main's push of cab7f8b. GitHub uploads 1MiB
+    // of a step's summary, and both jobs ended on an error annotation that
+    // the upload was aborted. The default reporter writes to the worker's
+    // output, as it did, which Stryker shows only for a worker that exits
+    // unexpectedly.
+    reporters: ['default'],
   },
 });
