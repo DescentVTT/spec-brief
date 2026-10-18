@@ -334,7 +334,8 @@ describe('an input that names nothing', () => {
     expect(parse(['archive', '1', '--summary', ' Done. ']).values['summary']).toBe(' Done. ');
     expect(parse(['new', 'T', '--wave', '0']).values['wave']).toBe('0');
     expect(parse(['new', 'T', '--depends-on', '7, 8']).values['depends-on']).toBe('7, 8');
-    expect(parse(['list', '--ready', '--archived', '--no-git', '--strict']).values).toMatchObject({ ready: true, archived: true, 'no-git': true, strict: true });
+    expect(parse(['list', '--ready', '--archived', '--no-git', '--color']).values).toMatchObject({ ready: true, archived: true, 'no-git': true, color: true });
+    expect(parse(['lint', '--strict']).values).toMatchObject({ strict: true });
   });
 
   it.each([
@@ -630,15 +631,6 @@ describe('an option that would tell someone what is not so', () => {
     expect(forced.out).toBe((await run(root, ['list', '--format', 'json'])).out);
   });
 
-  it('lets --help and --version answer a line it would refuse', async () => {
-    const cwd = process.cwd();
-    const pkg = JSON.parse(readFileSync('package.json', 'utf8')) as { version: string };
-    expect(await run(cwd, ['init', '--strict', '--help'])).toEqual({ code: EXIT_OK, out: HELP, err: '' });
-    expect(await run(cwd, ['list', '--strict', '--version'])).toEqual({ code: EXIT_OK, out: `${pkg.version}\n`, err: '' });
-    expect(await run(cwd, ['lint', '--config', 'team.json', '--no-config', '-h'])).toEqual({ code: EXIT_OK, out: HELP, err: '' });
-    expect(await run(cwd, ['lint', '--color', '--no-color', '-v'])).toEqual({ code: EXIT_OK, out: `${pkg.version}\n`, err: '' });
-  });
-
   it('says in the help which command an option is not for, and the rule', () => {
     expect(HELP).toContain(
       [
@@ -661,6 +653,265 @@ describe('an option that would tell someone what is not so', () => {
         'are --config beside --no-config and --color beside --no-color, of which one',
         'would go unread. An option that asks a command to leave out what it never',
         'does is taken, as init --no-git: it asks for what is already so.',
+        '',
+      ].join('\n'),
+    );
+  });
+});
+
+describe('an option given two values, and a wrong line beside --help', () => {
+  // `list --root nowhere --root .` listed `.`: the later of the two was read,
+  // and the earlier went unread with no word of it. And `--help` or
+  // `--version` on a line answered it, exit 0, whatever else was wrong with
+  // it, but an option the parser does not know (spec-core ADR-0005, amended
+  // 2026-10-18).
+  const pkg = JSON.parse(readFileSync('package.json', 'utf8')) as { version: string };
+  const twice = (option: string, first: string, second: string): Result => ({
+    code: EXIT_ERROR,
+    out: '',
+    err: `spec-brief: --${option} is given ${JSON.stringify(first)} and ${JSON.stringify(second)}, and takes one value; give one of the two\n`,
+  });
+
+  /**
+   * A tree every command runs clean in, with a second configuration, a file
+   * and a directory below the root. A repository where a line asks git;
+   * elsewhere a `.git` of its own, so that the line is as written here, with
+   * no git process to make it: a sweep runs these tests for every mutant of
+   * the line's reading.
+   */
+  function tree(name: string, git = false): string {
+    const files = {
+      'team.json': JSON.stringify({ briefs: 'specs' }),
+      'notes.txt': 'a file\n',
+      'sub/keep.txt': '',
+      'briefs/001_a.md': goodBrief({ wave: '1' }),
+      'specs/001_s.md': goodBrief(),
+    };
+    if (git) return repo(name, files);
+    const root = plain(name, files);
+    mkdirSync(join(root, '.git'));
+    return root;
+  }
+
+  /** Every file under a directory but git's, so that a line can be shown to have written nothing. */
+  const files = (root: string): string[] =>
+    (readdirSync(root, { recursive: true }) as string[])
+      .map((path) => path.replaceAll('\\', '/'))
+      .filter((path) => !path.startsWith('.git/') && path !== '.git')
+      .sort();
+
+  // Each option the help gives a value, on a command that reads it, with two values that read as two.
+  const TWO: [line: string[], option: string, first: string, second: string][] = [
+    [['list'], 'root', 'nowhere', '.'],
+    [['list'], 'config', 'team.json', '.spec-brief.json'],
+    [['lint'], 'format', 'json', 'pretty'],
+    [['init'], 'briefs', 'specs', 'tasks'],
+    [['init'], 'archive', 'specs/old', 'tasks/old'],
+    [['new', 'T'], 'id', '50', '51'],
+    [['new', 'T'], 'type', 'feature', 'defect'],
+    [['new', 'T'], 'wave', '1', '2'],
+    [['new', 'T'], 'depends-on', '1', '1,2'],
+    [['new', 'T'], 'date', '2026-01-01', '2026-02-02'],
+    [['archive', '1', '--dry-run'], 'pr', '5', '6'],
+    [['archive', '1', '--dry-run'], 'commit', 'HEAD', 'HEAD~1'],
+    [['archive', '1', '--dry-run'], 'base', 'main', 'HEAD~1'],
+    [['archive', '1', '--dry-run'], 'summary', 'Done.', 'Undone.'],
+    [['archive', '1', '--dry-run'], 'date', '2026-01-01', '2026-02-02'],
+  ];
+
+  it('holds every option the help gives a value to the rule', () => {
+    const valued = new Set([...HELP.matchAll(/^ {2}--([a-z-]+) </gm)].map((m) => m[1] as string));
+    expect([...new Set(TWO.map(([, option]) => option))].sort()).toEqual([...valued].sort());
+  });
+
+  it.each(TWO)('%j refuses --%s given two values, by both as they were written, in either order, and writes nothing', async (line, option, first, second) => {
+    const root = line[0] === 'init' ? dir('cli-two-init') : tree(`cli-two-${option}`);
+    const before = files(root);
+    expect(await run(root, [...line, `--${option}`, first, `--${option}`, second])).toEqual(twice(option, first, second));
+    expect(await run(root, [`--${option}=${second}`, ...line, `--${option}`, first])).toEqual(twice(option, second, first));
+    expect(files(root)).toEqual(before);
+  });
+
+  it('names the first option given two values, and shows what cannot be seen in them', async () => {
+    const root = tree('cli-two-first');
+    const before = files(root);
+    expect(await run(root, ['archive', '1', '--dry-run', '--summary', 'a', '--pr', '5', '--summary', 'b', '--pr', '6'])).toEqual(twice('summary', 'a', 'b'));
+    expect(await run(root, ['archive', '1', '--dry-run', '--summary', 'Done.', '--summary', 'Done.\tAnd more.'])).toEqual(twice('summary', 'Done.', 'Done.\tAnd more.'));
+    // A value that is no number, or no directory inside the repository, is still one of two values.
+    expect(await run(root, ['new', 'T', '--wave', 'v1', '--wave', 'v2'])).toEqual(twice('wave', 'v1', 'v2'));
+    expect(await run(root, ['archive', '1', '--dry-run', '--pr', '1st', '--pr', '2nd'])).toEqual(twice('pr', '1st', '2nd'));
+    expect(await run(dir('cli-two-outside'), ['init', '--briefs', '../a', '--briefs', '../b'])).toEqual(twice('briefs', '../a', '../b'));
+    // A list is read by its ids, in their order: the brief scaffolded writes them so.
+    expect(await run(root, ['new', 'T', '--depends-on', '1,2', '--depends-on', '12'])).toEqual(twice('depends-on', '1,2', '12'));
+    expect(await run(root, ['new', 'T', '--depends-on', '1,2', '--depends-on', '2,1'])).toEqual(twice('depends-on', '1,2', '2,1'));
+    expect(files(root)).toEqual(before);
+  });
+
+  it('takes one value given twice, however it is written, as the line that gives it once', async () => {
+    // The line, the option, the value, and the same value written again, in the tree it is run in.
+    const SAME = (root: string): [line: string[], option: string, once: string, again: string][] => [
+      [['list'], 'root', root, `${root}/sub/..`],
+      [['list'], 'config', 'team.json', './team.json'],
+      // A configuration is found from the directory the run starts in.
+      [['list'], 'config', join(root, 'team.json'), 'team.json'],
+      [['lint'], 'format', 'json', 'json'],
+      [['init'], 'briefs', 'specs', './specs/'],
+      [['init'], 'archive', 'specs/old', 'specs/./old'],
+      [['new', 'T'], 'id', '50', '50'],
+      [['new', 'T'], 'type', 'feature', 'feature'],
+      [['new', 'T'], 'wave', '1', '01'],
+      [['new', 'T'], 'depends-on', '1,2', ' 1 , 2 '],
+      [['new', 'T'], 'date', '2026-01-01', '2026-01-01'],
+      [['archive', '1', '--dry-run'], 'pr', '5', '05'],
+      [['archive', '1', '--dry-run'], 'commit', 'HEAD', 'HEAD'],
+      [['archive', '1', '--dry-run'], 'base', 'main', 'main'],
+      [['archive', '1', '--dry-run'], 'summary', 'Done.', ' Done. '],
+      [['archive', '1', '--dry-run'], 'date', '2026-01-01', '2026-01-01'],
+    ];
+    const read = tree('cli-same', true);
+    for (let index = 0; index < SAME(read).length; index += 1) {
+      const [line] = SAME(read)[index] as [string[], string, string, string];
+      // A line that writes is run in two trees alike; one that reads, twice in one.
+      const [here, twin] = line[0] === 'init' ? [dir('cli-same-init'), dir('cli-same-init-twin')] : line[0] === 'new' ? [tree('cli-same-new'), tree('cli-same-new-twin')] : [read, read];
+      const [, option, once, again] = SAME(here)[index] as [string[], string, string, string];
+      const [, , onceThere] = SAME(twin)[index] as [string[], string, string, string];
+      const shown = `${line.join(' ')} --${option} ${JSON.stringify(once)} --${option}=${JSON.stringify(again)}`;
+      const given = await run(here, [...line, `--${option}`, once, `--${option}=${again}`]);
+      const alone = await run(twin, [...line, `--${option}`, onceThere]);
+      expect({ code: given.code, err: given.err }, shown).toEqual({ code: EXIT_OK, err: '' });
+      expect(given.out, shown).toBe(alone.out);
+      expect(files(here), shown).toEqual(files(twin));
+    }
+    // A root is resolved from the directory the process runs in, as the run resolves it, whatever the other root names.
+    const missing = join('tests', 'no-such-directory');
+    expect(await run(read, ['list', '--root', missing, '--root', join(process.cwd(), missing)])).toEqual({
+      code: EXIT_ERROR,
+      out: '',
+      err: `spec-brief: --root is "${join(process.cwd(), missing)}", which is no directory; give it one, or leave the option out\n`,
+    });
+    // From a --root, where the run reads the configuration.
+    const elsewhere = dir('cli-same-elsewhere');
+    expect(await run(elsewhere, ['list', '--root', read, '--config', join(read, 'team.json'), '--config', 'team.json'])).toEqual(
+      await run(elsewhere, ['list', '--root', read, '--config', 'team.json']),
+    );
+    // A flag given twice is that flag once, and so is either of the two answers.
+    expect(await run(read, ['lint', '--strict', '--no-git', '--strict', '--no-git'])).toEqual(await run(read, ['lint', '--strict', '--no-git']));
+    expect(await run(read, ['--help', '-h', 'list', '--help'])).toEqual({ code: EXIT_OK, out: HELP, err: '' });
+    expect(await run(read, ['-v', '--version'])).toEqual({ code: EXIT_OK, out: `${pkg.version}\n`, err: '' });
+    // A list in one value is a list: no option here is one that each use adds to.
+    expect(await run(read, ['new', 'T', '--depends-on', '1,2', '--depends-on', '1, 2'])).toEqual({ code: EXIT_OK, out: 'wrote briefs/002_t.md\n', err: '' });
+    expect(readFileSync(join(read, 'briefs', '002_t.md'), 'utf8')).toContain('\ndependsOn: ["1", "2"]\n');
+  });
+
+  it('refuses --help beside --version, in either order, by both as they were written', async () => {
+    // Each printed the version, exit 0, and the help it was asked for went unread.
+    const root = tree('cli-help-version');
+    const both = (first: string, second: string): Result => ({
+      code: EXIT_ERROR,
+      out: '',
+      err: `spec-brief: ${first} is given beside ${second}, and one of the two answers would go unread; give one of the two\n`,
+    });
+    expect(await run(root, ['--help', '--version'])).toEqual(both('--help', '--version'));
+    expect(await run(root, ['--version', '--help'])).toEqual(both('--version', '--help'));
+    expect(await run(root, ['-h', '-v'])).toEqual(both('-h', '-v'));
+    expect(await run(root, ['-vh'])).toEqual(both('-v', '-h'));
+    expect(await run(root, ['list', '--help', '-v'])).toEqual(both('--help', '-v'));
+    expect(await run(root, ['-v', 'list', '--help', '--version'])).toEqual(both('-v', '--help'));
+    expect(await run(root, ['init', '--version', '-h'])).toEqual(both('--version', '-h'));
+  });
+
+  // Each line wrong in itself, whatever the tree holds, with what it is refused for, in the parser's own words for an option it does not know.
+  const WRONG: [line: string[], refusal: string | RegExp][] = [
+    [['list', '--bogus'], /^spec-brief: Unknown option '--bogus'\. [^\n]+\n$/],
+    [['lnit'], '"lnit" is not a command; run spec-brief --help'],
+    [['list', 'extra'], 'list takes no argument, not "extra": spec-brief list'],
+    [['list', '--root', ''], '--root is "", which is no value; give it one, or leave the option out'],
+    [['init', '--strict'], 'init does not read --strict; it reads --root, --format, --briefs and --archive, and takes --no-config, --no-git and --no-color'],
+    [['new', 'T', '--color'], 'new does not read --color; it reads --root, --config, --no-config, --format, --no-git, --id, --type, --wave, --depends-on and --date, and takes --no-color'],
+    [['list', '--strict'], 'list does not read --strict; it reads --root, --config, --no-config, --format, --no-git, --color, --no-color, --ready and --archived'],
+    [['lint', '--config', 'team.json', '--no-config'], '--config is given beside --no-config, which has the run read no configuration file; give one of the two'],
+    [['lint', '--no-config', '--config', 'team.json'], '--config is given beside --no-config, which has the run read no configuration file; give one of the two'],
+    [['lint', '--color', '--no-color'], '--color is given beside --no-color, which turns colour off; give one of the two'],
+    [['lint', '--no-color', '--color'], '--color is given beside --no-color, which turns colour off; give one of the two'],
+    [['archive', '1', '--dry-run', '--commit', 'HEAD', '--no-git'], 'a commit or a base needs git; drop --no-git, or drop --commit and --base'],
+    [['archive', '1', '--dry-run', '--no-git', '--base', 'main'], 'a commit or a base needs git; drop --no-git, or drop --commit and --base'],
+    [['list', '--format', 'sarif'], '--format for list is one of pretty, json, not "sarif"'],
+    [['lint', '--format', 'html'], '--format for lint is one of pretty, json, sarif, github, gitlab, not "html"'],
+    [['list', '--root', 'nowhere', '--root', '.'], '--root is given "nowhere" and ".", and takes one value; give one of the two'],
+    [['new', 'T', '--wave', 'two'], '--wave must be a whole number of at least 0, not "two"'],
+    [['archive', '1', '--dry-run', '--pr', '0'], '--pr must be a whole number of at least 1, not "0"'],
+    [['new', 'T', '--depends-on', ','], '--depends-on is ",", which names no brief; give it ids with commas between them, as in 7,8, or leave the option out'],
+    [['new', 'T', '--depends-on', '1,,2'], '--depends-on is "1,,2", which names no brief in one of its places; give it ids with one comma between each two, as in 7,8, and none before or after'],
+    [['new', 'T', '--date', '2026-02-30'], '"2026-02-30" is not a date written YYYY-MM-DD'],
+    [['archive', '1', '--dry-run', '--date', 'today'], '"today" is not a date written YYYY-MM-DD'],
+    [['archive', '1', '--dry-run', '--commit=-x'], '"-x" is not a revision'],
+    [['archive', '1', '--dry-run', '--base=-x'], '"-x" is not a revision'],
+    [['init', '--briefs', '../outside'], '--briefs must be a directory inside the repository, not "../outside"'],
+    [['init', '--briefs', 'a', '--archive', 'a'], '--briefs and --archive must be two directories'],
+    [['archive', '1', '2', '--dry-run'], 'archive takes one brief: spec-brief archive <brief>'],
+    [['unarchive', '1', '2', '--dry-run'], 'unarchive takes one brief: spec-brief unarchive <brief>'],
+  ];
+
+  // One repository for the lines that refuse before any is opened; init is given an empty directory each time.
+  let shared: string | undefined;
+
+  it.each(WRONG)('refuses %j with --help or --version on it, before or after it, as without', async (line, refusal) => {
+    const root = line[0] === 'init' ? dir('cli-wrong-init') : (shared ??= tree('cli-wrong'));
+    const before = files(root);
+    const refused = await run(root, line);
+    expect({ code: refused.code, out: refused.out }, line.join(' ')).toEqual({ code: EXIT_ERROR, out: '' });
+    if (typeof refusal === 'string') expect(refused.err, line.join(' ')).toBe(`spec-brief: ${refusal}\n`);
+    else expect(refused.err, line.join(' ')).toMatch(refusal);
+    for (const asked of ['--help', '-h', '--version', '-v']) {
+      expect(await run(root, [...line, asked]), `${line.join(' ')} ${asked}`).toEqual(refused);
+      expect(await run(root, [asked, ...line]), `${asked} ${line.join(' ')}`).toEqual(refused);
+    }
+    expect(files(root), line.join(' ')).toEqual(before);
+  });
+
+  it('answers --help and --version where only the tree can refuse the line, and where what it lacks is what the help gives', async () => {
+    // A root, a configuration, an id or a type is refused by what the tree
+    // holds, which --help and --version open none of; a command without the
+    // brief or the title it takes is what a person asks the help about.
+    const root = tree('cli-answered');
+    const before = files(root);
+    for (const line of [
+      [],
+      ['new'],
+      ['archive'],
+      ['unarchive'],
+      ['init'],
+      ['list', '--root', join(root, 'nowhere')],
+      ['list', '--root', join(root, 'notes.txt')],
+      ['list', '--config', 'nowhere.json'],
+      ['list', '--config', 'notes.txt'],
+      ['new', 'T', '--type', 'epic'],
+      ['new', 'T', '--id', '001'],
+      ['archive', '9', '--dry-run'],
+      ['archive', '1', '--dry-run', '--commit', 'nothing'],
+    ]) {
+      expect(await run(root, [...line, '--help']), `${line.join(' ')} --help`).toEqual({ code: EXIT_OK, out: HELP, err: '' });
+      expect(await run(root, ['-v', ...line]), `-v ${line.join(' ')}`).toEqual({ code: EXIT_OK, out: `${pkg.version}\n`, err: '' });
+    }
+    expect(files(root)).toEqual(before);
+  });
+
+  it('has the run read each value the line was checked for', async () => {
+    // Checked where the line is read, a value is read again where the run uses it.
+    const root = repo('cli-read-after', { 'briefs/001_a.md': goodBrief({ affectedFiles: '[src/**]' }) });
+    expect((await run(root, ['archive', '1', '--dry-run', '--pr', '12', '--no-color'])).out).toContain('> Merged in pull request #12.\n');
+    expect((await run(root, ['archive', '1', '--dry-run', '--base', 'main', '--no-color'])).out).toContain(' is already in main, so the diff from their merge base is empty  scope-unmeasured\n');
+    expect((await run(root, ['archive', '1', '--dry-run', '--no-color'])).out).toContain('affectedFiles went unchecked: no commit or base was named');
+  });
+
+  it('says in the help that two values are refused, and a wrong line beside --help', () => {
+    expect(HELP).toContain(
+      [
+        'An option that takes one value and is given two is refused, as --root a',
+        '--root b, since the earlier would go unread; one value given twice, however',
+        'it is written, is taken once, as --root . --root ./. A line refused for any',
+        'of these is refused with --help or --version on it too, and so is --help',
+        'beside --version.',
         '',
       ].join('\n'),
     );

@@ -11,6 +11,45 @@ release that can turn a run red. This is the family's policy, recorded in
 releases up to 0.2.7 came before it, and several of their patches changed
 what a run reports.
 
+## Unreleased
+
+An option that takes one value and is given two is refused, exit 2, where
+the later was read and the earlier went unread. A line refused for what it
+holds is refused with `--help` or `--version` on it, and `--help` beside
+`--version` is refused.
+
+### Changed
+
+- **An option that takes one value, given two, is refused.**
+  `list --root nowhere --root .` listed `.`, and
+  `lint --format json --format pretty` printed `pretty`, each exit 0 with
+  the earlier never read. Each is now exit 2 with a line that names both as
+  they were written, and writes nothing. Two values are compared as each is
+  read, so one value written two ways is taken once: `--root .` beside
+  `--root ./`, `--wave 1` beside `--wave 01`
+  ([An option given two values](README.md#an-option-given-two-values);
+  [the family contract](https://github.com/DescentVTT/spec-core/blob/main/docs/adr/0005-the-family-contract.md),
+  amended 2026-10-18). Upgrading: give each option once; a shell alias or
+  a script that gives an option, and a line that gives it again to override
+  it, now stops there.
+- **A wrong line is refused with `--help` or `--version` on it.**
+  `init --strict --help`, `lint --color --no-color -h`,
+  `list --format sarif --version`, `new T --wave two --help` and every
+  other line refused for what it holds printed the help or the version,
+  exit 0; only an option, a command or an argument spec-brief does not take,
+  and an empty value, were refused there. Each is now refused as it is
+  without them, exit 2, and a value refused for what it holds is refused
+  before the configuration is read, so a line wrong in both ways names the
+  value. What only the tree can refuse, such as a `--root` that is not
+  there, is still answered by `--help` and `--version`, and so is a
+  command without its argument, `new --help`
+  ([The help on a wrong line](README.md#the-help-on-a-wrong-line)).
+  Upgrading: take the wrong part off a line that asks for the help or the
+  version.
+- **`--help` beside `--version` is refused**, in either order and by
+  either name. The version was printed and the help went unread, exit 0;
+  it is exit 2 and a line that names both. Upgrading: give one of the two.
+
 ## 0.8.0
 
 An option is refused, exit 2, where taking it would tell someone what is

@@ -258,7 +258,7 @@ Every command takes these, except where the last column names it: an option is [
 | `--no-git` | Leaves git out even inside a repository: the tree is read from disk, and `archive` records no commit. | |
 | `--color` | Colour, whatever the environment and the terminal say. | `init` and `new`, which print none |
 | `--no-color` | No colour, whatever they say. | |
-| `--help`, `--version` | Do what they say, whatever else is on the line. | |
+| `--help`, `--version` | Do what they say, on a line that is otherwise one to run: [a line refused for what it holds](#the-help-on-a-wrong-line) is refused with either of them on it, and the two together are refused. | |
 
 Without `--color` or `--no-color`, `NO_COLOR` set to anything turns colour off; otherwise `FORCE_COLOR` turns it on, and `FORCE_COLOR=0` or `FORCE_COLOR=false` off, on a terminal too; otherwise `TERM=dumb` turns it off; otherwise a terminal has colour and a pipe has none. `NO_COLOR` or `FORCE_COLOR` set to nothing is as unset. Only the `pretty` format has colour.
 
@@ -268,7 +268,7 @@ Without `--color` or `--no-color`, `NO_COLOR` set to anything turns colour off; 
 | --- | --- |
 | `0` | Clean. |
 | `1` | Findings, a collision, or a refused action. |
-| `2` | The run could not be trusted, or its answer did not arrive - a bad flag, [an input that names nothing](#an-input-that-names-nothing), [an option the command does not read](#an-option-a-command-does-not-read), a configuration that does not load, a brief that does not exist, a git command that failed, a `SOURCE_DATE_EPOCH` that [cannot be read as a date](#todays-date) where one is to be written, a stdout its reader closed before all of the output was written, as a pipeline into `head` does, each said in one line on stderr, or an error spec-brief did not expect, reported on stderr as `spec-brief: unexpected error:` with its stack. |
+| `2` | The run could not be trusted, or its answer did not arrive - a bad flag, [an input that names nothing](#an-input-that-names-nothing), [an option the command does not read](#an-option-a-command-does-not-read), [an option given two values](#an-option-given-two-values), a configuration that does not load, a brief that does not exist, a git command that failed, a `SOURCE_DATE_EPOCH` that [cannot be read as a date](#todays-date) where one is to be written, a stdout its reader closed before all of the output was written, as a pipeline into `head` does, each said in one line on stderr, or an error spec-brief did not expect, reported on stderr as `spec-brief: unexpected error:` with its stack. |
 
 A run over a briefs directory that does not exist exits 2, because a check over nothing looks exactly like a clean one.
 
@@ -299,7 +299,32 @@ spec-brief: init does not read --strict; it reads --root, --format, --briefs and
 - **Two options of which one would go unread** are refused together, for the same reason: `--config <file>` beside `--no-config` says the file was read, where the defaults ran and it was never opened, and `--color` beside `--no-color` that colour was forced on, where it was off. Give one of the two.
 - **An option that asks a command to leave out what it never does is taken**, since it asks for what is already so: `--no-color` by `init` and `new`, which print no colour, `--no-git` by `init`, which asks git nothing, and `--no-config` by `init`, which opens no configuration file. A script that runs every command in a tree without git, or into a log, passes such an option to each of them. `init --no-config` still writes over no configuration: where one is there, it stops as `init` does.
 - **An option a format has nothing to read for is taken**: `--no-color` or `--color` beside `--format json` changes nothing, and a caller that asks for JSON passes `--no-color` beside it.
-- **`--help` and `--version` answer first**: `init --strict --help` prints the help.
+- **`--help` and `--version` are no way past a refusal**: `init --strict --help` is refused as `init --strict` is ([the help on a wrong line](#the-help-on-a-wrong-line)).
+
+### An option given two values
+
+An option that takes one value is given one. Given two that read as two, the run is refused: exit 2, one line that names both as they were written, nothing written. The later was read and the earlier went unread, with no word of it: `list --root nowhere --root .` listed `.`, and `lint --format json --format pretty` printed `pretty` to a script that had asked for JSON.
+
+```text
+spec-brief: --root is given "nowhere" and ".", and takes one value; give one of the two
+```
+
+- **One value given twice is taken once, however it is written.** Two values are compared as each is read: `--root` and `--config` as the paths they resolve to, so `--root .` beside `--root ./`; `--briefs` and `--archive` as directories of the repository, so `specs` beside `./specs/`; `--wave` and `--pr` by the number their digits write, so `1` beside `01`; `--depends-on` by its ids in their order, so `7,8` beside `7, 8`; `--summary` with the spaces around it taken off. Any other value is read as it is written, in its own case.
+- **A revision written two ways is two values**: `--commit HEAD` beside the hash it names, since only git can say they are one, and the line is checked before git is asked anything.
+- **Every option that takes a value takes one.** `--depends-on` is a list written in one value, and no option adds to a list each time it is given. A flag given twice is that flag once.
+- A shell alias or a script that gives an option, and a line that gives it again to override it, is refused: give the option once.
+
+### The help on a wrong line
+
+A line refused for what it holds is refused with `--help` or `--version` on it, before it or after it, as an option spec-brief does not know always was. `init --strict --help` printed the help and `list --format sarif --version` the version, each exit 0, and said nothing of what was wrong. `--help` beside `--version` is refused too, in either order: one of the two answers went unread.
+
+```text
+spec-brief: --help is given beside --version, and one of the two answers would go unread; give one of the two
+```
+
+- **What the line alone decides is refused there**: an option or a command spec-brief does not know, [an input that names nothing](#an-input-that-names-nothing), [an option the command does not read](#an-option-a-command-does-not-read) and the pairs, `--commit` or `--base` beside `--no-git`, a `--format` the command does not write, [two values](#an-option-given-two-values), a `--wave` or `--pr` that is no number it takes, a `--date` that is no date, a revision that begins with `-`, a directory for `init` outside the repository or one for both, and a second brief for `archive` or `unarchive`.
+- **What only the tree can refuse is not asked**: a `--root` that is not there, a configuration that does not load, an id that is taken, a type the configuration does not have, a brief or a commit that is not there. `--help` and `--version` open nothing, and answer.
+- **What a command lacks is what the help is asked about**: `new --help` and `archive --help` print the help, though `new` without a title and `archive` without a brief are refused.
 
 ### Today's date
 

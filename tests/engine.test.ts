@@ -200,6 +200,10 @@ describe('an engine over memory', () => {
     await expect(engine.planArchive('1', { noGit: true, commit: 'HEAD' })).rejects.toThrow(
       new EngineError('invalid', 'a commit or a base needs git; drop --no-git, or drop --commit and --base'),
     );
+    // The command line refuses the pair before the engine is opened; a caller of the library is refused here.
+    await expect(engine.planArchive('1', { noGit: true, base: 'main' })).rejects.toThrow(
+      new EngineError('invalid', 'a commit or a base needs git; drop --no-git, or drop --commit and --base'),
+    );
     // A round with no summary, pull request or commit has a banner without their sentences.
     expect((await engine.planArchive('1')).banner).toEqual([
       BANNER_OPEN,

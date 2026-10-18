@@ -8,13 +8,14 @@
  */
 
 import { readFile, stat } from 'node:fs/promises';
+import { resolve } from 'node:path';
 import { parseArgs, type ParseArgsConfig } from 'node:util';
 
 import { TransactionError, ConflictError } from './apply.js';
 import type { Plan } from './archive.js';
 import { reported } from './collisions.js';
 import { CONFIG_FILES, ConfigError, initialConfig } from './config.js';
-import { BriefEngine, EngineError, today } from './engine.js';
+import { BriefEngine, EngineError, isDate, today } from './engine.js';
 import { NodeFileSystem } from './fs.js';
 import { GitError } from './git.js';
 import { failing, sortFindings, summarise } from './lint.js';
@@ -62,6 +63,16 @@ export interface CliIO {
 }
 
 type Values = Record<string, string | boolean | undefined>;
+
+/** An option as `parseArgs` read it, by its name and as it was written, `-h` or `--help`. */
+interface OptionToken {
+  readonly kind: 'option';
+  readonly name: string;
+  readonly rawName: string;
+  readonly value?: string | undefined;
+}
+
+type Token = OptionToken | { readonly kind: 'positional' | 'option-terminator' };
 
 const GLOBAL: NonNullable<ParseArgsConfig['options']> = {
   root: { type: 'string' },
@@ -200,7 +211,112 @@ function unread(command: string, spec: CommandSpec, values: Values): string | nu
     return '--config is given beside --no-config, which has the run read no configuration file; give one of the two';
   }
   if (flag(values, 'color') && flag(values, 'no-color')) return '--color is given beside --no-color, which turns colour off; give one of the two';
+  // The engine refuses the pair as well, for a caller of the library; here it
+  // is refused with the line, where --help and --version are no way past it.
+  if (flag(values, 'no-git') && (text(values, 'commit') !== undefined || text(values, 'base') !== undefined)) {
+    return 'a commit or a base needs git; drop --no-git, or drop --commit and --base';
+  }
   return null;
+}
+
+/**
+ * An option's value as the command reads it, so that one thing written two
+ * ways is asked for once: a directory as the run resolves it, a number by
+ * what its digits count, a list by its ids, a summary as it is trimmed. Any
+ * other value is read as it is written, in its own case, which is how each
+ * of those options reads it. A revision is read by git, which a line is not
+ * checked against, so `HEAD` and the commit it names are two values here.
+ */
+function asRead(option: string, value: string, root: string): string {
+  switch (option) {
+    case 'root':
+      return resolve(value);
+    case 'config':
+      return resolve(root, value);
+    case 'wave':
+    case 'pr':
+      return String(digits(value) ?? value);
+    case 'depends-on':
+      return JSON.stringify(idsOf(value));
+    case 'summary':
+      return value.trim();
+    case 'briefs':
+    case 'archive':
+      // Last: one outside the repository leaves the switch and is read as it
+      // was written, for `directories` to refuse by what it was given. A catch
+      // that returned it would have a mutant, its return taken out, that fell
+      // into the next case and read it the same, which no test can tell apart.
+      try {
+        return normalisePath(value);
+      } catch {}
+  }
+  // After the switch, for the reason `untrue` has.
+  return value;
+}
+
+/**
+ * Why a line that gives one option two values is not one to run: the later
+ * was read, and the earlier went unread with no word of it, so `--root
+ * nowhere --root .` ran in `.` (spec-core ADR-0005, amended 2026-10-18).
+ */
+function twice(options: readonly OptionToken[], values: Values, cwd: string): string | null {
+  // A configuration is found from the root, as the engine finds it.
+  const root = resolve(text(values, 'root') ?? cwd);
+  const first = new Map<string, { readonly written: string; readonly read: string }>();
+  for (const token of options) {
+    // A flag has no value to compare, and one given twice is that flag once.
+    // Taken in here it would be read as nothing each time, which decides
+    // nothing either: the mutant that takes it in is equivalent.
+    if (token.value === undefined) continue;
+    const read = asRead(token.name, token.value, root);
+    const earlier = first.get(token.name);
+    if (earlier === undefined) first.set(token.name, { written: token.value, read });
+    else if (earlier.read !== read) {
+      // Shown as JSON, as an empty value is, where what cannot be seen can be.
+      return `--${token.name} is given ${JSON.stringify(earlier.written)} and ${JSON.stringify(token.value)}, and takes one value; give one of the two`;
+    }
+  }
+  return null;
+}
+
+/**
+ * `--help` beside `--version` asks for two answers, and printed one of
+ * them; the other went unread. Named as each was written, `-h` or `--help`.
+ */
+function answers(options: readonly OptionToken[]): string | null {
+  let asked: OptionToken | undefined;
+  for (const token of options) {
+    if (token.name !== 'help' && token.name !== 'version') continue;
+    if (asked === undefined) asked = token;
+    else if (asked.name !== token.name) return `${asked.rawName} is given beside ${token.rawName}, and one of the two answers would go unread; give one of the two`;
+  }
+  return null;
+}
+
+/**
+ * What a command's own options hold, refused where the line is read, by what
+ * each holds: a number, a list of ids, a date, a revision, a directory, and a
+ * second brief where a command takes one. What only the tree can answer - a
+ * root that is not there, an id that is taken, a type the configuration does
+ * not have - is asked by the run, which `--help` and `--version` do not start.
+ */
+function checkValues(command: string | undefined, values: Values, positionals: readonly string[]): void {
+  integer(values, 'wave', 0);
+  integer(values, 'pr', 1);
+  dependencies(values);
+  const date = text(values, 'date');
+  if (date !== undefined && !isDate(date)) throw new UsageError(`"${date}" is not a date written YYYY-MM-DD`);
+  for (const option of ['commit', 'base']) {
+    // Handed to git, it would be read as one of git's options.
+    const revision = text(values, option);
+    if (revision?.startsWith('-') === true) throw new UsageError(`"${revision}" is not a revision`);
+  }
+  // Only init takes --briefs and --archive; for any other command they are
+  // the defaults, which are two directories inside the root.
+  directories(values);
+  if ((command === 'archive' || command === 'unarchive') && positionals.length > 1) {
+    throw new UsageError(`${command} takes one brief: spec-brief ${command} <brief>`);
+  }
 }
 
 /**
@@ -295,6 +411,12 @@ are --config beside --no-config and --color beside --no-color, of which one
 would go unread. An option that asks a command to leave out what it never
 does is taken, as init --no-git: it asks for what is already so.
 
+An option that takes one value and is given two is refused, as --root a
+--root b, since the earlier would go unread; one value given twice, however
+it is written, is taken once, as --root . --root ./. A line refused for any
+of these is refused with --help or --version on it too, and so is --help
+beside --version.
+
 Exit codes: 0 clean, 1 findings or refused, 2 the run could not be trusted.
 `;
 
@@ -320,24 +442,32 @@ function commandOf(argv: readonly string[]): string | undefined {
   return undefined;
 }
 
-export function parse(argv: readonly string[]): Parsed {
+/**
+ * The line, read and checked. Everything the line alone decides is refused
+ * here, before `--help` and `--version` are answered, as an option the
+ * parser does not know always was: a wrong line is wrong with either of them
+ * on it (spec-core ADR-0005, amended 2026-10-18). `cwd` is the directory a
+ * run without `--root` starts in, from which a `--config` is found.
+ */
+export function parse(argv: readonly string[], cwd: string = process.cwd()): Parsed {
   const command = commandOf(argv);
   const spec = COMMANDS.get(command);
   if (command !== undefined && spec === undefined) {
     throw new UsageError(`"${command}" is not a command; run spec-brief --help`);
   }
-  let parsed: { values: Values; positionals: string[] };
+  let parsed: { values: Values; positionals: string[]; tokens: Token[] };
   try {
     const read = parseArgs({
       args: [...argv],
       options: { ...GLOBAL, ...(spec?.options ?? {}) },
       allowPositionals: true,
       strict: true,
+      tokens: true,
     });
     // The cast stands on the name, with nothing under it: Stryker makes no
     // mutant of what an `as` holds, and the call above is what the parser
     // is asked (ADR-0009).
-    parsed = read as { values: Values; positionals: string[] };
+    parsed = read as { values: Values; positionals: string[]; tokens: Token[] };
   } catch (error) {
     throw new UsageError((error as Error).message);
   }
@@ -356,7 +486,22 @@ export function parse(argv: readonly string[]): Parsed {
     const extra = positionals.map((argument) => `"${argument}"`).join(', ');
     throw new UsageError(`${command} takes no argument, not ${extra}: spec-brief ${command}${spec.noArgument}`);
   }
+  const options = parsed.tokens.filter((token): token is OptionToken => token.kind === 'option');
+  const refusal =
+    twice(options, parsed.values, cwd) ??
+    answers(options) ??
+    (spec === undefined ? null : (unread(command!, spec, parsed.values) ?? unwritten(command!, spec, parsed.values)));
+  if (refusal !== null) throw new UsageError(refusal);
+  checkValues(command, parsed.values, positionals);
   return { command, values: parsed.values, positionals };
+}
+
+/** A `--format` the command does not write, which the help lists by command. */
+function unwritten(command: string, spec: CommandSpec, values: Values): string | null {
+  const asked = text(values, 'format') ?? 'pretty';
+  // Cast on the name, as above. The check below is what makes it true.
+  const format = asked as Format;
+  return spec.formats.includes(format) ? null : `--format for ${command} is one of ${spec.formats.join(', ')}, not "${format}"`;
 }
 
 /** The value of an option declared a string, which is all `parseArgs` gives one. */
@@ -368,11 +513,58 @@ function flag(values: Values, key: string): boolean {
   return values[key] === true;
 }
 
+/** The number a value's digits count, or nothing for a value that is not digits alone. */
+function digits(raw: string): number | undefined {
+  return /^\d+$/.test(raw) ? Number(raw) : undefined;
+}
+
 function integer(values: Values, key: string, minimum: number): number | undefined {
   const raw = text(values, key);
   if (raw === undefined) return undefined;
-  if (!/^\d+$/.test(raw) || Number(raw) < minimum) throw new UsageError(`--${key} must be a whole number of at least ${minimum}, not "${raw}"`);
-  return Number(raw);
+  const number = digits(raw);
+  if (number === undefined || number < minimum) throw new UsageError(`--${key} must be a whole number of at least ${minimum}, not "${raw}"`);
+  return number;
+}
+
+/** The ids of a list written with commas between them, spaces beside each taken off. */
+function idsOf(listed: string): string[] {
+  return listed.split(',').map((id) => id.trim());
+}
+
+/** `--depends-on` as the ids it names, or nothing where it is not given. */
+function dependencies(values: Values): string[] | undefined {
+  const listed = text(values, 'depends-on');
+  const dependsOn = listed === undefined ? undefined : idsOf(listed);
+  // A list that names no brief is not a brief that depends on none: written
+  // as given, "," scaffolded a brief with no dependency and said nothing.
+  if (dependsOn?.every((d) => d === '')) {
+    throw new UsageError(`--depends-on is ${JSON.stringify(listed)}, which names no brief; give it ids with commas between them, as in 7,8, or leave the option out`);
+  }
+  // And a place in it that names none is a brief left out: "$A,$B" with one
+  // of the two unset scaffolded a brief that depends on the other alone.
+  if (dependsOn?.includes('')) {
+    throw new UsageError(`--depends-on is ${JSON.stringify(listed)}, which names no brief in one of its places; give it ids with one comma between each two, as in 7,8, and none before or after`);
+  }
+  return dependsOn;
+}
+
+/**
+ * The directories `init` sets up. One above the root is refused as the
+ * configuration refuses one (config.ts), in the same words, before anything
+ * is written.
+ */
+function directories(values: Values): { readonly briefs: string; readonly archive: string } {
+  const inside = (option: string, given: string): string => {
+    try {
+      return normalisePath(given);
+    } catch {
+      throw new UsageError(`--${option} must be a directory inside the repository, not "${given}"`);
+    }
+  };
+  const briefs = inside('briefs', text(values, 'briefs') ?? 'briefs');
+  const archive = inside('archive', text(values, 'archive') ?? `${briefs}/archive`);
+  if (briefs === '' || archive === '' || briefs === archive) throw new UsageError('--briefs and --archive must be two directories');
+  return { briefs, archive };
 }
 
 async function version(): Promise<string> {
@@ -457,18 +649,7 @@ async function runInit(run: Run): Promise<number> {
   for (const name of CONFIG_FILES) {
     if (await fs.exists(name)) throw new UsageError(`${name} already exists here; edit it instead`);
   }
-  // A directory above the root is refused as the configuration refuses one
-  // (config.ts), in the same words, before anything is written.
-  const inside = (option: string, given: string): string => {
-    try {
-      return normalisePath(given);
-    } catch {
-      throw new UsageError(`--${option} must be a directory inside the repository, not "${given}"`);
-    }
-  };
-  const briefs = inside('briefs', text(run.values, 'briefs') ?? 'briefs');
-  const archive = inside('archive', text(run.values, 'archive') ?? `${briefs}/archive`);
-  if (briefs === '' || archive === '' || briefs === archive) throw new UsageError('--briefs and --archive must be two directories');
+  const { briefs, archive } = directories(run.values);
   const config = `${JSON.stringify(initialConfig(briefs, archive), null, 2)}\n`;
   await fs.write('.spec-brief.json', config);
   const written = ['.spec-brief.json'];
@@ -487,18 +668,7 @@ async function runInit(run: Run): Promise<number> {
 async function runNew(run: Run): Promise<number> {
   const title = run.positionals.join(' ').trim();
   if (title === '') throw new UsageError('new needs a title: spec-brief new "<title>"');
-  const listed = text(run.values, 'depends-on');
-  const dependsOn = listed?.split(',').map((d) => d.trim());
-  // A list that names no brief is not a brief that depends on none: written
-  // as given, "," scaffolded a brief with no dependency and said nothing.
-  if (dependsOn?.every((d) => d === '')) {
-    throw new UsageError(`--depends-on is ${JSON.stringify(listed)}, which names no brief; give it ids with commas between them, as in 7,8, or leave the option out`);
-  }
-  // And a place in it that names none is a brief left out: "$A,$B" with one
-  // of the two unset scaffolded a brief that depends on the other alone.
-  if (dependsOn?.includes('')) {
-    throw new UsageError(`--depends-on is ${JSON.stringify(listed)}, which names no brief in one of its places; give it ids with one comma between each two, as in 7,8, and none before or after`);
-  }
+  const dependsOn = dependencies(run.values);
   const engine = await openEngine(run);
   const created = await engine.create({
     title,
@@ -585,7 +755,8 @@ async function runSchedule(run: Run): Promise<number> {
 
 async function runTransition(run: Run, action: 'archive' | 'unarchive'): Promise<number> {
   const reference = run.positionals[0];
-  if (reference === undefined || run.positionals.length > 1) throw new UsageError(`${action} takes one brief: spec-brief ${action} <brief>`);
+  // A second brief is refused with the line; none at all is what --help is asked for.
+  if (reference === undefined) throw new UsageError(`${action} takes one brief: spec-brief ${action} <brief>`);
   const engine = await openEngine(run);
   const dryRun = flag(run.values, 'dry-run');
   const plan: Plan =
@@ -598,7 +769,8 @@ async function runTransition(run: Run, action: 'archive' | 'unarchive'): Promise
           date: text(run.values, 'date') ?? run.today(),
           allowDirty: flag(run.values, 'allow-dirty'),
           strict: run.strict,
-          noGit: flag(run.values, 'no-git'),
+          // No noGit: under --no-git the engine is opened without git, and a
+          // commit or a base beside it is refused with the line.
         })
       : engine.planUnarchive(reference, { strict: run.strict });
   const refused = plan.blocking.length > 0;
@@ -616,7 +788,7 @@ export async function main(argv: readonly string[] = process.argv.slice(2), io: 
   };
   let parsed: Parsed;
   try {
-    parsed = parse(argv);
+    parsed = parse(argv, io.cwd ?? process.cwd());
   } catch (error) {
     err((error as Error).message);
     return EXIT_ERROR;
@@ -636,16 +808,9 @@ export async function main(argv: readonly string[] = process.argv.slice(2), io: 
       // Asked for, the help is the answer; printed because no command was named, it is the error.
       return flag(values, 'help') ? EXIT_OK : EXIT_ERROR;
     }
-    const spec = COMMANDS.get(command) as CommandSpec;
-    const refusal = unread(command, spec, values);
-    if (refusal !== null) throw new UsageError(refusal);
     const asked = text(values, 'format') ?? 'pretty';
-    // Cast on the name, as in `parse`. The check below is what makes it true.
+    // Cast on the name, as in `parse`, which refused a format the command does not write.
     const format = asked as Format;
-    if (!spec.formats.includes(format)) {
-      err(`--format for ${command} is one of ${spec.formats.join(', ')}, not "${format}"`);
-      return EXIT_ERROR;
-    }
     // A file, or a name with nothing behind it, had the search for a
     // configuration go on from its parent: the run reported on a tree nobody
     // had named, and `new` wrote into it. A path that cannot be reached is

@@ -415,3 +415,98 @@ value that is not empty, and as unset when empty
 `supports-color` read it as off. Only the two spellings are off: Node reads
 every word it does not know as off, `FALSE` and `no` among them, and here
 each of those still forces colour on, as the family's reading has it.
+
+## Amended 2026-10-18: one value, and a wrong line beside `--help`
+
+The amendment of 2026-10-11 left two things as they were: an option given
+twice, read as its last, and `--help` and `--version`, which answered
+first. The family contract decides both
+([spec-core ADR-0005](https://github.com/DescentVTT/spec-core/blob/main/docs/adr/0005-the-family-contract.md),
+amended 2026-10-18), and this is how spec-brief reads it.
+
+Measured on 2026-10-18 through the launcher at cab7f8b (Windows 11, Node
+24.18.1), 620 command lines, each in a copy of a tree of its own: each of
+the 35 pairings of an option that takes a value with a command that reads
+it, given two values in either order and one value in two spellings; the 47
+pairings of a flag with a command that reads it, the flag given twice; and
+48 lines spec-brief refuses, alone and with `--help` or `--version` before
+or after them.
+
+- Each of the 35 read the later of two values: `--root nowhere --root .`
+  ran in `.`, `--config alt.json --config .spec-brief.json` read the
+  second, `new T --id 50 --id 51` wrote `51_t.md`. One value given twice
+  was taken once, and so was each flag.
+- An option the parser does not know, an option given no value or an empty
+  one, a value given to a flag, a command that is none and an argument a
+  command does not take, `init mydir` beside `--root mydir` among them,
+  were refused with `--help` or `--version` on the line. The other 40 lines
+  printed the help or the version, exit 0: the options a command does not
+  read and the two pairs, a `--format` the command does not write,
+  `--wave x`, `--pr 0`, `--depends-on ,`, `--date nope`, `--commit=-x`,
+  `--commit` beside `--no-git`, `init --briefs ../x`, `archive 1 2` and
+  two values among them.
+- `--help` beside `--version`, in either order and by either name, printed
+  the version.
+
+**An option that takes one value is given one.** Two values that read as
+two are refused, exit 2, before anything is opened, in one line that names
+both as they were written:
+
+    spec-brief: --root is given "nowhere" and ".", and takes one value; give one of the two
+
+Two values are compared as each is read: `--root` resolved from the
+directory the process runs in and `--config` from the root, as the run
+resolves them; `--briefs` and `--archive` as directories of the
+repository; `--wave` and `--pr` by the number their digits write;
+`--depends-on` by its ids, in the order the brief writes them; `--summary`
+trimmed, as the banner writes it. The rest are read as written, in their
+own case, which is how spec-brief reads them. The first option given two is
+the one named.
+
+- **A path is resolved, not followed.** A link and the directory it names
+  are two values, since the line is checked before the disk is read.
+- **A revision is read by git**, which is asked nothing for a line, so
+  `--commit HEAD` beside the hash it names is two values. "As each is
+  read" is met for every value the line alone can read; for a revision it
+  cannot be without a git process for every line, and two spellings of one
+  commit are refused rather than one of them left unread.
+- **No option here is a list each use adds to.** `--depends-on` holds its
+  list in one value, and is held to one value: `7,8` beside `8,7` is two,
+  since the brief writes its ids in their order.
+
+That retires the reading of 2026-10-11 that an option given twice is its
+last because an alias with a default and a line that overrides it rely on
+it: the line read the alias's value nowhere, and said nothing of it.
+
+**A wrong line is refused with `--help` or `--version` on it.** Every
+refusal the line alone decides is made where the line is read, before either
+is answered. The refusals of 2026-10-09 were made there already; those of
+2026-10-11 move there, and a format the command does not write with them;
+and so do the values a command checked as it ran, a number, a list, a date,
+a revision, `init`'s directories and a second brief, in the words they had.
+`--commit` or `--base` beside `--no-git` is refused there too, where the
+engine refused it once the configuration was read; the engine still refuses
+it, for a caller of the library. `--help` beside `--version` is refused, in
+either order and by either name, `-hv` among them:
+
+    spec-brief: --help is given beside --version, and one of the two answers would go unread; give one of the two
+
+Two kinds of refusal are left to the run, which `--help` and `--version`
+do not start. The contract does not decide them, and this keeps what was:
+
+- **What only the tree can refuse**: a `--root` that is not there or is a
+  file, a configuration that does not load, an id that is taken or holds the
+  configuration's separator, a type the configuration does not have, a brief
+  or a commit that is not there, `init` over a configuration. `--help` and
+  `--version` open nothing, as the amendment of 2026-10-09 has it, and a
+  refusal that reads the disk is not one of the line.
+- **A command that lacks what it takes**: `new` without a title, and
+  `archive` or `unarchive` without a brief. `new --help` is how a person
+  asks what to give it, and prints the help.
+
+A test holds each refusal of the line to `--help`, `-h`, `--version` and
+`-v`, before the line and after it, and each of the two kinds above to the
+help and the version.
+
+Each refusal is input refused that was accepted, a minor release
+([spec-core ADR-0009](https://github.com/DescentVTT/spec-core/blob/main/docs/adr/0009-versions-before-1-0.md)).
