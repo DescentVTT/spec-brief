@@ -896,6 +896,14 @@ describe('an option given two values, and a wrong line beside --help', () => {
     expect(files(root)).toEqual(before);
   });
 
+  it('has the run read each value the line was checked for', async () => {
+    // Checked where the line is read, a value is read again where the run uses it.
+    const root = repo('cli-read-after', { 'briefs/001_a.md': goodBrief({ affectedFiles: '[src/**]' }) });
+    expect((await run(root, ['archive', '1', '--dry-run', '--pr', '12', '--no-color'])).out).toContain('> Merged in pull request #12.\n');
+    expect((await run(root, ['archive', '1', '--dry-run', '--base', 'main', '--no-color'])).out).toContain(' is already in main, so the diff from their merge base is empty  scope-unmeasured\n');
+    expect((await run(root, ['archive', '1', '--dry-run', '--no-color'])).out).toContain('affectedFiles went unchecked: no commit or base was named');
+  });
+
   it('says in the help that two values are refused, and a wrong line beside --help', () => {
     expect(HELP).toContain(
       [

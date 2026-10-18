@@ -769,7 +769,8 @@ async function runTransition(run: Run, action: 'archive' | 'unarchive'): Promise
           date: text(run.values, 'date') ?? run.today(),
           allowDirty: flag(run.values, 'allow-dirty'),
           strict: run.strict,
-          noGit: flag(run.values, 'no-git'),
+          // No noGit: under --no-git the engine is opened without git, and a
+          // commit or a base beside it is refused with the line.
         })
       : engine.planUnarchive(reference, { strict: run.strict });
   const refused = plan.blocking.length > 0;
