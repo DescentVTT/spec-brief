@@ -222,7 +222,14 @@ without coverage. No other survivor was new. In the core two of 0.7.0's
 31 timed out, the anchor of `NOTE_START` and `!read.ok` held false in
 `src/glob.ts`; both survive the full sweep as they did, and the core sweep
 since it has the full sweep's clock, where it reads 99.34% over 5,289 with
-32 survivors (amended 2026-10-11, below).
+32 survivors (amended 2026-10-11, below). For 0.9.0 the sweep of 7aeea93
+(run 39126162567) read 99.31% over 7,375 and, for the core, 99.33% over
+5,357. The refusals of that release made 124 mutants and left one, the
+skip of a flag in `twice` (`src/cli.ts`), `token.value === undefined`
+made `false`: a flag taken in is read as nothing each time it is given,
+which refuses nothing either. It is equivalent, and said so beside the
+code. No other survivor is new against the sweep of e0e6251
+(run 39121573933), and the core reads as that sweep did.
 
 Reading them was a review again, and found what no test had:
 

@@ -11,7 +11,7 @@ release that can turn a run red. This is the family's policy, recorded in
 releases up to 0.2.7 came before it, and several of their patches changed
 what a run reports.
 
-## Unreleased
+## 0.9.0
 
 An option that takes one value and is given two is refused, exit 2, where
 the later was read and the earlier went unread. A line refused for what it
