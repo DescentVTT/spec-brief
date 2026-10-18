@@ -233,14 +233,6 @@ function asRead(option: string, value: string, root: string): string {
       return resolve(value);
     case 'config':
       return resolve(root, value);
-    case 'briefs':
-    case 'archive':
-      try {
-        return normalisePath(value);
-      } catch {
-        // Outside the repository: `directories` refuses it, by what it was given.
-        return value;
-      }
     case 'wave':
     case 'pr':
       return String(digits(value) ?? value);
@@ -248,6 +240,15 @@ function asRead(option: string, value: string, root: string): string {
       return JSON.stringify(idsOf(value));
     case 'summary':
       return value.trim();
+    case 'briefs':
+    case 'archive':
+      // Last: one outside the repository leaves the switch and is read as it
+      // was written, for `directories` to refuse by what it was given. A catch
+      // that returned it would have a mutant, its return taken out, that fell
+      // into the next case and read it the same, which no test can tell apart.
+      try {
+        return normalisePath(value);
+      } catch {}
   }
   // After the switch, for the reason `untrue` has.
   return value;
