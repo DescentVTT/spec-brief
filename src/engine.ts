@@ -385,15 +385,15 @@ export class BriefEngine {
    * list's shape, so an answer read without one is not to be kept.
    */
   inputs(): Inputs {
-    const directories = [...(this.reading?.reads.directories ?? [])];
-    if (this.reading?.whole !== true || directories.some(([, entries]) => entries === null)) return { keep: false, files: [], directories: [], git: null };
+    const reading = this.reading;
+    if (reading?.whole !== true || [...reading.reads.directories.values()].includes(null)) return { keep: false, files: [], directories: [], git: null };
     // Paths are unique, so no two compare equal.
     const byPath = (a: { readonly path: string }, b: { readonly path: string }): number => (a.path < b.path ? -1 : 1);
     return {
       keep: true,
-      files: [...this.reading.reads.files].map(([path, sha256]) => ({ path, sha256 })).sort(byPath),
+      files: [...reading.reads.files].map(([path, sha256]) => ({ path, sha256 })).sort(byPath),
       // The root is "." where a briefs directory is the root itself.
-      directories: directories.map(([path, entries]) => ({ path: path === '' ? '.' : path, entries: [...entries!].sort() })).sort(byPath),
+      directories: [...reading.reads.directories].map(([path, entries]) => ({ path: path === '' ? '.' : path, entries: [...entries!].sort() })).sort(byPath),
       git: null,
     };
   }
