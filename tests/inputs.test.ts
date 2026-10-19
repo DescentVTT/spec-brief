@@ -139,6 +139,8 @@ function briefs(name: string, config: Record<string, string> = { '.spec-brief.js
     'briefs/archive/002_b.md': goodBrief({ status: 'archived' }),
     'briefs/archive/README.md': 'Not a brief either.\n',
     'briefs/.gitkeep': '',
+    // Lower case after upper: NTFS lists names in neither case, which is not the order JavaScript sorts them in.
+    'briefs/notes.txt': '',
   });
   // Bytes no text keeps: a digest of the text decoded would not be theirs.
   writeFileSync(join(root, 'briefs', '001_a.md'), Buffer.concat([Buffer.from(goodBrief().replaceAll('\n', '\r\n')), Buffer.from([0xff, 0x0a])]));
@@ -161,7 +163,7 @@ describe('what list answers from', () => {
         { path: 'spec-brief.json', sha256: null },
       ],
       directories: [
-        { path: 'briefs', entries: ['.gitkeep', '001_a.md', '003_c.md', 'README.md'] },
+        { path: 'briefs', entries: ['.gitkeep', '001_a.md', '003_c.md', 'README.md', 'notes.txt'] },
         { path: 'briefs/archive', entries: ['002_b.md', 'README.md'] },
       ],
       git: null,

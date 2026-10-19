@@ -4,6 +4,7 @@ import { join } from 'node:path';
 
 import { afterAll, afterEach, describe, expect, it, vi } from 'vitest';
 
+import { BriefEngine } from '../src/engine.js';
 import { NodeFileSystem } from '../src/fs.js';
 import { tempDir, writeTree } from './helpers.js';
 
@@ -114,5 +115,18 @@ describe('a directory', () => {
     writeTree(root, { 'b.md': '', 'a.md': '', 'c/d.md': '', 'c.md': '' });
     disk.backwards = true;
     expect(await new NodeFileSystem(root).walk()).toEqual(['a.md', 'b.md', 'c.md', 'c/d.md']);
+  });
+
+  it('is named in what an answer was read from with its files sorted, whatever order they come in', async () => {
+    // A reader compares the files it lists with these, and no host is held
+    // to an order: NTFS and an overlay list them sorted, ext4 does not.
+    const root = dir('inputs-order');
+    writeTree(root, { '.spec-brief.json': '{}', 'briefs/001_a.md': '', 'briefs/002_b.md': '', 'briefs/archive/003_c.md': '' });
+    disk.backwards = true;
+    const engine = await BriefEngine.open({ cwd: root, git: null, needsGit: false });
+    expect(engine.inputs().directories).toEqual([
+      { path: 'briefs', entries: ['001_a.md', '002_b.md'] },
+      { path: 'briefs/archive', entries: ['003_c.md'] },
+    ]);
   });
 });
