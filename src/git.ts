@@ -31,6 +31,11 @@ export interface FileChange {
 export interface Git {
   /** The commit a revision names, or `null` when it names none. */
   commit(revision: string): Promise<CommitInfo | null>;
+  /**
+   * The hash of the commit each revision names, or `null` for one that names
+   * none, asked once. A git without it is one that cannot say.
+   */
+  commits?(revisions: readonly string[]): Promise<(string | null)[]>;
   mergeBase(a: string, b: string): Promise<string | null>;
   /** Files changed from `from` to `to`; with no `from`, the files `to` changed against its first parent. */
   changes(from: string | null, to: string): Promise<FileChange[]>;
@@ -59,15 +64,19 @@ interface Run {
   readonly stderr: string;
 }
 
-function run(cwd: string, args: readonly string[]): Promise<Run> {
+/** A git command, handed `input` on its standard input, and an end of it there either way. */
+function run(cwd: string, args: readonly string[], input?: string): Promise<Run> {
   return new Promise((done) => {
-    execFile(
+    const child = execFile(
       'git',
       ['-c', 'core.quotepath=off', ...args],
       // windowsHide keeps a console window from flashing up on Windows; no other host has one to hide.
       { cwd, encoding: 'utf8', maxBuffer: 256 * 1024 * 1024, windowsHide: true },
       (error, stdout, stderr) => done({ ok: error === null, stdout, stderr }),
     );
+    // A command that reads its input reads to the end of it, which only this
+    // gives it; the others read none.
+    child.stdin!.end(input);
   });
 }
 
@@ -144,6 +153,26 @@ export class NodeGit implements Git {
     // Cast on the name, as in `parseNumstat`.
     const [author, date] = fields as [string, string];
     return { sha: hash, author, date };
+  }
+
+  /**
+   * One process for every revision: `cat-file --batch-check` reads one a
+   * line, as `rev-parse --verify` reads one, and answers each with its
+   * object's name, or with the revision and why it names none.
+   */
+  async commits(revisions: readonly string[]): Promise<(string | null)[]> {
+    // A line break would make one revision two questions, and its answer
+    // another's. On a line of its own a revision is never read as an option,
+    // so one that starts with "-" is asked, and names none.
+    if (revisions.some((revision) => revision.includes('\n'))) return revisions.map(() => null);
+    const asked = revisions.map((revision) => `${revision}^{commit}\n`).join('');
+    // Outside a repository git answers nothing, and each line is empty.
+    const lines = (await run(this.cwd, ['cat-file', '--batch-check=%(objectname)'], asked)).stdout.split('\n');
+    return revisions.map((_, index) => {
+      const line = lines[index] ?? '';
+      // An object's name holds no space; the answer for a revision that names none does.
+      return line === '' || line.includes(' ') ? null : line;
+    });
   }
 
   async mergeBase(a: string, b: string): Promise<string | null> {

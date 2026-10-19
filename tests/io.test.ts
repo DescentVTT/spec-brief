@@ -166,6 +166,11 @@ describe('real git', () => {
     // message alone; printed whole by a caller, it says which kind it is.
     await expect(g.commit(' ')).rejects.toBeInstanceOf(GitError);
     expect(String(new GitError('no'))).toBe('GitError: no');
+    // Every revision asked at once: the commit each names, or none.
+    expect(await g.commits(['HEAD', second, second.slice(0, 7), 'HEAD~1', 'main', 'nothing', '-x', 'HEAD..HEAD~1', 'HEAD '])).toEqual([second, second, second, first, second, null, null, null, null]);
+    // A line break would be two questions, and one answer given for another.
+    expect(await g.commits(['HEAD', `HEAD${String.fromCharCode(10)}HEAD~1`])).toEqual([null, null]);
+    expect(await g.commits([])).toEqual([]);
     expect(await g.mergeBase('HEAD', first)).toBe(first);
     expect(await g.mergeBase('HEAD', 'nothing')).toBeNull();
     expect((await g.changes(null, second)).map((c) => c.path).sort()).toEqual(['a.txt', 'c.txt']);
@@ -210,6 +215,8 @@ describe('real git', () => {
     await expect(plain.dirty()).rejects.toBeInstanceOf(GitError);
     await expect(plain.files()).rejects.toBeInstanceOf(GitError);
     await expect(plain.dirty()).rejects.toThrow(/^git status failed: fatal: not a git repository[^]*\S$/);
+    // Where git answers nothing, it names no commit.
+    expect(await plain.commits(['HEAD', 'main'])).toEqual([null, null]);
     await expect(plain.files()).rejects.toThrow(/^git ls-files failed: fatal: not a git repository[^]*\S$/);
   });
 

@@ -3,8 +3,8 @@ import { join } from 'node:path';
 
 import { afterAll, describe, expect, it } from 'vitest';
 
-import { EXIT_ERROR, EXIT_FAILED, EXIT_OK, HELP, main, parse, UsageError } from '../src/cli.js';
-import { commitAll, goodBrief, initRepo, Sink, tempDir, writeTree } from './helpers.js';
+import { EXIT_ERROR, EXIT_FAILED, EXIT_OK, HELP, main, onVolume, parse, UsageError } from '../src/cli.js';
+import { commitAll, goodBrief, head, initRepo, Sink, tempDir, writeTree } from './helpers.js';
 
 const made: string[] = [];
 function dir(name: string): string {
@@ -741,9 +741,9 @@ describe('an option given two values, and a wrong line beside --help', () => {
     expect(await run(root, ['new', 'T', '--wave', 'v1', '--wave', 'v2'])).toEqual(twice('wave', 'v1', 'v2'));
     expect(await run(root, ['archive', '1', '--dry-run', '--pr', '1st', '--pr', '2nd'])).toEqual(twice('pr', '1st', '2nd'));
     expect(await run(dir('cli-two-outside'), ['init', '--briefs', '../a', '--briefs', '../b'])).toEqual(twice('briefs', '../a', '../b'));
-    // A list is read by its ids, in their order: the brief scaffolded writes them so.
+    // A list is read by the ids it names: one fewer, or another, is another list.
     expect(await run(root, ['new', 'T', '--depends-on', '1,2', '--depends-on', '12'])).toEqual(twice('depends-on', '1,2', '12'));
-    expect(await run(root, ['new', 'T', '--depends-on', '1,2', '--depends-on', '2,1'])).toEqual(twice('depends-on', '1,2', '2,1'));
+    expect(await run(root, ['new', 'T', '--depends-on', '1,2', '--depends-on', '1'])).toEqual(twice('depends-on', '1,2', '1'));
     expect(files(root)).toEqual(before);
   });
 
@@ -902,6 +902,81 @@ describe('an option given two values, and a wrong line beside --help', () => {
     expect((await run(root, ['archive', '1', '--dry-run', '--pr', '12', '--no-color'])).out).toContain('> Merged in pull request #12.\n');
     expect((await run(root, ['archive', '1', '--dry-run', '--base', 'main', '--no-color'])).out).toContain(' is already in main, so the diff from their merge base is empty  scope-unmeasured\n');
     expect((await run(root, ['archive', '1', '--dry-run', '--no-color'])).out).toContain('affectedFiles went unchecked: no commit or base was named');
+  });
+
+  it('folds the case of a drive letter on Windows, and of nothing else, nor anywhere else', () => {
+    // A path resolved on Windows starts with its drive letter or a backslash.
+    expect(onVolume('c:\\x\\Y', 'win32')).toBe('C:\\x\\Y');
+    expect(onVolume('C:\\x', 'win32')).toBe('C:\\x');
+    expect(onVolume('\\\\server\\share', 'win32')).toBe('\\\\server\\share');
+    expect(onVolume('c:\\x', 'linux')).toBe('c:\\x');
+    expect(onVolume('/c/x', 'darwin')).toBe('/c/x');
+  });
+
+  // On Windows alone: a drive letter is no part of a path anywhere else.
+  it.skipIf(process.platform !== 'win32')('takes a root and a configuration with a drive letter in either case as one, and the rest of a path as it resolves', async () => {
+    // Each was refused as two directories (spec-core ADR-0005, amended 2026-10-19).
+    const root = plain('cli-drive', { 'briefs/001_a.md': goodBrief() });
+    const upper = `${root.charAt(0).toUpperCase()}${root.slice(1)}`;
+    const lower = `${root.charAt(0).toLowerCase()}${root.slice(1)}`;
+    const alone = await run(root, ['list', '--root', upper]);
+    expect(alone.code).toBe(EXIT_OK);
+    expect(await run(root, ['list', '--root', upper, '--root', lower])).toEqual(alone);
+    expect(await run(root, ['list', '--root', lower, '--root', upper])).toEqual(alone);
+    expect(await run(root, ['list', '--config', join(lower, '.spec-brief.json'), '--config', join(upper, '.spec-brief.json')])).toEqual(alone);
+    // Whether two names in other cases are one directory is the disk's to say, not the line's.
+    const shouted = `${upper.slice(0, 3)}${upper.slice(3).toUpperCase()}`;
+    expect(await run(root, ['list', '--root', upper, '--root', shouted])).toEqual(twice('root', upper, shouted));
+  });
+
+  it('asks git whether two revisions written two ways name one commit, and takes them as one where they do', async () => {
+    // `--commit HEAD` beside the hash it names was refused as two values.
+    const root = repo('cli-revisions', { 'briefs/001_a.md': goodBrief() });
+    writeTree(root, { 'x.txt': 'x' });
+    commitAll(root, 'two');
+    const tip = head(root);
+    const archive = ['archive', '1', '--dry-run', '--no-color'];
+    const alone = await run(root, [...archive, '--commit', 'HEAD']);
+    expect(alone.code).toBe(EXIT_OK);
+    for (const [first, second] of [['HEAD', tip], [tip, 'HEAD'], ['HEAD', tip.slice(0, 7)], ['main', 'HEAD'], ['HEAD', 'HEAD~0']]) {
+      expect(await run(root, [...archive, '--commit', first!, '--commit', second!]), `${first} ${second}`).toEqual(alone);
+    }
+    expect(await run(root, [...archive, '--commit', 'HEAD', '--commit', tip, '--commit', 'HEAD'])).toEqual(alone);
+    // Two commits, and a revision git cannot name, are two values, as they were.
+    expect(await run(root, [...archive, '--commit', 'HEAD', '--commit', 'HEAD~1'])).toEqual(twice('commit', 'HEAD', 'HEAD~1'));
+    expect(await run(root, [...archive, '--commit', 'HEAD', '--commit', tip, '--commit', 'HEAD~1'])).toEqual(twice('commit', 'HEAD', 'HEAD~1'));
+    expect(await run(root, [...archive, '--commit', 'HEAD', '--commit', 'nothing'])).toEqual(twice('commit', 'HEAD', 'nothing'));
+    expect(await run(root, [...archive, '--commit', 'nothing', '--commit', 'HEAD'])).toEqual(twice('commit', 'nothing', 'HEAD'));
+    expect(await run(root, [...archive, '--commit', 'nothing', '--commit', 'nowhere'])).toEqual(twice('commit', 'nothing', 'nowhere'));
+    expect(await run(root, [...archive, '--commit=-x', '--commit', 'HEAD'])).toEqual(twice('commit', '-x', 'HEAD'));
+    // A base the same way, and the first option of the two that names two commits is the one named.
+    const based = await run(root, [...archive, '--base', 'main']);
+    expect(await run(root, [...archive, '--base', 'main', '--base', tip])).toEqual(based);
+    expect(await run(root, [...archive, '--base', 'main', '--base', 'HEAD~1'])).toEqual(twice('base', 'main', 'HEAD~1'));
+    expect(await run(root, [...archive, '--base', 'main', '--commit', 'HEAD', '--commit', tip, '--base', 'HEAD~1'])).toEqual(twice('base', 'main', 'HEAD~1'));
+    expect(await run(root, [...archive, '--commit', 'HEAD', '--commit', 'HEAD~1', '--base', 'main', '--base', 'HEAD~1'])).toEqual(twice('commit', 'HEAD', 'HEAD~1'));
+    // --help and --version start no run and --no-git asks git nothing, so the line reads them as two.
+    for (const asked of ['--help', '-v', '--no-git']) {
+      expect(await run(root, [...archive, '--commit', 'HEAD', '--commit', tip, asked]), asked).toEqual(twice('commit', 'HEAD', tip));
+    }
+  });
+
+  it('reads --depends-on as the set of ids it names, each as an id is matched to a brief', async () => {
+    // `7,8` beside `8,7` was refused as two values; the brief writes the later.
+    for (const [first, second, written] of [
+      ['7,8', '8,7', '["8", "7"]'],
+      ['7', '007', '["007"]'],
+      ['7,8', '7,8,7', '["7", "8", "7"]'],
+      ['7, 8', '008,7', '["008", "7"]'],
+    ]) {
+      const root = plain(`cli-ids-${first!.length}`, { 'briefs/001_a.md': goodBrief() });
+      expect(await run(root, ['new', 'T', '--depends-on', first!, '--depends-on', second!]), `${first} ${second}`).toEqual({ code: EXIT_OK, out: 'wrote briefs/002_t.md\n', err: '' });
+      expect(readFileSync(join(root, 'briefs', '002_t.md'), 'utf8')).toContain(`\ndependsOn: ${written}\n`);
+    }
+    const root = plain('cli-ids-other', { 'briefs/001_a.md': goodBrief() });
+    expect(await run(root, ['new', 'T', '--depends-on', '7,8', '--depends-on', '7'])).toEqual(twice('depends-on', '7,8', '7'));
+    expect(await run(root, ['new', 'T', '--depends-on', '7', '--depends-on', '70'])).toEqual(twice('depends-on', '7', '70'));
+    expect(await run(root, ['new', 'T', '--depends-on', 'a7', '--depends-on', '7'])).toEqual(twice('depends-on', 'a7', '7'));
   });
 
   it('says in the help that two values are refused, and a wrong line beside --help', () => {
