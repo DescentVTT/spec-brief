@@ -70,7 +70,10 @@ changes:
         { "path": "briefs/042_x.md", "sha256": "<hex>" },
         { "path": "spec-brief.json", "sha256": null }
       ],
-      "directories": [{ "path": "briefs", "entries": ["042_x.md", "README.md"] }],
+      "directories": [
+        { "path": "briefs", "entries": ["042_x.md", "README.md"] },
+        { "path": "briefs/archive", "entries": null }
+      ],
       "git": null
     }
 
@@ -82,7 +85,11 @@ changes:
   names of the regular files directly in it as `readdir` gives their types,
   sorted as JavaScript sorts strings. A link and a directory are no file to
   `list`, which reads neither. A file that is no brief is named though it
-  is not read, since one renamed would be a brief.
+  is not read, since one renamed would be a brief. A directory looked for
+  and not found, with nothing or a file under its name, is named with
+  `null`: there must still be no directory there, as a file named with a
+  `null` digest must still not be there. An archive not yet made is one,
+  and one made with a brief in it changes what `list --archived` answers.
 - **`tool`**: the version that read them.
 - **`git`**: `null`. Measured through the launcher on 2026-10-19 under a
   recorder of every call to `node:fs` and every process started, 0.9.0's
@@ -110,9 +117,6 @@ another tool give the answer again after that input changed:
   which no list here names; without git, the configuration was looked for
   in every directory above the root as well. `--no-config --no-git` asks
   neither, and its answer is kept.
-- **A directory listed that was not there**, an archive not yet made: the
-  shape has no way to say a directory must still not be there, and one made
-  with a brief in it changes `list --archived`.
 - **An engine a caller of the library made, or opened over a filesystem of
   its own**, which tells it nothing of what was read; and **one asked for
   the files git or a walk lists, or for its plugins**, which no list here
@@ -126,8 +130,9 @@ spec-brief, and compares the record with the list both ways: a file read
 or looked for and not listed with what it holds fails it, a directory
 listed and not named with its files fails it, a process started fails it,
 and so does a path listed and not read. It runs over a configuration of
-each name, one named, none with `--no-config --no-git`, and briefs at the
-root, and the cases above are each held to `keep: false`.
+each name, one named, none with `--no-config --no-git`, briefs at the
+root, and an archive that is not there or is a file, which is held to
+`entries: null`; the cases above are each held to `keep: false`.
 
 No other command carries `inputs`. `lint`, `matrix` and `schedule` read the
 files git lists, and `lint` the plugins a configuration names, whose code a

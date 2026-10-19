@@ -139,16 +139,19 @@ Live briefs with their status, in the word the brief writes (`封存` where the 
     { "path": "briefs/001_a.md", "sha256": "5ee9361a..." },
     { "path": "spec-brief.json", "sha256": null }
   ],
-  "directories": [{ "path": "briefs", "entries": ["001_a.md", "README.md"] }],
+  "directories": [
+    { "path": "briefs", "entries": ["001_a.md", "README.md"] },
+    { "path": "briefs/archive", "entries": null }
+  ],
   "git": null
 }
 ```
 
 - **`files`**: each file read, with the SHA-256 of its bytes in hex, and each name a configuration was looked for under and was not there, with `null`: it must still not be there.
-- **`directories`**: each directory the briefs were listed from, with the names of the regular files directly in it, sorted as JavaScript sorts strings. A link and a directory are no file here, and a file that is no brief is named though it is not read, since one renamed would be.
+- **`directories`**: each directory the briefs were listed from, with the names of the regular files directly in it, sorted as JavaScript sorts strings. A link and a directory are no file here, and a file that is no brief is named though it is not read, since one renamed would be. A directory looked for and not found, as an archive not yet made, has `null`: there must still be no directory there.
 - **`tool`**: the version that read them. **`git`**: `null`, since `list` reads nothing of git, and asks it nothing where a configuration file names the root.
 - **Paths** are POSIX, from the root, which wherever `keep` is `true` is the directory the run started in.
-- **`keep` is `false`**, and the lists are empty, wherever spec-brief cannot name every input: a run that starts below its configuration's directory, or names a configuration in another; one with no configuration file, where git or the search above the root finds the root; and one whose archive directory is not there, which the lists have no way to name as absent.
+- **`keep` is `false`**, and the lists are empty, wherever spec-brief cannot name every input: a run that starts below its configuration's directory, or names a configuration in another, and one with no configuration file, where git or the search above the root finds the root.
 
 ### `spec-brief matrix`
 

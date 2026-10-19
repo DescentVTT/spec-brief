@@ -82,8 +82,9 @@ export interface OpenOptions {
  * Everything an answer was read from, for a tool that would give it again
  * without starting spec-brief (ADR-0002, amended 2026-10-19). Each file is
  * named with the SHA-256 of its bytes, or `null` where it was looked for and
- * was not there; each directory with the names of the files in it, sorted.
- * Paths are from the root, which wherever `keep` is true is the directory
+ * was not there; each directory with the names of the files in it, sorted,
+ * or `null` where there was no directory to list. Each `null` is a path
+ * that must still not be there. Paths are from the root, which wherever `keep` is true is the directory
  * the run started in. `git` is `null`, since no answer named here asks git
  * anything. `keep` is `false`, and the lists are empty, wherever that cannot
  * be named whole.
@@ -91,7 +92,7 @@ export interface OpenOptions {
 export interface Inputs {
   readonly keep: boolean;
   readonly files: readonly { readonly path: string; readonly sha256: string | null }[];
-  readonly directories: readonly { readonly path: string; readonly entries: readonly string[] }[];
+  readonly directories: readonly { readonly path: string; readonly entries: readonly string[] | null }[];
   readonly git: null;
 }
 
@@ -381,19 +382,22 @@ export class BriefEngine {
   /**
    * Every input of an answer made of the briefs and the configuration alone,
    * as `list` gives one, read since the engine was opened (ADR-0002, amended
-   * 2026-10-19). A directory that was not there cannot be named in the
-   * list's shape, so an answer read without one is not to be kept.
+   * 2026-10-19).
    */
   inputs(): Inputs {
     const reading = this.reading;
-    if (reading?.whole !== true || [...reading.reads.directories.values()].includes(null)) return { keep: false, files: [], directories: [], git: null };
+    if (reading?.whole !== true) return { keep: false, files: [], directories: [], git: null };
     // Paths are unique, so no two compare equal.
     const byPath = (a: { readonly path: string }, b: { readonly path: string }): number => (a.path < b.path ? -1 : 1);
     return {
       keep: true,
       files: [...reading.reads.files].map(([path, sha256]) => ({ path, sha256 })).sort(byPath),
-      // The root is "." where a briefs directory is the root itself.
-      directories: [...reading.reads.directories].map(([path, entries]) => ({ path: path === '' ? '.' : path, entries: [...entries!].sort() })).sort(byPath),
+      // The root is "." where a briefs directory is the root itself. One that
+      // was not there, an archive not yet made, is named with no entries: one
+      // made with a brief in it changes what `list --archived` answers.
+      directories: [...reading.reads.directories]
+        .map(([path, entries]) => ({ path: path === '' ? '.' : path, entries: entries === null ? null : [...entries].sort() }))
+        .sort(byPath),
       git: null,
     };
   }

@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -66,7 +66,7 @@ interface Listed {
   readonly keep: boolean;
   readonly tool: string;
   readonly files: readonly { readonly path: string; readonly sha256: string | null }[];
-  readonly directories: readonly { readonly path: string; readonly entries: readonly string[] }[];
+  readonly directories: readonly { readonly path: string; readonly entries: readonly string[] | null }[];
   readonly git: null;
 }
 
@@ -88,12 +88,14 @@ async function list(cwd: string, args: readonly string[] = []): Promise<{ readon
 
 const digest = (path: string): string | null => (existsSync(path) ? createHash('sha256').update(readFileSync(path)).digest('hex') : null);
 
-/** The files directly in a directory, as a reader that checks the list would list them. */
-const filesIn = (path: string): string[] =>
-  readdirSync(path, { withFileTypes: true })
-    .filter((entry) => entry.isFile())
-    .map((entry) => entry.name)
-    .sort();
+/** The files directly in a directory, as a reader that checks the list would list them, or `null` where there is no directory. */
+const filesIn = (path: string): string[] | null =>
+  existsSync(path) && statSync(path).isDirectory()
+    ? readdirSync(path, { withFileTypes: true })
+        .filter((entry) => entry.isFile())
+        .map((entry) => entry.name)
+        .sort()
+    : null;
 
 /**
  * Holds a list that may be kept to the calls: each file read, and each name
@@ -231,10 +233,29 @@ describe('what list answers from', () => {
     expect((await list(bare, ['--no-config'])).inputs).toEqual(none);
     // Without git, a configuration not found was looked for above the root as well.
     expect((await list(bare, ['--no-git'])).inputs).toEqual(none);
-    // An archive that is not there is a directory the list has no way to name as not there.
+  });
+
+  it('names a directory it looked for and did not find with no entries, which must still not be there', async () => {
+    // An archive not yet made: one made with a brief in it changes what
+    // `list --archived` answers, so an answer that left it off would be given
+    // again after it was made.
     const unarchived = dir('inputs-no-archive');
     writeTree(unarchived, { '.spec-brief.json': '{}\n', 'briefs/001_a.md': goodBrief() });
-    expect((await list(unarchived, ['--no-git'])).inputs).toEqual(none);
+    const absent = await list(unarchived, ['--no-git']);
+    heldTo(unarchived, absent.inputs, absent.calls);
+    expect(absent.inputs.directories).toEqual([
+      { path: 'briefs', entries: ['001_a.md'] },
+      { path: 'briefs/archive', entries: null },
+    ]);
+    // A file where the archive would be is no directory to list either.
+    const filed = dir('inputs-archive-file');
+    writeTree(filed, { '.spec-brief.json': JSON.stringify({ archive: 'done' }), 'briefs/001_a.md': goodBrief(), done: 'not a directory\n' });
+    const file = await list(filed, ['--no-git']);
+    heldTo(filed, file.inputs, file.calls);
+    expect(file.inputs.directories).toEqual([
+      { path: 'briefs', entries: ['001_a.md'] },
+      { path: 'done', entries: null },
+    ]);
   });
 });
 
