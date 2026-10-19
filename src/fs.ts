@@ -9,7 +9,7 @@
  * exactly the operation that matters.
  */
 
-import { randomBytes } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 import { mkdir, readdir, readFile, realpath, rename, rm, stat, writeFile } from 'node:fs/promises';
 import { dirname, join, relative, resolve, sep } from 'node:path';
 
@@ -27,6 +27,19 @@ export interface FileSystem {
   /** Every file beneath the root, as sorted repository-relative paths, skipping {@link IGNORED_DIRECTORIES}. */
   walk(): Promise<string[]>;
   exists(path: string): Promise<boolean>;
+}
+
+/**
+ * What a run read from the disk, by repository-relative path: each file with
+ * the SHA-256 of its bytes, or `null` where it was looked for and was not
+ * there, and each directory with the names of the files it listed, or
+ * `null` where there was none. An answer that names every input it was read
+ * from is one another tool may give again without starting this one
+ * (ADR-0002, amended 2026-10-19).
+ */
+export interface Reads {
+  readonly files: Map<string, string | null>;
+  readonly directories: Map<string, readonly string[] | null>;
 }
 
 /**
@@ -68,9 +81,12 @@ async function pause(ms: number): Promise<void> {
 
 export class NodeFileSystem implements FileSystem {
   readonly root: string;
+  private readonly reads: Reads | undefined;
 
-  constructor(root: string) {
+  /** `reads`, where it is given, is told every file read and every directory listed. */
+  constructor(root: string, reads?: Reads) {
     this.root = resolve(root);
+    this.reads = reads;
   }
 
   private host(path: string): string {
@@ -78,12 +94,18 @@ export class NodeFileSystem implements FileSystem {
   }
 
   async read(path: string): Promise<string | null> {
+    let bytes: Buffer;
     try {
-      return await readFile(this.host(path), 'utf8');
+      bytes = await readFile(this.host(path));
     } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null;
-      throw error;
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+      this.reads?.files.set(repoPath(path), null);
+      return null;
     }
+    // The digest is of the bytes the text is decoded from, so that nothing
+    // written between a read and a digest of it can go unseen.
+    this.reads?.files.set(repoPath(path), createHash('sha256').update(bytes).digest('hex'));
+    return bytes.toString('utf8');
   }
 
   async write(path: string, content: string): Promise<void> {
@@ -121,10 +143,15 @@ export class NodeFileSystem implements FileSystem {
   async list(directory: string): Promise<string[] | null> {
     try {
       const entries = await readdir(this.host(directory), { withFileTypes: true });
-      return entries.filter((e) => e.isFile()).map((e) => e.name);
+      const names = entries.filter((e) => e.isFile()).map((e) => e.name);
+      this.reads?.directories.set(repoPath(directory), names);
+      return names;
     } catch (error) {
       const code = (error as NodeJS.ErrnoException).code;
-      if (code === 'ENOENT' || code === 'ENOTDIR') return null;
+      if (code === 'ENOENT' || code === 'ENOTDIR') {
+        this.reads?.directories.set(repoPath(directory), null);
+        return null;
+      }
       // A directory that may not be read must not read as "no briefs".
       throw error;
     }

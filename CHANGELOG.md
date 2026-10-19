@@ -11,6 +11,42 @@ release that can turn a run red. This is the family's policy, recorded in
 releases up to 0.2.7 came before it, and several of their patches changed
 what a run reports.
 
+## Unreleased
+
+`list --format json` names what its answer was read from, so that another
+tool can give the answer again without starting spec-brief. A
+configuration that is not a file is refused, exit 2, where a named pipe
+under its name was read without end.
+
+### Added
+
+- **`list --format json` names its inputs**, in a field `inputs`: each
+  file the answer was read from, with the SHA-256 of its bytes; each name a
+  configuration was looked for under and was not there, with `null`; each
+  directory the briefs were listed from, with the files in it; and the
+  version that read them. `keep` is `false`, and nothing is listed,
+  wherever that cannot be named whole: a run that starts below its
+  configuration's directory, one with no configuration file, and one whose
+  archive directory is not there
+  ([`spec-brief list`](README.md#spec-brief-list); ADR-0002, amended
+  2026-10-19). `schemaVersion` stays 2, since a field is added and none
+  changes. `list` asks git nothing where a configuration file names the
+  root, which is a process fewer.
+
+### Changed
+
+- **A configuration that is not a file is refused.** A named pipe at
+  `.spec-brief.json` or `spec-brief.json`, or named by `--config`, was read
+  without end by every command; a socket ended the run on `ENXIO` and a
+  stack, and `--config /dev/zero` on `RangeError`. Each is now exit 2 with
+  one line, `is neither a file nor a directory, not a configuration file`,
+  before it is opened, as a directory was already. A link is read as what
+  it names ([An input that names nothing](README.md#an-input-that-names-nothing);
+  ADR-0003, amended 2026-10-19). Upgrading: nothing to change for a
+  configuration that is a file; `--config <(...)`, which a shell hands as a
+  pipe, ran in `/dev/fd` and found no briefs, and now says what it was
+  handed.
+
 ## 0.9.0
 
 An option that takes one value and is given two is refused, exit 2, where

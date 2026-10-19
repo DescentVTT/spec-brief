@@ -611,12 +611,14 @@ function useColor(values: Values, io: CliIO): boolean {
   return (io.stdout ?? process.stdout).isTTY === true;
 }
 
-async function openEngine(run: Run): Promise<BriefEngine> {
+/** The engine for a run, which asks git nothing where `needsGit` is false and a configuration file names the root. */
+async function openEngine(run: Run, needsGit = true): Promise<BriefEngine> {
   return BriefEngine.open({
     cwd: text(run.values, 'root') ?? run.cwd,
     config: text(run.values, 'config'),
     ...(flag(run.values, 'no-git') ? { git: null } : {}),
     noConfig: flag(run.values, 'no-config'),
+    needsGit,
   });
 }
 
@@ -692,7 +694,9 @@ async function runLint(run: Run): Promise<number> {
 }
 
 async function runList(run: Run): Promise<number> {
-  const engine = await openEngine(run);
+  // Nothing `list` answers is read from git, so git is asked nothing where
+  // the root is a configuration file's, and the answer can say so.
+  const engine = await openEngine(run, false);
   engine.requireBriefs();
   const briefs = flag(run.values, 'archived') ? engine.corpus.briefs : engine.corpus.live;
   const ready = new Set(engine.ready());
@@ -700,11 +704,15 @@ async function runList(run: Run): Promise<number> {
     .map((brief) => ({ brief, ready: ready.has(brief), waitingOn: engine.waitingOn(brief) }))
     .filter((row) => !flag(run.values, 'ready') || row.ready);
   if (run.format === 'json') {
+    const { keep, ...read } = engine.inputs();
     run.out(
       jsonDocument('list', run.version, {
         ok: true,
         briefs: rows.map((r) => briefJson(r.brief, { ready: r.ready, waitingOn: r.waitingOn })),
         sections: sectionsJson(engine.config),
+        // What the answer was read from, for a tool that would give it again
+        // without starting this one, and the version that read it.
+        inputs: { keep, tool: run.version, ...read },
       }),
     );
   } else {
