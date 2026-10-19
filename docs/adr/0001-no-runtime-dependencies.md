@@ -510,3 +510,64 @@ help and the version.
 
 Each refusal is input refused that was accepted, a minor release
 ([spec-core ADR-0009](https://github.com/DescentVTT/spec-core/blob/main/docs/adr/0009-versions-before-1-0.md)).
+
+## Amended 2026-10-19: a drive letter, a revision and a set of ids
+
+The amendment of 2026-10-18 compared two values of one option as each is
+read, and left three to be read by the line where the run reads them
+otherwise. Measured on 2026-10-19 through 0.9.0's launcher (Windows 11,
+Node 24.18.1), in a repository of its own with two commits:
+
+- `list --root C:\x --root c:\x`, in either order, and two `--config`
+  values whose drive letters differ in case, were refused as two values,
+  where `list --root c:\x` alone runs as `list --root C:\x` does: Node's
+  `path.resolve` keeps the case a drive letter is written in. So was
+  `--root C:\x` beside `--root c:\X`.
+- `archive 1 --commit HEAD` beside the hash HEAD names, in either order,
+  beside its short hash, and beside `main`, and `--base main` beside the
+  hash `main` is at, were refused as two values; so, with `--help` or
+  `--no-git` on the line, was the first.
+- `new T --depends-on 7,8 --depends-on 8,7`, `--depends-on 7 --depends-on
+  007` and `--depends-on 7,8 --depends-on 7,8,7` were refused as two
+  values, where `--depends-on 7,7` alone scaffolds a brief that depends on
+  `7` twice, and `007` names the brief `7` names.
+
+**A drive letter names its volume in either case**
+([spec-core ADR-0005](https://github.com/DescentVTT/spec-core/blob/main/docs/adr/0005-the-family-contract.md),
+amended 2026-10-19). On Windows a resolved path starts with its drive
+letter or a backslash, and that first character is folded before two
+values of `--root`, or of `--config`, are compared. The rest is compared as
+it resolves, so `C:\x` beside `C:\X` is still two: whether they are one
+directory is the disk's to say. A path written `\\?\c:\x` keeps its letter
+as written, and no other host has a drive letter.
+
+**A revision written two ways is asked of git, once, by the run.** Where
+two values of `--commit`, or of `--base`, differ as written, the line
+keeps both, and `archive` asks the git it reads revisions with, once the
+repository is open, what commit each names: one `git cat-file
+--batch-check` for every such value of both options, each on a line as
+`<revision>^{commit}`, which git resolves as `rev-parse --verify`, the
+run's own reading, resolves it. Two that name one commit are one value,
+and the run reads the later. Two that name two commits, one git cannot
+name, a root with no repository, and a value with a line break in it,
+which would be two questions, are refused as before, in the same line.
+`--help` and `--version` start no run and `--no-git` asks git nothing, so
+beside any of the three the line refuses the two, as it did. A line the
+line itself refuses for another option given two values is refused for
+that one first, since it is read before git is asked. That retires the
+reading of 2026-10-18 that two spellings of one commit are refused rather
+than one of them left unread: where git says they are one, neither is.
+
+**`--depends-on` is read as the set of ids it names**, each as a
+dependency is matched to a brief: an id written in digits by the number
+they write, so `7` and `007` are one, and any other as written. Order and
+repetition make no second value, and the brief is scaffolded with the
+later as it was written. That retires the reading of 2026-10-18 that `7,8`
+beside `8,7` is two because the brief writes its ids in their order: both
+name the same briefs, and the order the brief writes is the one read.
+
+Nothing that ran is refused, so this is a patch
+([spec-core ADR-0009](https://github.com/DescentVTT/spec-core/blob/main/docs/adr/0009-versions-before-1-0.md)).
+One refusal changes its words: `--commit HEAD --commit=-x` is refused as
+`"-x" is not a revision`, which the line checks of the value the run
+reads, where it was refused as two values.

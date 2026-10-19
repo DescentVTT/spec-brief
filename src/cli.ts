@@ -15,6 +15,7 @@ import { TransactionError, ConflictError } from './apply.js';
 import type { Plan } from './archive.js';
 import { reported } from './collisions.js';
 import { CONFIG_FILES, ConfigError, initialConfig } from './config.js';
+import { idKey } from './corpus.js';
 import { BriefEngine, EngineError, isDate, today } from './engine.js';
 import { NodeFileSystem } from './fs.js';
 import { GitError } from './git.js';
@@ -220,24 +221,38 @@ function unread(command: string, spec: CommandSpec, values: Values): string | nu
 }
 
 /**
+ * A resolved path as two values of one option compare. On Windows a drive
+ * letter names its volume in either case, and a path resolved there starts
+ * with its drive letter or a backslash, so its first character is folded;
+ * the rest is compared as resolved (spec-core ADR-0005, amended 2026-10-19).
+ * A path written `\\?\c:\x` keeps its letter as written.
+ */
+export function onVolume(path: string, platform: string = process.platform): string {
+  // Folded to either case, two letters compare the same, and the folded path is never shown.
+  return platform === 'win32' ? `${path.charAt(0).toUpperCase()}${path.slice(1)}` : path;
+}
+
+/**
  * An option's value as the command reads it, so that one thing written two
- * ways is asked for once: a directory as the run resolves it, a number by
- * what its digits count, a list by its ids, a summary as it is trimmed. Any
- * other value is read as it is written, in its own case, which is how each
- * of those options reads it. A revision is read by git, which a line is not
- * checked against, so `HEAD` and the commit it names are two values here.
+ * ways is asked for once: a directory as the run resolves it, its drive
+ * letter in either case, a number by what its digits count, a list by the
+ * set of ids it names, each as a brief's id is matched, a summary as it is
+ * trimmed. Any other value is read as it is written, in its own case, which
+ * is how each of those options reads it. A revision is read by git, which
+ * the run asks once there are two (`sameCommits`).
  */
 function asRead(option: string, value: string, root: string): string {
   switch (option) {
     case 'root':
-      return resolve(value);
+      return onVolume(resolve(value));
     case 'config':
-      return resolve(root, value);
+      return onVolume(resolve(root, value));
     case 'wave':
     case 'pr':
       return String(digits(value) ?? value);
     case 'depends-on':
-      return JSON.stringify(idsOf(value));
+      // `7` and `007` name one brief, and `8,7` the briefs `7,8` does.
+      return JSON.stringify([...new Set(idsOf(value).map(idKey))].sort());
     case 'summary':
       return value.trim();
     case 'briefs':
@@ -254,12 +269,19 @@ function asRead(option: string, value: string, root: string): string {
   return value;
 }
 
+/** The refusal of an option given two values, each shown as JSON, as an empty value is, where what cannot be seen can be. */
+function twoValues(option: string, first: string, second: string): string {
+  return `--${option} is given ${JSON.stringify(first)} and ${JSON.stringify(second)}, and takes one value; give one of the two`;
+}
+
 /**
  * Why a line that gives one option two values is not one to run: the later
  * was read, and the earlier went unread with no word of it, so `--root
  * nowhere --root .` ran in `.` (spec-core ADR-0005, amended 2026-10-18).
+ * Two revisions written two ways are kept in `revisions`, where it is
+ * given, for git to say whether they name one commit.
  */
-function twice(options: readonly OptionToken[], values: Values, cwd: string): string | null {
+function twice(options: readonly OptionToken[], values: Values, cwd: string, revisions: Map<string, string[]> | null): string | null {
   // A configuration is found from the root, as the engine finds it.
   const root = resolve(text(values, 'root') ?? cwd);
   const first = new Map<string, { readonly written: string; readonly read: string }>();
@@ -272,8 +294,8 @@ function twice(options: readonly OptionToken[], values: Values, cwd: string): st
     const earlier = first.get(token.name);
     if (earlier === undefined) first.set(token.name, { written: token.value, read });
     else if (earlier.read !== read) {
-      // Shown as JSON, as an empty value is, where what cannot be seen can be.
-      return `--${token.name} is given ${JSON.stringify(earlier.written)} and ${JSON.stringify(token.value)}, and takes one value; give one of the two`;
+      if (revisions === null || (token.name !== 'commit' && token.name !== 'base')) return twoValues(token.name, earlier.written, token.value);
+      revisions.set(token.name, [...(revisions.get(token.name) ?? [earlier.written]), token.value]);
     }
   }
   return null;
@@ -424,6 +446,8 @@ interface Parsed {
   readonly command: string | undefined;
   readonly values: Values;
   readonly positionals: readonly string[];
+  /** Each option's revisions as they were written, where two are written two ways, for git to read. */
+  readonly revisions: ReadonlyMap<string, readonly string[]>;
 }
 
 /** Global options that take a value, so the value is not mistaken for the command. */
@@ -487,13 +511,39 @@ export function parse(argv: readonly string[], cwd: string = process.cwd()): Par
     throw new UsageError(`${command} takes no argument, not ${extra}: spec-brief ${command}${spec.noArgument}`);
   }
   const options = parsed.tokens.filter((token): token is OptionToken => token.kind === 'option');
+  // Two revisions written two ways are git's to read, by the run: `--help`
+  // and `--version` start none, and `--no-git` asks git nothing, so with
+  // any of the three they are two values, as the line reads them.
+  const revisions = flag(parsed.values, 'help') || flag(parsed.values, 'version') || flag(parsed.values, 'no-git') ? null : new Map<string, string[]>();
   const refusal =
-    twice(options, parsed.values, cwd) ??
+    twice(options, parsed.values, cwd, revisions) ??
     answers(options) ??
     (spec === undefined ? null : (unread(command!, spec, parsed.values) ?? unwritten(command!, spec, parsed.values)));
   if (refusal !== null) throw new UsageError(refusal);
   checkValues(command, parsed.values, positionals);
-  return { command, values: parsed.values, positionals };
+  return { command, values: parsed.values, positionals, revisions: revisions ?? new Map() };
+}
+
+/**
+ * Two revisions of one option are one value where the run's git says both
+ * name one commit, and two where it names two, or cannot say of one: with
+ * no repository, outside one, or for a revision that names none. It is asked
+ * once, for every revision of both options.
+ */
+async function sameCommits(engine: BriefEngine, revisions: ReadonlyMap<string, readonly string[]>): Promise<void> {
+  // Asked nothing, a git process answers nothing: the mutant that starts one is equivalent.
+  if (revisions.size === 0) return;
+  const asked = [...revisions.values()].flat();
+  // A git a caller of the library hands the engine may have no `commits`;
+  // the command line's is always NodeGit's, which has, so the mutant that
+  // calls it without asking is equivalent here.
+  const named = await engine.git?.commits?.(asked);
+  const commitOf = new Map(asked.map((revision, index) => [revision, named?.[index] ?? null]));
+  for (const [option, [first, ...later]] of revisions) {
+    const commit = commitOf.get(first!) ?? null;
+    const other = later.find((revision) => commit === null || commitOf.get(revision) !== commit);
+    if (other !== undefined) throw new UsageError(twoValues(option, first!, other));
+  }
 }
 
 /** A `--format` the command does not write, which the help lists by command. */
@@ -591,6 +641,7 @@ interface Run {
   readonly version: string;
   readonly values: Values;
   readonly positionals: readonly string[];
+  readonly revisions: ReadonlyMap<string, readonly string[]>;
   readonly cwd: string;
 }
 
@@ -758,6 +809,7 @@ async function runTransition(run: Run, action: 'archive' | 'unarchive'): Promise
   // A second brief is refused with the line; none at all is what --help is asked for.
   if (reference === undefined) throw new UsageError(`${action} takes one brief: spec-brief ${action} <brief>`);
   const engine = await openEngine(run);
+  await sameCommits(engine, run.revisions);
   const dryRun = flag(run.values, 'dry-run');
   const plan: Plan =
     action === 'archive'
@@ -793,7 +845,7 @@ export async function main(argv: readonly string[] = process.argv.slice(2), io: 
     err((error as Error).message);
     return EXIT_ERROR;
   }
-  const { command, values, positionals } = parsed;
+  const { command, values, positionals, revisions } = parsed;
   // From here on, so that what comes before a command is covered as the
   // command is: --version and --help, the package's own manifest, the colour.
   // An error there left main as a rejection, which the launcher ended as
@@ -836,6 +888,7 @@ export async function main(argv: readonly string[] = process.argv.slice(2), io: 
       version: await version(),
       values,
       positionals,
+      revisions,
       cwd: io.cwd ?? process.cwd(),
     };
     switch (command) {

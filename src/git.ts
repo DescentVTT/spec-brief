@@ -31,6 +31,11 @@ export interface FileChange {
 export interface Git {
   /** The commit a revision names, or `null` when it names none. */
   commit(revision: string): Promise<CommitInfo | null>;
+  /**
+   * The hash of the commit each revision names, or `null` for one that names
+   * none, asked once. A git without it is one that cannot say.
+   */
+  commits?(revisions: readonly string[]): Promise<(string | null)[]>;
   mergeBase(a: string, b: string): Promise<string | null>;
   /** Files changed from `from` to `to`; with no `from`, the files `to` changed against its first parent. */
   changes(from: string | null, to: string): Promise<FileChange[]>;
@@ -59,15 +64,25 @@ interface Run {
   readonly stderr: string;
 }
 
-function run(cwd: string, args: readonly string[]): Promise<Run> {
+/** A git command, handed `input` on its standard input, and an end of it there either way. */
+function run(cwd: string, args: readonly string[], input?: string): Promise<Run> {
   return new Promise((done) => {
-    execFile(
+    const child = execFile(
       'git',
       ['-c', 'core.quotepath=off', ...args],
       // windowsHide keeps a console window from flashing up on Windows; no other host has one to hide.
       { cwd, encoding: 'utf8', maxBuffer: 256 * 1024 * 1024, windowsHide: true },
       (error, stdout, stderr) => done({ ok: error === null, stdout, stderr }),
     );
+    // A git that ends before it reads what it is handed, as one outside a
+    // repository does, closes the pipe under the write, and the EPIPE went
+    // uncaught and ended the process. What git printed is its answer, so the
+    // error is taken and nothing is done with it; the mutant that gives the
+    // handler a body of `undefined` does nothing either, and is equivalent.
+    child.stdin!.on('error', () => {});
+    // A command that reads its input reads to the end of it, which only this
+    // gives it; the others read none.
+    child.stdin!.end(input);
   });
 }
 
@@ -144,6 +159,26 @@ export class NodeGit implements Git {
     // Cast on the name, as in `parseNumstat`.
     const [author, date] = fields as [string, string];
     return { sha: hash, author, date };
+  }
+
+  /**
+   * One process for every revision: `cat-file --batch-check` reads one a
+   * line, as `rev-parse --verify` reads one, and answers each with its
+   * object's name, or with the revision and why it names none.
+   */
+  async commits(revisions: readonly string[]): Promise<(string | null)[]> {
+    // A line break would make one revision two questions, and its answer
+    // another's. On a line of its own a revision is never read as an option,
+    // so one that starts with "-" is asked, and names none.
+    if (revisions.some((revision) => revision.includes('\n'))) return revisions.map(() => null);
+    const asked = revisions.map((revision) => `${revision}^{commit}\n`).join('');
+    const lines = (await run(this.cwd, ['cat-file', '--batch-check=%(objectname)'], asked)).stdout.split('\n');
+    return revisions.map((_, index) => {
+      const line = lines[index];
+      // An object's name holds no space, and the answer for a revision that
+      // names none does; a git that answered nothing printed no line for it.
+      return line !== undefined && line !== '' && !line.includes(' ') ? line : null;
+    });
   }
 
   async mergeBase(a: string, b: string): Promise<string | null> {

@@ -11,6 +11,35 @@ release that can turn a run red. This is the family's policy, recorded in
 releases up to 0.2.7 came before it, and several of their patches changed
 what a run reports.
 
+## Unreleased
+
+One value written two ways is taken once in three more cases, each of
+which was refused as two values: a drive letter in either case on
+Windows, two revisions git says name one commit, and two lists that name
+the same briefs. Nothing that ran is refused.
+
+### Fixed
+
+- **A drive letter names its volume in either case.** On Windows
+  `--root C:\x` beside `--root c:\x`, and two `--config` values the same
+  way, were refused as two directories; each is taken once. The rest of a
+  path is compared as it resolves, so `C:\x` beside `C:\X` is still two
+  ([An option given two values](README.md#an-option-given-two-values);
+  [the family contract](https://github.com/DescentVTT/spec-core/blob/main/docs/adr/0005-the-family-contract.md),
+  amended 2026-10-19).
+- **A revision written two ways is asked of git.** `--commit HEAD` beside
+  the hash it names, or `--base main` beside the commit `main` is at, was
+  refused as two values. `archive` now asks git once what commit each
+  names, and takes two that name one as one. Two that name two commits,
+  one git cannot name, and any line with `--no-git`, `--help` or
+  `--version`, none of which asks git, are refused as they were
+  (ADR-0001, amended 2026-10-19).
+- **`--depends-on` is read as the set of ids it names**, each as a brief's
+  id is matched: `7,8` beside `8,7`, `7` beside `007` and `7,8` beside
+  `7,8,7` are taken once, and the brief is written with the later as
+  given. A list that names another brief, or one fewer, is still two
+  values.
+
 ## 0.9.0
 
 An option that takes one value and is given two is refused, exit 2, where
