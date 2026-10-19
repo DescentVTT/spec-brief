@@ -229,7 +229,15 @@ skip of a flag in `twice` (`src/cli.ts`), `token.value === undefined`
 made `false`: a flag taken in is read as nothing each time it is given,
 which refuses nothing either. It is equivalent, and said so beside the
 code. No other survivor is new against the sweep of e0e6251
-(run 39121573933), and the core reads as that sweep did.
+(run 39121573933), and the core reads as that sweep did. For 0.10.0 the
+sweep of 716da8d (run 39211537582) read 99.29% over 7,559 and, for the
+core, 99.33% over 5,357, as 0.9.0's did. The release made 184 mutants
+and left three, each equivalent and said so beside the code: the guard
+of an empty list of revisions and the optional call of `commits`
+(`src/cli.ts`), where git is asked of revisions written two ways, and
+`a.path < b.path` made `<=` in the sort of an answer's inputs
+(`src/engine.ts`), whose paths are keys of one map. No other survivor is
+new, and the core reads as before.
 
 Reading them was a review again, and found what no test had:
 
