@@ -11,7 +11,7 @@ release that can turn a run red. This is the family's policy, recorded in
 releases up to 0.2.7 came before it, and several of their patches changed
 what a run reports.
 
-## Unreleased
+## 0.10.0
 
 One value written two ways is taken once in three more cases, each of
 which was refused as two values: a drive letter in either case on
