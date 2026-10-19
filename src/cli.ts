@@ -537,8 +537,8 @@ async function sameCommits(engine: BriefEngine, revisions: ReadonlyMap<string, r
   // A git a caller of the library hands the engine may have no `commits`;
   // the command line's is always NodeGit's, which has, so the mutant that
   // calls it without asking is equivalent here.
-  const named = (await engine.git?.commits?.(asked)) ?? [];
-  const commitOf = new Map(asked.map((revision, index) => [revision, named[index] ?? null]));
+  const named = await engine.git?.commits?.(asked);
+  const commitOf = new Map(asked.map((revision, index) => [revision, named?.[index] ?? null]));
   for (const [option, [first, ...later]] of revisions) {
     const commit = commitOf.get(first!) ?? null;
     const other = later.find((revision) => commit === null || commitOf.get(revision) !== commit);

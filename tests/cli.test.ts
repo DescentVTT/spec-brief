@@ -737,6 +737,9 @@ describe('an option given two values, and a wrong line beside --help', () => {
     const before = files(root);
     expect(await run(root, ['archive', '1', '--dry-run', '--summary', 'a', '--pr', '5', '--summary', 'b', '--pr', '6'])).toEqual(twice('summary', 'a', 'b'));
     expect(await run(root, ['archive', '1', '--dry-run', '--summary', 'Done.', '--summary', 'Done.\tAnd more.'])).toEqual(twice('summary', 'Done.', 'Done.\tAnd more.'));
+    // A number is no list: `5,6` beside `6,5` is two values, as the line reads a number.
+    expect(await run(root, ['archive', '1', '--dry-run', '--pr', '5,6', '--pr', '6,5'])).toEqual(twice('pr', '5,6', '6,5'));
+    expect(await run(root, ['new', 'T', '--wave', '1,2', '--wave', '2,1'])).toEqual(twice('wave', '1,2', '2,1'));
     // A value that is no number, or no directory inside the repository, is still one of two values.
     expect(await run(root, ['new', 'T', '--wave', 'v1', '--wave', 'v2'])).toEqual(twice('wave', 'v1', 'v2'));
     expect(await run(root, ['archive', '1', '--dry-run', '--pr', '1st', '--pr', '2nd'])).toEqual(twice('pr', '1st', '2nd'));

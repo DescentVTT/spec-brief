@@ -172,12 +172,12 @@ export class NodeGit implements Git {
     // so one that starts with "-" is asked, and names none.
     if (revisions.some((revision) => revision.includes('\n'))) return revisions.map(() => null);
     const asked = revisions.map((revision) => `${revision}^{commit}\n`).join('');
-    // Outside a repository git answers nothing, and each line is empty.
     const lines = (await run(this.cwd, ['cat-file', '--batch-check=%(objectname)'], asked)).stdout.split('\n');
     return revisions.map((_, index) => {
-      const line = lines[index] ?? '';
-      // An object's name holds no space; the answer for a revision that names none does.
-      return line === '' || line.includes(' ') ? null : line;
+      const line = lines[index];
+      // An object's name holds no space, and the answer for a revision that
+      // names none does; a git that answered nothing printed no line for it.
+      return line !== undefined && line !== '' && !line.includes(' ') ? line : null;
     });
   }
 
