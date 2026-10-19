@@ -217,6 +217,10 @@ describe('real git', () => {
     await expect(plain.dirty()).rejects.toThrow(/^git status failed: fatal: not a git repository[^]*\S$/);
     // Where git answers nothing, it names no commit.
     expect(await plain.commits(['HEAD', 'main'])).toEqual([null, null]);
+    // More than a pipe holds, so that the write meets a git that has gone: its
+    // EPIPE ended the process, where git's answer is none for each.
+    const many = Array.from({ length: 100_000 }, (_, index) => `revision-${index}`);
+    expect(await plain.commits(many)).toEqual(many.map(() => null));
     await expect(plain.files()).rejects.toThrow(/^git ls-files failed: fatal: not a git repository[^]*\S$/);
   });
 

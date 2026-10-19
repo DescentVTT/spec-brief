@@ -74,6 +74,12 @@ function run(cwd: string, args: readonly string[], input?: string): Promise<Run>
       { cwd, encoding: 'utf8', maxBuffer: 256 * 1024 * 1024, windowsHide: true },
       (error, stdout, stderr) => done({ ok: error === null, stdout, stderr }),
     );
+    // A git that ends before it reads what it is handed, as one outside a
+    // repository does, closes the pipe under the write, and the EPIPE went
+    // uncaught and ended the process. What git printed is its answer, so the
+    // error is taken and nothing is done with it; the mutant that gives the
+    // handler a body of `undefined` does nothing either, and is equivalent.
+    child.stdin!.on('error', () => {});
     // A command that reads its input reads to the end of it, which only this
     // gives it; the others read none.
     child.stdin!.end(input);
