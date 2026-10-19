@@ -132,3 +132,38 @@ ends a placeholder, `TBD -`, `TBD - later`, and run straight into a word it
 is part of that word, so `TODO-driven work is out.` and `XXX-large` are
 content. An em dash joins no words, and `TBD—ask the vendor` stays a
 placeholder.
+
+## Amended 2026-10-19: a configuration that is not a file
+
+The configuration was read with whatever stood under its name. Measured on
+2026-10-19 through 0.9.0's launcher in a Linux container (`node:24-slim`,
+Node 24.21.0), each case in a tree of its own with ten seconds to answer:
+
+- A named pipe at `.spec-brief.json`, at `spec-brief.json`, named by
+  `--config`, below the directory the run started in, or named by a link,
+  had `list`, `list --format json` and `lint` wait until the limit ended
+  them. A tool that asks spec-brief before each write, as spec-harness
+  does, waited with it.
+- A socket at `.spec-brief.json` ended the run on Node's `ENXIO` and a
+  stack, and `--config /dev/zero` on `RangeError: Invalid string length`,
+  each exit 2; `--config /dev/null` was read as JSON that ends at once.
+- A directory was said in a line already
+  ([ADR-0001](0001-no-runtime-dependencies.md), amended 2026-10-09), a link
+  to a file was read as the file, and `--no-config` looked for none.
+
+**Only a file is read as a configuration.** The path found or named is
+asked what it is, following a link, before it is opened, and anything but
+a regular file is a configuration that does not load: exit 2, one line, in
+the words spec-harness 0.19.0 has for its own,
+
+    spec-brief: .spec-brief.json: is neither a file nor a directory, not a configuration file
+
+and a directory as before. A pipe a shell hands to `--config <(...)` is
+one too. It was read, and its directory, `/dev/fd`, was the root, where no
+briefs are, so the run ended on `briefs/ does not exist`, exit 2; it is
+refused now as the pipe it is. No run that answered is refused. A file
+replaced by a pipe between the question and the read is not held off.
+
+Left as they are, and measured the same day: a template that is a named
+pipe has `new` wait without end; a pipe among the briefs is no file to the
+listing, and is not read.

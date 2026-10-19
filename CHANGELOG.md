@@ -18,6 +18,11 @@ which was refused as two values: a drive letter in either case on
 Windows, two revisions git says name one commit, and two lists that name
 the same briefs. Nothing that ran is refused.
 
+`list --format json` names what its answer was read from, so that another
+tool can give the answer again without starting spec-brief. A
+configuration that is not a file is refused, exit 2, where a named pipe
+under its name was read without end.
+
 ### Fixed
 
 - **A drive letter names its volume in either case.** On Windows
@@ -39,6 +44,35 @@ the same briefs. Nothing that ran is refused.
   `7,8,7` are taken once, and the brief is written with the later as
   given. A list that names another brief, or one fewer, is still two
   values.
+
+### Added
+
+- **`list --format json` names its inputs**, in a field `inputs`: each
+  file the answer was read from, with the SHA-256 of its bytes; each name a
+  configuration was looked for under and was not there, with `null`; each
+  directory the briefs were listed from, with the files in it, or `null`
+  where there was none, as an archive not yet made; and the version that
+  read them. `keep` is `false`, and nothing is listed, wherever that
+  cannot be named whole: a run that starts below its configuration's
+  directory, and one with no configuration file
+  ([`spec-brief list`](README.md#spec-brief-list); ADR-0002, amended
+  2026-10-19). `schemaVersion` stays 2, since a field is added and none
+  changes. `list` asks git nothing where a configuration file names the
+  root, which is a process fewer.
+
+### Changed
+
+- **A configuration that is not a file is refused.** A named pipe at
+  `.spec-brief.json` or `spec-brief.json`, or named by `--config`, was read
+  without end by every command; a socket ended the run on `ENXIO` and a
+  stack, and `--config /dev/zero` on `RangeError`. Each is now exit 2 with
+  one line, `is neither a file nor a directory, not a configuration file`,
+  before it is opened, as a directory was already. A link is read as what
+  it names ([An input that names nothing](README.md#an-input-that-names-nothing);
+  ADR-0003, amended 2026-10-19). Upgrading: nothing to change for a
+  configuration that is a file; `--config <(...)`, which a shell hands as a
+  pipe, ran in `/dev/fd` and found no briefs, and now says what it was
+  handed.
 
 ## 0.9.0
 

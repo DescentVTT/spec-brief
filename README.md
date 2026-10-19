@@ -126,7 +126,32 @@ Live briefs with their status, in the word the brief writes (`封存` where the 
 | --- | --- |
 | `--ready` | Only the ready briefs, which is the question an orchestrator asks. |
 | `--archived` | The archive as well. |
-| `--format json` | The whole table, for an orchestrator, and the sections the configuration asks for, each with its `hint`. |
+| `--format json` | The whole table, for an orchestrator, the sections the configuration asks for, each with its `hint`, and what the answer was read from. |
+
+**What the answer was read from.** `--format json` names, under `inputs`, every input of its answer, so that a tool that asks for the same answer again, as spec-harness does before each write it checks, can give the one it kept while every input reads as listed, without starting spec-brief ([the family contract](https://github.com/DescentVTT/spec-core/blob/main/docs/adr/0005-the-family-contract.md), amended 2026-10-19):
+
+```json
+"inputs": {
+  "keep": true,
+  "tool": "0.10.0",
+  "files": [
+    { "path": ".spec-brief.json", "sha256": "ca3d163b..." },
+    { "path": "briefs/001_a.md", "sha256": "5ee9361a..." },
+    { "path": "spec-brief.json", "sha256": null }
+  ],
+  "directories": [
+    { "path": "briefs", "entries": ["001_a.md", "README.md"] },
+    { "path": "briefs/archive", "entries": null }
+  ],
+  "git": null
+}
+```
+
+- **`files`**: each file read, with the SHA-256 of its bytes in hex, and each name a configuration was looked for under and was not there, with `null`: it must still not be there.
+- **`directories`**: each directory the briefs were listed from, with the names of the regular files directly in it, sorted as JavaScript sorts strings. A link and a directory are no file here, and a file that is no brief is named though it is not read, since one renamed would be. A directory looked for and not found, as an archive not yet made, has `null`: there must still be no directory there.
+- **`tool`**: the version that read them. **`git`**: `null`, since `list` reads nothing of git, and asks it nothing where a configuration file names the root.
+- **Paths** are POSIX, from the root, which wherever `keep` is `true` is the directory the run started in.
+- **`keep` is `false`**, and the lists are empty, wherever spec-brief cannot name every input: a run that starts below its configuration's directory, or names a configuration in another, and one with no configuration file, where git or the search above the root finds the root.
 
 ### `spec-brief matrix`
 
@@ -280,7 +305,7 @@ An option, an argument or a path that is given and names nothing is refused: exi
 - **A list that names nothing.** `--depends-on ,` names no brief, and a brief that depends on nothing is one scaffolded without the option. A place in a list that names no brief, the comma too many in `7,8,` or the gap in `7,,8`, is refused as well: it is a brief left out, as `"$A,$B"` is with one of the two unset.
 - **An argument a command does not take.** `init`, `list`, `matrix` and `schedule` take none and refuse one by name, with their usage. `init mydir` set up the current directory; `init --root mydir` is what sets up another.
 - **A `--root` that is no directory.** A file, or a path that does not exist, is refused: the search for a configuration would go on from its parent, and the run would report on, or `new` write into, the tree above. A directory below the configuration's is a place to start from, as the current directory is.
-- **A configuration that is a directory**, named by `--config` or found under the configuration's name, does not load, and is said so in a line, as one that is not JSON is.
+- **A configuration that is not a file**, named by `--config` or found under the configuration's name, does not load, and is said so in a line before it is opened, as one that is not JSON is: a directory, a named pipe, which was read without end, a socket or a device. A link is read as what it names.
 
 ### An option a command does not read
 
@@ -336,7 +361,7 @@ spec-brief: --help is given beside --version, and one of the two answers would g
 
 ## Configuration
 
-`.spec-brief.json` (or `spec-brief.json`) at the root; the nearest one above the working directory is used, and its directory is the root. It is JSON, validated against [`schema.json`](schema.json): an unknown key, a misspelt rule or a value of the wrong type stops the run with exit 2 rather than falling back to defaults and reporting on the wrong rules.
+`.spec-brief.json` (or `spec-brief.json`) at the root; the nearest one above the working directory is used, and its directory is the root. It is a file, and JSON, validated against [`schema.json`](schema.json): an unknown key, a misspelt rule or a value of the wrong type stops the run with exit 2 rather than falling back to defaults and reporting on the wrong rules.
 
 | Key | Default | What it says |
 | --- | --- | --- |

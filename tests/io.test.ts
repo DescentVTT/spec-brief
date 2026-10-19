@@ -1,10 +1,11 @@
 import { execFileSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { existsSync, readdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { afterAll, describe, expect, it } from 'vitest';
 
-import { MemoryFileSystem, NodeFileSystem } from '../src/fs.js';
+import { MemoryFileSystem, NodeFileSystem, type Reads } from '../src/fs.js';
 import { GitError, NodeGit, parseNumstat, parsePorcelain, pullRequestUrl } from '../src/git.js';
 import { commitAll, git, head, initRepo, tempDir, writeTree } from './helpers.js';
 
@@ -75,6 +76,34 @@ describe('the Node filesystem', () => {
     writeTree(root, { 'a.md': '', 'sub/b.md': '' });
     symlinkSync(root, join(root, 'sub', 'loop'), 'junction');
     expect(await new NodeFileSystem(root).walk()).toEqual(['a.md', 'sub/b.md']);
+  });
+
+  it('tells its reads each file it read, by a digest of the bytes, each it looked for, and each directory it listed', async () => {
+    // A tool that gives an answer again reads each input as listed, so a
+    // read that went untold is an answer given after it changed (ADR-0002,
+    // amended 2026-10-19). Bytes no text keeps, so that a digest of the text
+    // decoded would not be theirs.
+    const root = dir('fs-reads');
+    const odd = Buffer.from([0xef, 0xbb, 0xbf, 0x68, 0xff, 0x0d, 0x0a]);
+    writeTree(root, { 'a/b.md': 'text\n', 'a/sub/c.md': '' });
+    writeFileSync(join(root, 'a', 'odd.md'), odd);
+    const reads: Reads = { files: new Map(), directories: new Map() };
+    const fs = new NodeFileSystem(root, reads);
+    expect(await fs.read('a/b.md')).toBe('text\n');
+    expect(await fs.read('./a/odd.md')).toBe(odd.toString('utf8'));
+    expect(await fs.read('missing.md')).toBeNull();
+    expect((await fs.list('a'))?.sort()).toEqual(['b.md', 'odd.md']);
+    expect(await fs.list('nope')).toBeNull();
+    expect(await fs.list('a/b.md')).toBeNull();
+    const sha = (bytes: Buffer | string): string => createHash('sha256').update(bytes).digest('hex');
+    expect(reads.files).toEqual(new Map([['a/b.md', sha('text\n')], ['a/odd.md', sha(odd)], ['missing.md', null]]));
+    expect([...reads.directories].map(([path, names]) => [path, names === null ? null : [...names].sort()])).toEqual([
+      ['a', ['b.md', 'odd.md']],
+      ['nope', null],
+      ['a/b.md', null],
+    ]);
+    // Given none, it reads as it did.
+    expect(await new NodeFileSystem(root).read('a/odd.md')).toBe(odd.toString('utf8'));
   });
 });
 

@@ -1,5 +1,6 @@
-import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { execFileSync } from 'node:child_process';
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { join, relative } from 'node:path';
 
 import { afterAll, describe, expect, it } from 'vitest';
 
@@ -452,6 +453,34 @@ describe('an input that names nothing', () => {
     expect(unnamed.code).toBe(EXIT_ERROR);
     expect(unnamed.err).toMatch(/^spec-brief: unexpected error: [^]*\n {4}at /);
   });
+
+  // Windows has no named pipe at a path, nor a device such as /dev/null.
+  it.skipIf(process.platform === 'win32')(
+    'says in one line that a configuration is neither a file nor a directory, and reads none',
+    async () => {
+      // A named pipe under the configuration's name was read without end, by
+      // every command; a socket ended the run on Node's ENXIO and a stack.
+      const root = plain('cli-config-pipe', { 'briefs/001_a.md': goodBrief() });
+      rmSync(join(root, '.spec-brief.json'));
+      execFileSync('mkfifo', [join(root, '.spec-brief.json'), join(root, 'team.json')]);
+      const neither = (name: string): Result => ({ code: EXIT_ERROR, out: '', err: `spec-brief: ${name}: is neither a file nor a directory, not a configuration file\n` });
+      expect(await run(root, ['list'])).toEqual(neither('.spec-brief.json'));
+      expect(await run(root, ['lint'])).toEqual(neither('.spec-brief.json'));
+      expect(await run(root, ['list', '--config', 'team.json'])).toEqual(neither('team.json'));
+      expect(await run(root, ['list', '--config', '/dev/null'])).toEqual(neither(relative(root, '/dev/null')));
+      // --no-config looks for none, and a link is read as what it names.
+      expect((await run(root, ['list', '--no-config'])).code).toBe(EXIT_OK);
+      const linked = plain('cli-config-linked', { 'briefs/001_a.md': goodBrief(), 'real.json': '{}' });
+      rmSync(join(linked, '.spec-brief.json'));
+      symlinkSync('real.json', join(linked, '.spec-brief.json'));
+      symlinkSync('team.json', join(linked, 'pipe.json'));
+      execFileSync('mkfifo', [join(linked, 'team.json')]);
+      expect(await run(linked, ['list'])).toEqual(await run(linked, ['list', '--no-config']));
+      expect(await run(linked, ['list', '--config', 'pipe.json'])).toEqual(neither('team.json'));
+    },
+    // A configuration read without end is a test that does not come back.
+    20_000,
+  );
 
   it('says in one line that a configuration is not JSON, be it text or not', async () => {
     // A text file's first line break was quoted into the refusal, which made it two lines.

@@ -9,7 +9,7 @@
  * so an engine can equally run over a `MemoryFileSystem` and no git at all.
  */
 
-import { access } from 'node:fs/promises';
+import { access, stat } from 'node:fs/promises';
 import { basename, dirname, relative, resolve, sep } from 'node:path';
 
 import { applyPlan } from './apply.js';
@@ -28,7 +28,7 @@ import type { Brief } from './brief.js';
 import { collisionFindings, collisions, type CollisionOptions, type CollisionReport } from './collisions.js';
 import { type Config, ConfigError, DEFAULT_CONFIG, locateConfig, parseConfig, typeSections } from './config.js';
 import { buildCorpus, type Corpus, findBriefs, isReady, pendingDependencies, type SourceFile } from './corpus.js';
-import { canonicalPath, type FileSystem, NodeFileSystem } from './fs.js';
+import { canonicalPath, type FileSystem, NodeFileSystem, type Reads } from './fs.js';
 import { type CommitInfo, type FileChange, type Git, NodeGit, pullRequestUrl } from './git.js';
 import { matchGlob, parseGlob } from './glob.js';
 import { normalisePath } from './links.js';
@@ -69,6 +69,31 @@ export interface OpenOptions {
   /** `null` runs without git. Defaults to git when the root is inside a working tree. */
   readonly git?: Git | null;
   readonly fs?: FileSystem;
+  /**
+   * `false` where nothing the caller asks of the engine reads git, as `list`
+   * asks it nothing: where a configuration file names the root, git is then
+   * not asked where the work tree's top is, and the engine has no git.
+   * Without one, git is still asked, since its answer is the root.
+   */
+  readonly needsGit?: boolean;
+}
+
+/**
+ * Everything an answer was read from, for a tool that would give it again
+ * without starting spec-brief (ADR-0002, amended 2026-10-19). Each file is
+ * named with the SHA-256 of its bytes, or `null` where it was looked for and
+ * was not there; each directory with the names of the files in it, sorted,
+ * or `null` where there was no directory to list. Each `null` is a path
+ * that must still not be there. Paths are from the root, which wherever `keep` is true is the directory
+ * the run started in. `git` is `null`, since no answer named here asks git
+ * anything. `keep` is `false`, and the lists are empty, wherever that cannot
+ * be named whole.
+ */
+export interface Inputs {
+  readonly keep: boolean;
+  readonly files: readonly { readonly path: string; readonly sha256: string | null }[];
+  readonly directories: readonly { readonly path: string; readonly entries: readonly string[] | null }[];
+  readonly git: null;
 }
 
 export interface ArchiveOptions {
@@ -169,6 +194,13 @@ export class BriefEngine {
   readonly git: Git | null;
   private plugins: readonly Plugin[] | undefined;
   private loaded: Corpus | undefined;
+  /**
+   * What the engine has read, where `open` made it, and whether that is
+   * every input of an answer made of the briefs and the configuration alone.
+   * Set false by a read that is not on it: the files git or a walk lists,
+   * and a plugin's module.
+   */
+  private reading: { readonly reads: Reads; whole: boolean } | undefined;
   /** Known once the briefs are read, which every command does before it asks. */
   private missingBriefs: boolean | undefined;
 
@@ -190,18 +222,38 @@ export class BriefEngine {
     // Named as git names them, so the root and the work tree compare.
     const cwd = await canonicalPath(resolve(options.cwd ?? process.cwd()));
     const explicit = options.config === undefined ? undefined : await canonicalPath(resolve(cwd, options.config));
-    const configPath = options.noConfig === true ? undefined : (explicit ?? (await locateConfig(cwd, exists)));
-    // Asking git costs a process; without git there is nothing to ask.
-    const toplevel = options.git === null ? null : await NodeGit.toplevel(cwd);
+    // Each name looked for, so that an answer can say which were not there.
+    const looked: string[] = [];
+    const configPath =
+      options.noConfig === true
+        ? undefined
+        : (explicit ??
+          (await locateConfig(cwd, (path) => {
+            looked.push(path);
+            return exists(path);
+          })));
+    // Asking git costs a process; without git there is nothing to ask, and
+    // with a root a configuration file names nothing to ask it where the
+    // caller reads no git.
+    const asksGit = options.git !== null && (configPath === undefined || options.needsGit !== false);
+    const toplevel = asksGit ? await NodeGit.toplevel(cwd) : null;
     const root = configPath === undefined ? (toplevel ?? cwd) : dirname(configPath);
+    const reads: Reads = { files: new Map(), directories: new Map() };
+    // Each is named as not there, and the one found again by its read below.
+    // Wherever an answer is kept, each was looked for in the root itself, so
+    // its path from there is its name.
+    for (const path of looked) reads.files.set(relative(root, path), null);
     let config = DEFAULT_CONFIG;
     if (configPath !== undefined) {
-      const text = await new NodeFileSystem(root).read(basename(configPath)).catch((error: NodeJS.ErrnoException) => {
-        // A directory of that name, found or named with --config, is a
-        // configuration that does not load, and no defect to report a stack for.
-        if (error.code !== 'EISDIR') throw error;
-        throw new ConfigError(relative(cwd, configPath), ['is a directory, not a configuration file']);
-      });
+      // Only a file is read. A named pipe under the configuration's name was
+      // read without end, by every command; and a directory, found or named
+      // with --config, ended the run on Node's EISDIR. Each is a
+      // configuration that does not load, and no defect to report a stack for.
+      const found = await stat(configPath).catch(() => null);
+      if (found !== null && !found.isFile()) {
+        throw new ConfigError(relative(cwd, configPath), [`is ${found.isDirectory() ? 'a directory' : 'neither a file nor a directory'}, not a configuration file`]);
+      }
+      const text = await new NodeFileSystem(root, reads).read(basename(configPath));
       if (text === null) throw new EngineError('not-found', `${configPath} does not exist`);
       config = parseConfig(text, relative(cwd, configPath));
     }
@@ -214,9 +266,18 @@ export class BriefEngine {
       config,
       // The root is the configuration's directory, so its path from there is its name.
       configFile: configPath === undefined ? null : basename(configPath),
-      fs: options.fs ?? new NodeFileSystem(root),
+      fs: options.fs ?? new NodeFileSystem(root, reads),
       git: options.git === undefined ? (inTree ? new NodeGit(root) : null) : options.git,
     });
+    // Named whole only where each input is read from the directory the run
+    // started in, so that a reader finds it by the path named: the engine
+    // reads through its own disk, the root is that directory, and a
+    // configuration file there names it, or neither a configuration nor git
+    // was asked. A configuration not found was looked for above the root as
+    // well, and a root git names is decided by what git reads to find the
+    // top of a work tree, which no list here names.
+    const whole = options.fs === undefined && !asksGit && root === cwd && (configPath !== undefined || options.noConfig === true);
+    engine.reading = { reads, whole };
     await engine.load();
     return engine;
   }
@@ -265,6 +326,7 @@ export class BriefEngine {
 
   /** The plugins the configuration names, loaded once. */
   async loadedPlugins(): Promise<readonly Plugin[]> {
+    if (this.reading !== undefined) this.reading.whole = false;
     this.plugins ??= await loadPlugins(this.config.plugins, this.root);
     return this.plugins;
   }
@@ -281,6 +343,7 @@ export class BriefEngine {
 
   /** The files git sees, or every file when there is no git; `null` when neither can be read. */
   async repoFiles(): Promise<string[] | null> {
+    if (this.reading !== undefined) this.reading.whole = false;
     try {
       return this.git === null ? await this.fs.walk() : await this.git.files();
     } catch {
@@ -314,6 +377,29 @@ export class BriefEngine {
     await applyPlan(this.fs, plan.ops);
     await this.load();
     return { written: plan.ops.map((op) => op.path), refused: [] };
+  }
+
+  /**
+   * Every input of an answer made of the briefs and the configuration alone,
+   * as `list` gives one, read since the engine was opened (ADR-0002, amended
+   * 2026-10-19).
+   */
+  inputs(): Inputs {
+    const reading = this.reading;
+    if (reading?.whole !== true) return { keep: false, files: [], directories: [], git: null };
+    // Paths are unique, so no two compare equal.
+    const byPath = (a: { readonly path: string }, b: { readonly path: string }): number => (a.path < b.path ? -1 : 1);
+    return {
+      keep: true,
+      files: [...reading.reads.files].map(([path, sha256]) => ({ path, sha256 })).sort(byPath),
+      // The root is "." where a briefs directory is the root itself. One that
+      // was not there, an archive not yet made, is named with no entries: one
+      // made with a brief in it changes what `list --archived` answers.
+      directories: [...reading.reads.directories]
+        .map(([path, entries]) => ({ path: path === '' ? '.' : path, entries: entries === null ? null : [...entries].sort() }))
+        .sort(byPath),
+      git: null,
+    };
   }
 
   /** Live briefs that can run now: every dependency archived, and neither a draft nor deferred. */

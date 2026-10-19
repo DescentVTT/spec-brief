@@ -26,6 +26,7 @@ export default defineConfig({
       'tests/bin.test.ts',
       'tests/cli.test.ts',
       'tests/engine.test.ts',
+      'tests/inputs.test.ts',
       'tests/io.test.ts',
       'tests/io-faults.test.ts',
       'tests/mutation-compare.test.ts',
