@@ -1140,7 +1140,7 @@ describe('init and new', () => {
       // A named pipe, or a link to one or to /dev/zero, had `new` wait without
       // end; a link to /dev/null wrote a brief of no bytes; a socket ended the
       // run on Node's ENXIO and a stack.
-      const root = plain('cli-template-pipe', { '.spec-brief.json': JSON.stringify({ template: 'tpl.md' }), 'briefs/001_a.md': goodBrief(), 'real.md': '# {id} {title}\n' });
+      const root = plain('cli-tpl-pipe', { '.spec-brief.json': JSON.stringify({ template: 'tpl.md' }), 'briefs/001_a.md': goodBrief(), 'real.md': '# {id} {title}\n' });
       const neither = { code: EXIT_ERROR, out: '', err: 'spec-brief: the template tpl.md is neither a file nor a directory; point "template" at a file, or set it to null\n' };
       const template = join(root, 'tpl.md');
       pipe(template);
@@ -1152,8 +1152,11 @@ describe('init and new', () => {
         expect(await run(root, ['new', 'A title']), target).toEqual(neither);
         rmSync(template);
       }
+      // A socket at a short name, linked: macOS holds a socket's path to 104
+      // bytes, which a temporary directory there nearly fills.
       const server = createServer();
-      await new Promise<void>((done) => server.listen(template, done));
+      await new Promise<void>((done) => server.listen(join(root, 's'), done));
+      symlinkSync('s', template);
       try {
         expect(await run(root, ['new', 'A title'])).toEqual(neither);
       } finally {

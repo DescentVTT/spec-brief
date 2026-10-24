@@ -145,11 +145,12 @@ describe('the Node filesystem', () => {
       symlinkSync('/dev/null', join(root, 'null'));
       symlinkSync('a.md', join(root, 'to-a.md'));
       const server = createServer();
-      await new Promise<void>((done) => server.listen(join(root, 'socket'), done));
+      // A short name: macOS holds a socket's path to 104 bytes.
+      await new Promise<void>((done) => server.listen(join(root, 's'), done));
       try {
         const reads: Reads = { files: new Map(), directories: new Map() };
         const fs = new NodeFileSystem(root, reads);
-        for (const path of ['pipe', 'to-pipe', 'null', 'socket']) {
+        for (const path of ['pipe', 'to-pipe', 'null', 's']) {
           const error = await fs.read(path).then(() => 'read', (thrown: unknown) => thrown);
           expect(error, path).toBeInstanceOf(NotAFileError);
           expect(error, path).toMatchObject({ message: `${path} is neither a file nor a directory; only a file is read`, what: 'neither a file nor a directory' });
