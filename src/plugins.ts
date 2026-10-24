@@ -18,6 +18,7 @@ import { pathToFileURL } from 'node:url';
 import type { Waiver } from './archive.js';
 import type { PluginReference } from './config.js';
 import { ConfigError } from './config.js';
+import { notAFile } from './fs.js';
 import type { Plugin } from './lint.js';
 import type { Rule } from './rules.js';
 
@@ -89,8 +90,19 @@ export function exportsTarget(exports: unknown, subpath: string): string | null 
   return best === undefined ? null : (exportTarget(map[best.key], best.match) ?? null);
 }
 
+/**
+ * Refuses a path that is not a file before it is read or imported: a named
+ * pipe as a plugin's module, or as the package.json its package is found
+ * by, had the run wait without end (ADR-0003, amended 2026-10-24).
+ */
+async function onlyAFile(path: string): Promise<void> {
+  const what = await notAFile(path);
+  if (what !== null) throw new Error(`${path} is ${what}; only a file is read`);
+}
+
 /** A package.json, `undefined` when there is none to read. */
 async function manifest(path: string): Promise<Record<string, unknown> | undefined> {
+  await onlyAFile(path);
   try {
     // The encoding decides nothing here either, for the reason `version` in cli.ts has.
     return JSON.parse(await readFile(path, 'utf8'));
@@ -134,9 +146,10 @@ async function resolvePackage(specifier: string, root: string): Promise<string> 
   return createRequire(join(root, 'package.json')).resolve(specifier);
 }
 
-async function specifierUrl(specifier: string, root: string): Promise<string> {
-  if (specifier.startsWith('.') || isAbsolute(specifier)) return pathToFileURL(resolve(root, specifier)).href;
-  return pathToFileURL(await resolvePackage(specifier, root)).href;
+/** The file a specifier names, from the root. */
+async function modulePath(specifier: string, root: string): Promise<string> {
+  if (specifier.startsWith('.') || isAbsolute(specifier)) return resolve(root, specifier);
+  return resolvePackage(specifier, root);
 }
 
 function isRule(value: unknown): value is Rule {
@@ -197,7 +210,9 @@ export async function loadPlugins(references: readonly PluginReference[], root: 
   for (const reference of references) {
     let loaded: Record<string, unknown>;
     try {
-      loaded = (await import(await specifierUrl(reference.module, root))) as Record<string, unknown>;
+      const path = await modulePath(reference.module, root);
+      await onlyAFile(path);
+      loaded = (await import(pathToFileURL(path).href)) as Record<string, unknown>;
     } catch (error) {
       throw new ConfigError(reference.module, [`could not be loaded: ${(error as Error).message}`]);
     }

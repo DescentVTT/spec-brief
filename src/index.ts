@@ -58,7 +58,7 @@ export {
   waitingOnDeferred,
 } from './corpus.js';
 export { type ArchiveOptions, BriefEngine, EngineError, type EngineSetup, type Inputs, type NewOptions, type OpenOptions, today } from './engine.js';
-export { type FileSystem, MemoryFileSystem, NodeFileSystem, type Reads } from './fs.js';
+export { type FileSystem, MemoryFileSystem, NodeFileSystem, type NotAFile, NotAFileError, type Reads } from './fs.js';
 export { type CommitInfo, type FileChange, type Git, GitError, NodeGit } from './git.js';
 export {
   type Glob,

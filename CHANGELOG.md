@@ -11,6 +11,23 @@ release that can turn a run red. This is the family's policy, recorded in
 releases up to 0.2.7 came before it, and several of their patches changed
 what a run reports.
 
+## Unreleased
+
+### Changed
+
+- **A template, a plugin, or what stands where a brief would move, is read
+  only where it is a file.** A named pipe as the `template`, where
+  `archive` or `unarchive` would write the brief, or as a plugin's module or
+  the `package.json` its package is found by, had the run wait without end;
+  a link to `/dev/null` as the template wrote a brief of no bytes; a
+  directory or a socket ended the run on Node's error and a stack. Each is
+  now exit 2 with one line before it is opened, nothing written, as a
+  configuration has been since 0.10.0. A link is read as what it names
+  ([An input that names nothing](README.md#an-input-that-names-nothing);
+  ADR-0003, amended 2026-10-24). Upgrading: nothing to change where each is
+  a file, or a link to one; a template that is a link to `/dev/null` now
+  refuses, so point `template` at a file, or set it to `null`.
+
 ## 0.10.0
 
 One value written two ways is taken once in three more cases, each of

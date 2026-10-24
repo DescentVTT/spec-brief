@@ -1,13 +1,14 @@
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { existsSync, readdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { createServer } from 'node:net';
 import { join } from 'node:path';
 
 import { afterAll, describe, expect, it } from 'vitest';
 
-import { MemoryFileSystem, NodeFileSystem, type Reads } from '../src/fs.js';
+import { MemoryFileSystem, NodeFileSystem, NotAFileError, notAFile, type Reads } from '../src/fs.js';
 import { GitError, NodeGit, parseNumstat, parsePorcelain, pullRequestUrl } from '../src/git.js';
-import { commitAll, git, head, initRepo, tempDir, writeTree } from './helpers.js';
+import { commitAll, git, head, initRepo, pipe, tempDir, writeTree } from './helpers.js';
 
 const made: string[] = [];
 function dir(name: string): string {
@@ -105,6 +106,65 @@ describe('the Node filesystem', () => {
     // Given none, it reads as it did.
     expect(await new NodeFileSystem(root).read('a/odd.md')).toBe(odd.toString('utf8'));
   });
+
+  it('reads only a file: a directory, or a link to one, is refused before it is opened, and told to no reads', async () => {
+    // A directory read as a file ended the run on Node's EISDIR and a stack.
+    const root = dir('fs-not-a-file');
+    writeTree(root, { 'a.md': 'text\n', 'd/x.md': '' });
+    symlinkSync(join(root, 'd'), join(root, 'j'), 'junction');
+    const reads: Reads = { files: new Map(), directories: new Map() };
+    const fs = new NodeFileSystem(root, reads);
+    const refusal = async (path: string): Promise<unknown> => fs.read(path).then(() => 'read', (error: unknown) => error);
+    const directory = await refusal('d');
+    expect(directory).toBeInstanceOf(NotAFileError);
+    expect(directory).toMatchObject({ name: 'NotAFileError', message: 'd is a directory; only a file is read', path: 'd', what: 'a directory' });
+    expect(await refusal('./j')).toMatchObject({ message: 'j is a directory; only a file is read', path: 'j' });
+    // A file is read as it was, and a path where nothing is reads as nothing.
+    expect(await fs.read('a.md')).toBe('text\n');
+    expect(await fs.read('gone.md')).toBeNull();
+    expect([...reads.files.keys()]).toEqual(['a.md', 'gone.md']);
+    expect(await notAFile(join(root, 'd'))).toBe('a directory');
+    expect(await notAFile(join(root, 'a.md'))).toBeNull();
+    expect(await notAFile(join(root, 'gone.md'))).toBeNull();
+    // A path a listing has just named a file is read without the question,
+    // so what a listing could not have named reaches Node's own read.
+    await expect(fs.read('d', true)).rejects.toMatchObject({ code: 'EISDIR' });
+    expect(await fs.read('a.md', true)).toBe('text\n');
+  });
+
+  // Windows has no named pipe at a path, no socket at one, and no /dev/null.
+  it.skipIf(process.platform === 'win32')(
+    'refuses a named pipe, a device and a socket, through a link too, before it is opened, and reads a link to a file',
+    async () => {
+      // A named pipe was read without end, a link to /dev/null as nothing, and
+      // a socket ended the run on Node's ENXIO and a stack.
+      const root = dir('fs-neither');
+      writeTree(root, { 'a.md': 'text\n' });
+      pipe(join(root, 'pipe'));
+      symlinkSync('pipe', join(root, 'to-pipe'));
+      symlinkSync('/dev/null', join(root, 'null'));
+      symlinkSync('a.md', join(root, 'to-a.md'));
+      const server = createServer();
+      // A short name: macOS holds a socket's path to 104 bytes.
+      await new Promise<void>((done) => server.listen(join(root, 's'), done));
+      try {
+        const reads: Reads = { files: new Map(), directories: new Map() };
+        const fs = new NodeFileSystem(root, reads);
+        for (const path of ['pipe', 'to-pipe', 'null', 's']) {
+          const error = await fs.read(path).then(() => 'read', (thrown: unknown) => thrown);
+          expect(error, path).toBeInstanceOf(NotAFileError);
+          expect(error, path).toMatchObject({ message: `${path} is neither a file nor a directory; only a file is read`, what: 'neither a file nor a directory' });
+          expect(await notAFile(join(root, path)), path).toBe('neither a file nor a directory');
+        }
+        expect(await fs.read('to-a.md')).toBe('text\n');
+        expect([...reads.files.keys()]).toEqual(['to-a.md']);
+      } finally {
+        server.close();
+      }
+    },
+    // A pipe read without end is a test that does not come back, until the pipe's writer ends it.
+    20_000,
+  );
 });
 
 describe('the in-memory filesystem', () => {

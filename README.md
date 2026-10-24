@@ -306,6 +306,7 @@ An option, an argument or a path that is given and names nothing is refused: exi
 - **An argument a command does not take.** `init`, `list`, `matrix` and `schedule` take none and refuse one by name, with their usage. `init mydir` set up the current directory; `init --root mydir` is what sets up another.
 - **A `--root` that is no directory.** A file, or a path that does not exist, is refused: the search for a configuration would go on from its parent, and the run would report on, or `new` write into, the tree above. A directory below the configuration's is a place to start from, as the current directory is.
 - **A configuration that is not a file**, named by `--config` or found under the configuration's name, does not load, and is said so in a line before it is opened, as one that is not JSON is: a directory, a named pipe, which was read without end, a socket or a device. A link is read as what it names.
+- **A template, a plugin or what stands where a brief would move that is not a file** is refused in a line before it is opened, and nothing is written: the `template` a configuration names, a plugin's module and each `package.json` spec-brief reads to find one, and what stands where `archive` or `unarchive` would write the brief, which a plan made from the files a listing names cannot have seen. A named pipe there had the run wait without end, a link to `/dev/null` as the template wrote a brief of no bytes, and a directory or a socket ended the run on a stack. A link is read as what it names.
 
 ### An option a command does not read
 
