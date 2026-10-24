@@ -13,13 +13,18 @@
  */
 
 import type { FileOp } from './archive.js';
-import type { FileSystem } from './fs.js';
+import { type FileSystem, type NotAFile, NotAFileError } from './fs.js';
 
 export class ConflictError extends Error {
   readonly path: string;
 
-  constructor(path: string) {
-    super(`${path} changed after the plan was made; nothing was written. Run the command again.`);
+  /** `found` is what stands at the path where it is not a file, which is not read. */
+  constructor(path: string, found?: NotAFile) {
+    super(
+      found === undefined
+        ? `${path} changed after the plan was made; nothing was written. Run the command again.`
+        : `${path} is ${found}; nothing was written. Move it out of the way, then run the command again.`,
+    );
     this.name = 'ConflictError';
     this.path = path;
   }
@@ -45,7 +50,12 @@ export class TransactionError extends Error {
 
 export async function applyPlan(fs: FileSystem, ops: readonly FileOp[]): Promise<void> {
   for (const op of ops) {
-    const current = await fs.read(op.path);
+    const current = await fs.read(op.path).catch((error: unknown) => {
+      // A plan is made from the files a listing names, so what stands where
+      // it would write a new one can be a named pipe, read without end, or a
+      // directory. Nothing is written yet, and the refusal can say so.
+      throw error instanceof NotAFileError ? new ConflictError(op.path, error.what) : error;
+    });
     if (current !== op.before) throw new ConflictError(op.path);
   }
 

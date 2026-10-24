@@ -16,8 +16,12 @@ import { dirname, join, relative, resolve, sep } from 'node:path';
 import { normalisePath as repoPath } from './links.js';
 
 export interface FileSystem {
-  /** Contents, or `null` when there is no such file. */
-  read(path: string): Promise<string | null>;
+  /**
+   * Contents, or `null` when there is no such file. What is there and is not
+   * a file is refused, and not read, unless `listed` says that `list` has
+   * just named it a file.
+   */
+  read(path: string, listed?: boolean): Promise<string | null>;
   /** Writes a file, creating its directory. Replaces an existing file atomically where the platform allows. */
   write(path: string, content: string): Promise<void>;
   /** Removes a file. Removing a file that is absent is an error. */
@@ -40,6 +44,36 @@ export interface FileSystem {
 export interface Reads {
   readonly files: Map<string, string | null>;
   readonly directories: Map<string, readonly string[] | null>;
+}
+
+/** What stands at a path that is not a regular file, in the words a refusal says it in. */
+export type NotAFile = 'a directory' | 'neither a file nor a directory';
+
+/**
+ * What stands at a path where it is not a regular file, a link followed:
+ * `null` for a file, and for a path where nothing is or that cannot be
+ * asked about, which the read that follows reports as it always has. A
+ * named pipe was read without end, a device as nothing or without end, and
+ * a directory or a socket ended the run on Node's error and a stack
+ * (ADR-0003, amended 2026-10-24).
+ */
+export async function notAFile(path: string): Promise<NotAFile | null> {
+  const found = await stat(path).catch(() => null);
+  if (found === null || found.isFile()) return null;
+  return found.isDirectory() ? 'a directory' : 'neither a file nor a directory';
+}
+
+/** A path that is there and is not a regular file, refused before it is opened. */
+export class NotAFileError extends Error {
+  readonly path: string;
+  readonly what: NotAFile;
+
+  constructor(path: string, what: NotAFile) {
+    super(`${path} is ${what}; only a file is read`);
+    this.name = 'NotAFileError';
+    this.path = path;
+    this.what = what;
+  }
 }
 
 /**
@@ -93,10 +127,21 @@ export class NodeFileSystem implements FileSystem {
     return join(this.root, ...repoPath(path).split('/'));
   }
 
-  async read(path: string): Promise<string | null> {
+  /** Contents, or `null` when there is no such file; a {@link NotAFileError} where what is there is not one. */
+  async read(path: string, listed = false): Promise<string | null> {
+    const host = this.host(path);
+    // Asked before anything is opened: a path may come from the
+    // configuration, as a template's does, or be one a plan writes over,
+    // which no listing has said is a file. One a listing has just named a
+    // file is not asked again, which cost `list` over 200 briefs 12 to 38 ms
+    // on Windows.
+    if (!listed) {
+      const what = await notAFile(host);
+      if (what !== null) throw new NotAFileError(repoPath(path), what);
+    }
     let bytes: Buffer;
     try {
-      bytes = await readFile(this.host(path));
+      bytes = await readFile(host);
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
       this.reads?.files.set(repoPath(path), null);

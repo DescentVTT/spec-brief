@@ -7,12 +7,12 @@ import type { Plan, Waiver } from '../src/archive.js';
 import { BANNER_CLOSE, BANNER_OPEN } from '../src/brief.js';
 import { ConfigError, DEFAULT_CONFIG, resolveConfig } from '../src/config.js';
 import { BriefEngine, EngineError, isDate, today } from '../src/engine.js';
-import { MemoryFileSystem } from '../src/fs.js';
+import { MemoryFileSystem, NotAFileError } from '../src/fs.js';
 import type { Git } from '../src/git.js';
 import type { Plugin, WaiveContext } from '../src/lint.js';
 import { asPlugin, asWaivers, exportsTarget, loadPlugins } from '../src/plugins.js';
 import type { Finding } from '../src/types.js';
-import { commitAll, goodBrief, initRepo, tempDir, writeTree } from './helpers.js';
+import { commitAll, goodBrief, initRepo, pipe, tempDir, writeTree } from './helpers.js';
 
 const made: string[] = [];
 function dir(name: string): string {
@@ -308,6 +308,31 @@ describe('an engine over memory', () => {
     await expect(engine.create({ title: 'x' })).rejects.toThrow(new EngineError('invalid', 'the ids here are not numbers, so there is no next one; pass --id'));
   });
 
+  it('refuses in one line a template that is not a file, writes no brief, and passes on any other failure to read one', async () => {
+    // A named pipe was read without end, and a directory or a socket ended
+    // the run on Node's error and a stack.
+    const failing = (error: Error): { engine: BriefEngine; fs: MemoryFileSystem } => {
+      const fs = new MemoryFileSystem({});
+      fs.read = () => Promise.reject(error);
+      return { engine: new BriefEngine({ root: '/virtual', config: resolveConfig({ template: 't.md' }), configFile: null, fs, git: null, plugins: [] }), fs };
+    };
+    const pipe = failing(new NotAFileError('t.md', 'neither a file nor a directory'));
+    await pipe.engine.load();
+    await expect(pipe.engine.create({ title: 'x', date: '2026-09-24' })).rejects.toThrow(
+      new EngineError('invalid', 'the template t.md is neither a file nor a directory; point "template" at a file, or set it to null'),
+    );
+    expect(pipe.fs.files.size).toBe(0);
+    const directory = failing(new NotAFileError('t.md', 'a directory'));
+    await directory.engine.load();
+    const refused = await directory.engine.create({ title: 'x', date: '2026-09-24' }).catch((e: unknown) => e);
+    expect(refused).toBeInstanceOf(EngineError);
+    expect(refused).toMatchObject({ code: 'invalid', message: 'the template t.md is a directory; point "template" at a file, or set it to null' });
+    const denied = new Error('EACCES: permission denied');
+    const other = failing(denied);
+    await other.engine.load();
+    await expect(other.engine.create({ title: 'x', date: '2026-09-24' })).rejects.toBe(denied);
+  });
+
   it('fills a configured template, and refuses a template that is not there', async () => {
     const engine = memoryEngine({ 't.md': '# {id}: {title} ({type}{wave}) {status} {date} {other}\n' }, resolveConfig({ template: 't.md' }));
     await engine.load();
@@ -497,6 +522,51 @@ describe('opening a repository', () => {
 });
 
 describe('plugins', () => {
+  it('refuses in one line a module or a manifest that is a directory, before Node is asked to read it', async () => {
+    // A manifest that is a directory ended on Node's EISDIR, and a module on
+    // Node's words for a directory import, which name spec-brief's own file.
+    const root = dir('plugins-directory');
+    writeTree(root, {
+      'plugin.mjs/index.mjs': '',
+      'node_modules/listed/package.json/keep': '',
+      'node_modules/exported/package.json': JSON.stringify({ name: 'exported', exports: './lib' }),
+      'node_modules/exported/lib/index.mjs': '',
+    });
+    const refused = (module: string, path: string, what = 'a directory'): ConfigError => new ConfigError(module, [`could not be loaded: ${path} is ${what}; only a file is read`]);
+    await expect(loadPlugins([{ module: './plugin.mjs', options: undefined }], root)).rejects.toThrow(refused('./plugin.mjs', join(root, 'plugin.mjs')));
+    await expect(loadPlugins([{ module: 'listed', options: undefined }], root)).rejects.toThrow(
+      refused('listed', join(root, 'node_modules', 'listed', 'package.json')),
+    );
+    await expect(loadPlugins([{ module: 'exported', options: undefined }], root)).rejects.toThrow(
+      refused('exported', join(root, 'node_modules', 'exported', 'lib')),
+    );
+  });
+
+  // Windows has no named pipe at a path, and no /dev/null.
+  it.skipIf(process.platform === 'win32')(
+    'refuses in one line a module, a manifest or a package\'s file that is a named pipe or a device, before Node is asked to read it',
+    async () => {
+      // Each had the run wait without end, and a module that is /dev/null was
+      // read as a module that exports nothing.
+      const root = dir('plugins-pipe');
+      writeTree(root, {
+        'node_modules/exported/package.json': JSON.stringify({ name: 'exported', exports: './index.mjs' }),
+        'node_modules/required/package.json': JSON.stringify({ name: 'required', main: 'index.mjs' }),
+      });
+      mkdirSync(join(root, 'node_modules', 'listed'));
+      const pipes = ['plugin.mjs', join('node_modules', 'listed', 'package.json'), join('node_modules', 'exported', 'index.mjs'), join('node_modules', 'required', 'index.mjs')];
+      for (const path of pipes) pipe(join(root, path));
+      symlinkSync('/dev/null', join(root, 'null.mjs'));
+      const refused = (module: string, path: string): ConfigError =>
+        new ConfigError(module, [`could not be loaded: ${join(root, path)} is neither a file nor a directory; only a file is read`]);
+      for (const [module, path] of [['./plugin.mjs', 'plugin.mjs'], ['./null.mjs', 'null.mjs'], ['listed', pipes[1]], ['exported', pipes[2]], ['required', pipes[3]]] as const) {
+        await expect(loadPlugins([{ module, options: undefined }], root), module).rejects.toThrow(refused(module, path as string));
+      }
+    },
+    // A pipe read without end is a test that does not come back, until the pipe's writer ends it.
+    30_000,
+  );
+
   it('loads a module by path, a default export or a factory, with its options', async () => {
     const root = dir('plugins');
     writeTree(root, {

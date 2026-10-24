@@ -9,7 +9,7 @@
  * so an engine can equally run over a `MemoryFileSystem` and no git at all.
  */
 
-import { access, stat } from 'node:fs/promises';
+import { access } from 'node:fs/promises';
 import { basename, dirname, relative, resolve, sep } from 'node:path';
 
 import { applyPlan } from './apply.js';
@@ -28,7 +28,7 @@ import type { Brief } from './brief.js';
 import { collisionFindings, collisions, type CollisionOptions, type CollisionReport } from './collisions.js';
 import { type Config, ConfigError, DEFAULT_CONFIG, locateConfig, parseConfig, typeSections } from './config.js';
 import { buildCorpus, type Corpus, findBriefs, isReady, pendingDependencies, type SourceFile } from './corpus.js';
-import { canonicalPath, type FileSystem, NodeFileSystem, type Reads } from './fs.js';
+import { canonicalPath, type FileSystem, NodeFileSystem, NotAFileError, type Reads } from './fs.js';
 import { type CommitInfo, type FileChange, type Git, NodeGit, pullRequestUrl } from './git.js';
 import { matchGlob, parseGlob } from './glob.js';
 import { normalisePath } from './links.js';
@@ -249,11 +249,9 @@ export class BriefEngine {
       // read without end, by every command; and a directory, found or named
       // with --config, ended the run on Node's EISDIR. Each is a
       // configuration that does not load, and no defect to report a stack for.
-      const found = await stat(configPath).catch(() => null);
-      if (found !== null && !found.isFile()) {
-        throw new ConfigError(relative(cwd, configPath), [`is ${found.isDirectory() ? 'a directory' : 'neither a file nor a directory'}, not a configuration file`]);
-      }
-      const text = await new NodeFileSystem(root, reads).read(basename(configPath));
+      const text = await new NodeFileSystem(root, reads).read(basename(configPath)).catch((error: unknown) => {
+        throw error instanceof NotAFileError ? new ConfigError(relative(cwd, configPath), [`is ${error.what}, not a configuration file`]) : error;
+      });
       if (text === null) throw new EngineError('not-found', `${configPath} does not exist`);
       config = parseConfig(text, relative(cwd, configPath));
     }
@@ -301,7 +299,8 @@ export class BriefEngine {
       for (const name of names) {
         if (!isBrief(name)) continue;
         const path = dir === '' ? name : `${dir}/${name}`;
-        const text = await this.fs.read(path);
+        // The listing named it a file, so the read does not ask again.
+        const text = await this.fs.read(path, true);
         // A file listed a moment ago and gone now was removed under the run; there is nothing to read.
         if (text !== null) files.push({ path, text, phase });
       }
@@ -544,7 +543,16 @@ export class BriefEngine {
     }
     const date = options.date ?? today();
     if (!isDate(date)) throw new EngineError('invalid', `"${date}" is not a date written YYYY-MM-DD`);
-    const template = this.config.template === null ? null : await this.fs.read(this.config.template);
+    const named = this.config.template;
+    const template =
+      named === null
+        ? null
+        : await this.fs.read(named).catch((error: unknown) => {
+            // A named pipe was read without end, and a directory or a socket
+            // ended the run on Node's error and a stack: each is a template
+            // the configuration names wrongly, and said so in a line.
+            throw error instanceof NotAFileError ? new EngineError('invalid', `the template ${named} is ${error.what}; point "template" at a file, or set it to null`) : error;
+          });
     if (this.config.template !== null && template === null) {
       throw new EngineError('not-found', `the template ${this.config.template} does not exist`);
     }

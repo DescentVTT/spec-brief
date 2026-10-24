@@ -1,11 +1,12 @@
 import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { createServer } from 'node:net';
 import { join, relative } from 'node:path';
 
 import { afterAll, describe, expect, it } from 'vitest';
 
 import { EXIT_ERROR, EXIT_FAILED, EXIT_OK, HELP, main, onVolume, parse, UsageError } from '../src/cli.js';
-import { commitAll, goodBrief, head, initRepo, Sink, tempDir, writeTree } from './helpers.js';
+import { commitAll, goodBrief, head, initRepo, pipe, Sink, tempDir, writeTree } from './helpers.js';
 
 const made: string[] = [];
 function dir(name: string): string {
@@ -1115,6 +1116,58 @@ describe('init and new', () => {
     expect((await run(root, ['new', 'Third', '--wave', '0'])).out).toBe('wrote briefs/003_third.md\n');
     expect(readFileSync(join(root, 'briefs', '003_third.md'), 'utf8')).toContain('\nwave: 0\n');
   });
+
+  it('fills the template a configuration names, and refuses in one line one that is a directory, or a junction to one, writing nothing', async () => {
+    // Each ended on Node's EISDIR and a stack.
+    const files = { '.spec-brief.json': JSON.stringify({ template: 'tpl.md' }), 'briefs/001_a.md': goodBrief() };
+    const refusal = { code: EXIT_ERROR, out: '', err: 'spec-brief: the template tpl.md is a directory; point "template" at a file, or set it to null\n' };
+    const directory = plain('cli-template-directory', { ...files, 'tpl.md/keep': '' });
+    expect(await run(directory, ['new', 'A title'])).toEqual(refusal);
+    expect(readdirSync(join(directory, 'briefs'))).toEqual(['001_a.md']);
+    const junction = plain('cli-template-junction', { ...files, 'd/keep': '' });
+    symlinkSync(join(junction, 'd'), join(junction, 'tpl.md'), 'junction');
+    expect(await run(junction, ['new', 'A title'])).toEqual(refusal);
+    expect(readdirSync(join(junction, 'briefs'))).toEqual(['001_a.md']);
+    const file = plain('cli-template-file', { ...files, 'tpl.md': '# {id} {title}\n' });
+    expect(await run(file, ['new', 'A title'])).toEqual({ code: EXIT_OK, out: 'wrote briefs/002_a-title.md\n', err: '' });
+    expect(readFileSync(join(file, 'briefs', '002_a-title.md'), 'utf8')).toBe('# 002 A title\n');
+  });
+
+  // Windows has no named pipe at a path, no socket at one, and no /dev/null.
+  it.skipIf(process.platform === 'win32')(
+    'refuses in one line a template that is a named pipe, a device or a socket, through a link too, writing nothing, and reads a link to a file',
+    async () => {
+      // A named pipe, or a link to one or to /dev/zero, had `new` wait without
+      // end; a link to /dev/null wrote a brief of no bytes; a socket ended the
+      // run on Node's ENXIO and a stack.
+      const root = plain('cli-template-pipe', { '.spec-brief.json': JSON.stringify({ template: 'tpl.md' }), 'briefs/001_a.md': goodBrief(), 'real.md': '# {id} {title}\n' });
+      const neither = { code: EXIT_ERROR, out: '', err: 'spec-brief: the template tpl.md is neither a file nor a directory; point "template" at a file, or set it to null\n' };
+      const template = join(root, 'tpl.md');
+      pipe(template);
+      expect(await run(root, ['new', 'A title'])).toEqual(neither);
+      rmSync(template);
+      pipe(join(root, 'pipe'));
+      for (const target of ['pipe', '/dev/null', '/dev/zero']) {
+        symlinkSync(target, template);
+        expect(await run(root, ['new', 'A title']), target).toEqual(neither);
+        rmSync(template);
+      }
+      const server = createServer();
+      await new Promise<void>((done) => server.listen(template, done));
+      try {
+        expect(await run(root, ['new', 'A title'])).toEqual(neither);
+      } finally {
+        server.close();
+      }
+      expect(readdirSync(join(root, 'briefs'))).toEqual(['001_a.md']);
+      rmSync(template, { force: true });
+      symlinkSync('real.md', template);
+      expect(await run(root, ['new', 'A title'])).toEqual({ code: EXIT_OK, out: 'wrote briefs/002_a-title.md\n', err: '' });
+      expect(readFileSync(join(root, 'briefs', '002_a-title.md'), 'utf8')).toBe('# 002 A title\n');
+    },
+    // A pipe read without end is a test that does not come back, until the pipe's writer ends it.
+    30_000,
+  );
 });
 
 describe('lint', () => {
@@ -1606,13 +1659,51 @@ describe('archive and unarchive', () => {
     expect(readFileSync(join(root, 'briefs', '002_b.md'), 'utf8')).toContain('[a](archive/001_a.md)');
   });
 
-  it('reports a conflict and an unexpected failure with exit 2', async () => {
+  it('says in one line that a directory stands where a brief would move, either way, and writes nothing', async () => {
+    // Each ended on Node's EISDIR and a stack: the plan is made from the
+    // files a listing names, and a directory is none.
     const root = repo('cli-archive-conflict', { 'briefs/001_a.md': goodBrief() });
     writeTree(root, { 'briefs/archive/001_a.md/blocker': '' });
-    const result = await run(root, ['archive', '1', '--allow-dirty']);
-    expect(result.code).toBe(EXIT_ERROR);
-    expect(result.err).toMatch(/^spec-brief: /);
+    const stands = (path: string): Result => ({
+      code: EXIT_ERROR,
+      out: '',
+      err: `spec-brief: ${path} is a directory; nothing was written. Move it out of the way, then run the command again.\n`,
+    });
+    expect(await run(root, ['archive', '1', '--allow-dirty'])).toEqual(stands('briefs/archive/001_a.md'));
+    expect(readFileSync(join(root, 'briefs', '001_a.md'), 'utf8')).toBe(goodBrief());
+    const back = plain('cli-unarchive-conflict', { 'briefs/archive/001_a.md': goodBrief({ status: 'archived' }), 'briefs/001_a.md/blocker': '' });
+    expect(await run(back, ['unarchive', '1'])).toEqual(stands('briefs/001_a.md'));
+    expect(readFileSync(join(back, 'briefs', 'archive', '001_a.md'), 'utf8')).toBe(goodBrief({ status: 'archived' }));
   });
+
+  // Windows has no named pipe at a path, and no /dev/null.
+  it.skipIf(process.platform === 'win32')(
+    'says in one line that a named pipe or a device stands where a brief would move, either way, and writes nothing',
+    async () => {
+      // A named pipe, or a link to one, had the run wait without end, and a
+      // link to /dev/null was read as a file that had changed since the plan.
+      const neither = (path: string): Result => ({
+        code: EXIT_ERROR,
+        out: '',
+        err: `spec-brief: ${path} is neither a file nor a directory; nothing was written. Move it out of the way, then run the command again.\n`,
+      });
+      const root = plain('cli-archive-pipe', { 'briefs/001_a.md': goodBrief(), 'briefs/archive/.gitkeep': '' });
+      const target = join(root, 'briefs', 'archive', '001_a.md');
+      pipe(target);
+      expect(await run(root, ['archive', '1'])).toEqual(neither('briefs/archive/001_a.md'));
+      rmSync(target);
+      symlinkSync('/dev/null', target);
+      expect(await run(root, ['archive', '1'])).toEqual(neither('briefs/archive/001_a.md'));
+      expect(readFileSync(join(root, 'briefs', '001_a.md'), 'utf8')).toBe(goodBrief());
+      const back = plain('cli-unarchive-pipe', { 'briefs/archive/001_a.md': goodBrief({ status: 'archived' }) });
+      pipe(join(back, 'elsewhere'));
+      symlinkSync('../elsewhere', join(back, 'briefs', '001_a.md'));
+      expect(await run(back, ['unarchive', '1'])).toEqual(neither('briefs/001_a.md'));
+      expect(readFileSync(join(back, 'briefs', 'archive', '001_a.md'), 'utf8')).toBe(goodBrief({ status: 'archived' }));
+    },
+    // A pipe read without end is a test that does not come back, until the pipe's writer ends it.
+    30_000,
+  );
 
   it('stops with exit 2 when a plugin asked to waive a refusal fails, and reports the waivers it makes as JSON', async () => {
     const plugin = (body: string): string => `export default { name: 'rulings', rules: [], waive: async ({ findings }) => { ${body} } };\n`;

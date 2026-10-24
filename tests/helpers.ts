@@ -1,7 +1,9 @@
 import { execFileSync } from 'node:child_process';
-import { appendFileSync, mkdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { appendFileSync, closeSync, constants, mkdirSync, openSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
+
+import { onTestFinished } from 'vitest';
 
 import { parseBrief, type Brief } from '../src/brief.js';
 import { type Config, DEFAULT_CONFIG, resolveConfig } from '../src/config.js';
@@ -72,6 +74,29 @@ export function writeTree(root: string, files: Readonly<Record<string, string>>)
     mkdirSync(dirname(full), { recursive: true });
     writeFileSync(full, text);
   }
+}
+
+/**
+ * A named pipe at `path`, made with mkfifo, which Linux and macOS have. A
+ * read that is not refused waits on it for a writer, and so every second
+ * one opens it and closes it: the read ends at the pipe's end, and the test
+ * that should have seen a refusal fails in time, instead of waiting without
+ * end and holding a thread of Node's pool. It opens without waiting, so
+ * where nothing reads, nothing waits. It stops when the test does.
+ */
+export function pipe(path: string): void {
+  execFileSync('mkfifo', [path]);
+  const writer = setInterval(() => {
+    try {
+      closeSync(openSync(path, constants.O_WRONLY | constants.O_NONBLOCK));
+    } catch {
+      // ENXIO: nothing reads it, as a refusal leaves it.
+    }
+  }, 1000);
+  writer.unref();
+  onTestFinished(() => {
+    clearInterval(writer);
+  });
 }
 
 export function git(cwd: string, ...args: string[]): string {

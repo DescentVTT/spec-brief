@@ -4,7 +4,7 @@ import { applyPlan, ConflictError, TransactionError } from '../src/apply.js';
 import { openTasks, type Plan, planArchive, planUnarchive, renderBanner } from '../src/archive.js';
 import { BANNER_CLOSE, BANNER_OPEN } from '../src/brief.js';
 import { buildCorpus, type Corpus, findBriefs } from '../src/corpus.js';
-import { MemoryFileSystem } from '../src/fs.js';
+import { MemoryFileSystem, NotAFileError } from '../src/fs.js';
 import type { CommitInfo } from '../src/git.js';
 import { integrityOf } from '../src/integrity.js';
 import { lint } from '../src/lint.js';
@@ -599,6 +599,30 @@ describe('the transaction', () => {
     const { fs: other, plan: again } = planFor({ [A]: goodBrief() });
     other.files.set('briefs/archive/001_a.md', 'appeared');
     await expect(applyPlan(other, again.ops)).rejects.toThrow('briefs/archive/001_a.md changed after the plan was made');
+  });
+
+  it('stops before it writes anything where what stands at a path is not a file, and passes on any other failure to read one', async () => {
+    // A plan is made from the files a listing names, so a named pipe where
+    // the archived copy goes was read back without end, and a directory
+    // there ended the run on Node's EISDIR and a stack.
+    const { fs, plan } = planFor({ [A]: goodBrief() });
+    const read = fs.read.bind(fs);
+    const refusing = (refused: string, what: 'a directory' | 'neither a file nor a directory') => (path: string) =>
+      path === refused ? Promise.reject(new NotAFileError(path, what)) : read(path);
+    fs.read = refusing('briefs/archive/001_a.md', 'neither a file nor a directory');
+    const error = await applyPlan(fs, plan.ops).catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(ConflictError);
+    expect(error).toMatchObject({
+      path: 'briefs/archive/001_a.md',
+      message: 'briefs/archive/001_a.md is neither a file nor a directory; nothing was written. Move it out of the way, then run the command again.',
+    });
+    expect([...fs.files.keys()]).toEqual([A]);
+    fs.read = refusing(A, 'a directory');
+    await expect(applyPlan(fs, plan.ops)).rejects.toThrow(`${A} is a directory; nothing was written. Move it out of the way, then run the command again.`);
+    const denied = new Error('EACCES: permission denied');
+    fs.read = () => Promise.reject(denied);
+    await expect(applyPlan(fs, plan.ops)).rejects.toBe(denied);
+    expect([...fs.files.keys()]).toEqual([A]);
   });
 
   it('rolls back every completed operation when a later one fails', async () => {

@@ -154,6 +154,9 @@ describe('what list answers from', () => {
     const root = briefs('inputs-default');
     const { inputs, calls } = await list(root);
     heldTo(root, inputs, calls);
+    // The listing names each brief a file, and its read does not ask again:
+    // only the configuration is asked what it is before it is read.
+    expect(calls.filter(({ op }) => op === 'fs/promises.stat').map(({ path }) => relative(root, path))).toEqual(['.spec-brief.json']);
     expect(inputs).toEqual({
       keep: true,
       tool: VERSION,
