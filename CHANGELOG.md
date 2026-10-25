@@ -11,7 +11,13 @@ release that can turn a run red. This is the family's policy, recorded in
 releases up to 0.2.7 came before it, and several of their patches changed
 what a run reports.
 
-## Unreleased
+## 0.11.0
+
+A template, a plugin, or what stands where `archive` or `unarchive`
+would write a brief is read only where it is a file, or a link to one:
+a named pipe there had a run wait without end, and a directory or a
+socket ended it on a stack. Each is now refused, exit 2, before it is
+opened.
 
 ### Changed
 
