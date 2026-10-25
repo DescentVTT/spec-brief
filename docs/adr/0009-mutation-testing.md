@@ -237,7 +237,11 @@ of an empty list of revisions and the optional call of `commits`
 (`src/cli.ts`), where git is asked of revisions written two ways, and
 `a.path < b.path` made `<=` in the sort of an answer's inputs
 (`src/engine.ts`), whose paths are keys of one map. No other survivor is
-new, and the core reads as before.
+new, and the core reads as before. For 0.11.0 the sweep of 5270f6d (run
+40105674374) read 99.29% over 7,585 and, for the core, 99.33% over 5,362.
+The refusals of that release made 26 mutants and left none: mutant for
+mutant against 716da8d's, no survivor is new and none is gone, in either
+sweep.
 
 Reading them was a review again, and found what no test had:
 
