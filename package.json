@@ -1,5 +1,5 @@
 {
-  "name": "@descent-vtt/spec-brief",
+  "name": "@spec-family/spec-brief",
   "version": "0.11.0",
   "description": "Lifecycle management for task briefs: lint the contract, map parallel collisions, and archive a round in one atomic command.",
   "keywords": [
@@ -68,12 +68,12 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/DescentVTT/spec-brief.git"
+    "url": "git+https://github.com/spec-family/spec-brief.git"
   },
   "bugs": {
-    "url": "https://github.com/DescentVTT/spec-brief/issues"
+    "url": "https://github.com/spec-family/spec-brief/issues"
   },
-  "homepage": "https://github.com/DescentVTT/spec-brief#readme",
+  "homepage": "https://github.com/spec-family/spec-brief#readme",
   "overrides": {
     "qs": "^6.16.0"
   }

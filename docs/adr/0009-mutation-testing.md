@@ -305,7 +305,7 @@ runner asks for the tests of a mutant by names joined with a space
 ([stryker-js #6210](https://github.com/stryker-mutator/stryker-js/issues/6210),
 open). The evidence is spec-guard's, which met this on 2026-09-07 and pinned
 vitest then
-([its ADR-0003](https://github.com/DescentVTT/spec-guard/blob/main/docs/adr/0003-mutation-testing.md)).
+([its ADR-0003](https://github.com/spec-family/spec-guard/blob/main/docs/adr/0003-mutation-testing.md)).
 On 2026-10-06 Dependabot proposed vitest 5.0.0 across the family. The two
 repositories that sweep a pull request in full measured it: 4.00% in
 spec-core, where main reads 96.36%, and 3.83% in spec-harness, where main
@@ -320,7 +320,7 @@ bump made by hand fails `npm test` before it reaches main. Minors and
 patches of 4 still come, and a security update is not held back.
 
 The hold is the family's and is lifted in spec-core first, by the steps in
-[its ADR-0008](https://github.com/DescentVTT/spec-core/blob/main/docs/adr/0008-toolchain.md)
+[its ADR-0008](https://github.com/spec-family/spec-core/blob/main/docs/adr/0008-toolchain.md)
 (amended 2026-10-07), which also records what vitest 4 still receives while
 it is held. When the bump comes here, its pull request measures nothing:
 dispatch `mutation.yml` on the branch with `full` ticked, and hold both
@@ -336,7 +336,7 @@ the first test that fails, and vitest's own sequencer puts a file that
 failed in the last run first and then the longest. spec-harness measured
 what that costs a sweep whose longest file takes most of a minute, and
 halved its sweep with an order of its own
-([its ADR-0010](https://github.com/DescentVTT/spec-harness/blob/main/docs/adr/0010-toolchain-and-verification.md),
+([its ADR-0010](https://github.com/spec-family/spec-harness/blob/main/docs/adr/0010-toolchain-and-verification.md),
 amended 2026-10-09). Here the whole suite takes eight seconds before any
 mutant, so the first question was whether there is anything to gain.
 
@@ -860,7 +860,7 @@ with it every test file that imports it. None of their tests exists, none
 fails, and where no test of another file fails either, the mutant is scored
 as survived although nothing works. spec-harness's full sweep for its 0.15.0
 counted one so, the body of its `literal()` emptied
-([its ADR-0010](https://github.com/DescentVTT/spec-harness/blob/main/docs/adr/0010-toolchain-and-verification.md)).
+([its ADR-0010](https://github.com/spec-family/spec-harness/blob/main/docs/adr/0010-toolchain-and-verification.md)).
 The same was asked here, of every mutant it can be asked of.
 
 **It can be asked of a static mutant only.** The runner's `stryker-setup.js`
@@ -1036,7 +1036,7 @@ for the full sweep and 22 for the core, with one mutant more in each, which
 **The whole of both, and no split by path.** spec-harness sweeps a pull
 request in full only where it changes a module its core sweep does not
 reach
-([its ADR-0010](https://github.com/DescentVTT/spec-harness/blob/main/docs/adr/0010-toolchain-and-verification.md),
+([its ADR-0010](https://github.com/spec-family/spec-harness/blob/main/docs/adr/0010-toolchain-and-verification.md),
 amended 2026-10-12), where a full sweep is nine jobs and two hours of
 runners. Here the minutes say otherwise. Each job from its start to its
 end, the install and the upload with the sweep, over the last five that

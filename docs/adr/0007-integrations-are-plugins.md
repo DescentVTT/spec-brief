@@ -72,4 +72,4 @@ waiver takes one path out of it, and the finding goes when none is left.
 
 A plugin is found as an import from the root would find it, a package's
 `exports` read under the import conditions, so a subpath such as
-`@descent-vtt/spec-harness/spec-brief-plugin` loads.
+`@spec-family/spec-harness/spec-brief-plugin` loads.

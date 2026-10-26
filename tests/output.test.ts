@@ -50,7 +50,7 @@ describe('reports', () => {
     expect(doc.runs[0]?.tool.driver).toEqual({
       name: 'spec-brief',
       version: '9.9.9',
-      informationUri: 'https://github.com/DescentVTT/spec-brief',
+      informationUri: 'https://github.com/spec-family/spec-brief',
       rules: [
         { id: 'id', shortDescription: { text: 'Every brief has an id with no whitespace or slashes in it.' }, defaultConfiguration: { level: 'error' } },
         { id: 'shared-directory', shortDescription: { text: 'Briefs in one wave do not write into the same directory.' } },

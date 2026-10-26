@@ -223,7 +223,7 @@ describe('git output', () => {
   });
 
   it('builds pull-request addresses for github.com remotes only', () => {
-    expect(pullRequestUrl('https://github.com/DescentVTT/spec-brief.git', 4)).toBe('https://github.com/DescentVTT/spec-brief/pull/4');
+    expect(pullRequestUrl('https://github.com/spec-family/spec-brief.git', 4)).toBe('https://github.com/spec-family/spec-brief/pull/4');
     expect(pullRequestUrl('git@github.com:o/r.git', 5)).toBe('https://github.com/o/r/pull/5');
     expect(pullRequestUrl('https://github.com/o/r/', 6)).toBe('https://github.com/o/r/pull/6');
     expect(pullRequestUrl('https://gitlab.com/o/r.git', 7)).toBeNull();

@@ -21,7 +21,7 @@ minutes.
 
 *Amended 2026-10-14.* As written on 2026-09-24 the intent was that a pull
 request "runs mutation testing on the files it changed". What was decided,
-and built in [pull request 64](https://github.com/DescentVTT/spec-brief/pull/64),
+and built in [pull request 64](https://github.com/spec-family/spec-brief/pull/64),
 is the whole of both sweeps for every pull request: a verdict is moved by
 more than the files a pull request changes under `src/`, as *Decided* below
 has it. The state the intent started from is gone too: the full sweep has

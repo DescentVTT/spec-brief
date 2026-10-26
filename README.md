@@ -4,26 +4,26 @@
 
 A *brief* is the input to one round of work - for a coding agent or a person: what done looks like, what the round must not touch, and the checks that prove it finished. spec-brief manages briefs as files in your repository. It has no runtime dependencies, reads and writes nothing but Markdown in two directories, and never writes to git.
 
-spec-brief is one of the [spec-\* tools](https://github.com/DescentVTT/spec-core#the-family). The family's words - brief, round, wave, scope, the two kinds of plugin - are defined in [concepts](https://github.com/DescentVTT/spec-core/blob/main/docs/concepts.md), and the [tutorial](https://github.com/DescentVTT/spec-core/blob/main/docs/tutorial.md) takes one round from the brief to the archive in ten steps.
+spec-brief is one of the [spec-\* tools](https://github.com/spec-family/spec-core#the-family). The family's words - brief, round, wave, scope, the two kinds of plugin - are defined in [concepts](https://github.com/spec-family/spec-core/blob/main/docs/concepts.md), and the [tutorial](https://github.com/spec-family/spec-core/blob/main/docs/tutorial.md) takes one round from the brief to the archive in ten steps.
 
 ```bash
-npm install --save-dev @descent-vtt/spec-brief
-npx --no-install @descent-vtt/spec-brief init
-npx --no-install @descent-vtt/spec-brief new "Rotate session tokens on privilege change" --wave 1
-npx --no-install @descent-vtt/spec-brief lint
+npm install --save-dev @spec-family/spec-brief
+npx --no-install @spec-family/spec-brief init
+npx --no-install @spec-family/spec-brief new "Rotate session tokens on privilege change" --wave 1
+npx --no-install @spec-family/spec-brief lint
 ```
 
 ## Names
 
-The package is `@descent-vtt/spec-brief`, and the command it installs is `spec-brief`. The name without the scope is not this project: on npm, `spec-brief` belonged to nobody on 2026-10-07, and whoever registers it decides what it runs.
+The package is `@spec-family/spec-brief`, and the command it installs is `spec-brief`. The name without the scope is not this project: on npm, `spec-brief` belonged to nobody on 2026-10-07, and whoever registers it decides what it runs.
 
 `npx` fetches and runs the package of whatever name it is given when the project has none installed - a fresh clone, a worktree before `npm ci`, a CI job without the install step - and without a terminal it does not ask first. So give `npx` the full name:
 
-- `npx --no-install @descent-vtt/spec-brief` in a project that installed it: it runs that install, the version the lockfile pins, and where there is none it stops with an error that names this package.
-- `npx @descent-vtt/spec-brief`, without `--no-install`, where nothing is installed: it fetches this package and runs it.
+- `npx --no-install @spec-family/spec-brief` in a project that installed it: it runs that install, the version the lockfile pins, and where there is none it stops with an error that names this package.
+- `npx @spec-family/spec-brief`, without `--no-install`, where nothing is installed: it fetches this package and runs it.
 
 <!-- bare-name: the two forms in the next sentence are shown as what not to write -->
-Never `npx spec-brief`, and not `npx --no-install spec-brief` either: `--no-install` stops a download, and npm still runs a copy of the bare name's package that an earlier fetch left in its cache. A `package.json` script names the command alone, as in `"briefs": "spec-brief lint"`, because npm fetches nothing for a script. The family's [adopting guide](https://github.com/DescentVTT/spec-core/blob/main/docs/adopting.md#names) has what was measured, under npm 10, 11 and 12.
+Never `npx spec-brief`, and not `npx --no-install spec-brief` either: `--no-install` stops a download, and npm still runs a copy of the bare name's package that an earlier fetch left in its cache. A `package.json` script names the command alone, as in `"briefs": "spec-brief lint"`, because npm fetches nothing for a script. The family's [adopting guide](https://github.com/spec-family/spec-core/blob/main/docs/adopting.md#names) has what was measured, under npm 10, 11 and 12.
 
 ## Why
 
@@ -128,7 +128,7 @@ Live briefs with their status, in the word the brief writes (`封存` where the 
 | `--archived` | The archive as well. |
 | `--format json` | The whole table, for an orchestrator, the sections the configuration asks for, each with its `hint`, and what the answer was read from. |
 
-**What the answer was read from.** `--format json` names, under `inputs`, every input of its answer, so that a tool that asks for the same answer again, as spec-harness does before each write it checks, can give the one it kept while every input reads as listed, without starting spec-brief ([the family contract](https://github.com/DescentVTT/spec-core/blob/main/docs/adr/0005-the-family-contract.md), amended 2026-10-19):
+**What the answer was read from.** `--format json` names, under `inputs`, every input of its answer, so that a tool that asks for the same answer again, as spec-harness does before each write it checks, can give the one it kept while every input reads as listed, without starting spec-brief ([the family contract](https://github.com/spec-family/spec-core/blob/main/docs/adr/0005-the-family-contract.md), amended 2026-10-19):
 
 ```json
 "inputs": {
@@ -380,7 +380,7 @@ spec-brief: --help is given beside --version, and one of the two answers would g
 | `fields` | `[]` | Front-matter keys the repository uses beyond the built-in ones. |
 | `archiving.tasks` | `"all"` | `"all"`, or the sections whose boxes must be closed. |
 | `archiving.dispositions` | `**Delegated`, `**Accepted debt`, `**Rejected` | What a note under an open box starts with to close it. |
-| `archiving.banner` | see [`src/config.ts`](https://github.com/DescentVTT/spec-brief/blob/main/src/config.ts) | Banner lines, with `{date}`, `{summary}`, `{pr}`, `{commit}`, `{diffstat}`, `{links}`, `{id}`, `{title}`, `{author}`. A line with an empty placeholder is left out. |
+| `archiving.banner` | see [`src/config.ts`](https://github.com/spec-family/spec-brief/blob/main/src/config.ts) | Banner lines, with `{date}`, `{summary}`, `{pr}`, `{commit}`, `{diffstat}`, `{links}`, `{id}`, `{title}`, `{author}`. A line with an empty placeholder is left out. |
 | `archiving.rewriteLinks` | `true` | Rewrite relative links when a brief moves: its own, and the ones other live briefs hold to it. Off, neither is edited, and the links other briefs are left holding are reported as `stale-link`. |
 | `archiving.freeze` | `true` | Write an integrity hash, so a later edit is caught. |
 | `archiving.base` | `null` | Branch the diff is measured from, such as `"main"`. |
@@ -397,7 +397,7 @@ A repository whose briefs have eight ordered sections, `proposed` and `archived`
 
 ```json
 {
-  "$schema": "./node_modules/@descent-vtt/spec-brief/schema.json",
+  "$schema": "./node_modules/@spec-family/spec-brief/schema.json",
   "files": "[0-9][0-9][0-9]_*.md",
   "status": { "draft": null, "active": "proposed", "archived": "archived" },
   "sections": [
@@ -466,9 +466,9 @@ How a heading fills a section, and what counts as a heading, a task or a link, i
 After the job has installed the project, with `npm ci`:
 
 ```yaml
-- run: npx --no-install @descent-vtt/spec-brief lint --format github
-- run: npx --no-install @descent-vtt/spec-brief matrix --format github
-- run: npx --no-install @descent-vtt/spec-brief schedule --format github
+- run: npx --no-install @spec-family/spec-brief lint --format github
+- run: npx --no-install @spec-family/spec-brief matrix --format github
+- run: npx --no-install @spec-family/spec-brief schedule --format github
 ```
 
 Each gives `npx` the package's [full name](#names) and `--no-install`: a job that lost its install step then stops, where the command's name alone would fetch whatever package has that name.
@@ -484,7 +484,7 @@ Each gives `npx` the package's [full name](#names) and `--no-install`: a job tha
 spec-brief:
   script:
     - npm ci
-    - npx --no-install @descent-vtt/spec-brief lint --format gitlab > gl-code-quality.json
+    - npx --no-install @spec-family/spec-brief lint --format gitlab > gl-code-quality.json
   artifacts:
     reports:
       codequality: gl-code-quality.json
@@ -499,7 +499,7 @@ In the GitLab report:
 ## As a library
 
 ```ts
-import { BriefEngine } from '@descent-vtt/spec-brief';
+import { BriefEngine } from '@spec-family/spec-brief';
 
 const engine = await BriefEngine.open({ cwd: process.cwd() });
 const findings = await engine.lint();
@@ -545,7 +545,7 @@ A result is `{ line, message }`, with optional fields:
 
 This is where integrations belong. A tool that defines a format - signed departures, recorded reproducers, a code graph's blast radius - is the one that can check it, and spec-brief carries no copy of formats it does not own. Loading a plugin runs its code, exactly as loading a linter configuration does.
 
-A path is relative to the root. A package is found from the root as an `import` there would find it, its `exports` read under the import conditions, so a plugin published as ESM only loads, and so does a subpath such as `@descent-vtt/spec-harness/spec-brief-plugin`.
+A path is relative to the root. A package is found from the root as an `import` there would find it, its `exports` read under the import conditions, so a plugin published as ESM only loads, and so does a subpath such as `@spec-family/spec-harness/spec-brief-plugin`.
 
 ### Waiving a refusal
 
@@ -578,7 +578,7 @@ export default () => ({
 
 ## Design
 
-The decisions and what they cost are in [`docs/adr/`](https://github.com/DescentVTT/spec-brief/blob/main/docs/adr/README.md). Working on spec-brief itself: [CONTRIBUTING.md](https://github.com/DescentVTT/spec-brief/blob/main/CONTRIBUTING.md); reporting a vulnerability: [SECURITY.md](https://github.com/DescentVTT/spec-brief/blob/main/SECURITY.md).
+The decisions and what they cost are in [`docs/adr/`](https://github.com/spec-family/spec-brief/blob/main/docs/adr/README.md). Working on spec-brief itself: [CONTRIBUTING.md](https://github.com/spec-family/spec-brief/blob/main/CONTRIBUTING.md); reporting a vulnerability: [SECURITY.md](https://github.com/spec-family/spec-brief/blob/main/SECURITY.md).
 
 ## License
 

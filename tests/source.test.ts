@@ -240,7 +240,7 @@ describe('the documents', () => {
     expect(documents).toEqual(expect.arrayContaining(['README.md', 'CHANGELOG.md']));
     expect(files).toContain('/README.md');
     expect(documents.filter((path) => path.startsWith('src/'))).toEqual([]);
-    const REPOSITORY = 'https://github.com/DescentVTT/spec-brief/blob/main/';
+    const REPOSITORY = 'https://github.com/spec-family/spec-brief/blob/main/';
     const dead: string[] = [];
     for (const document of documents) {
       for (const link of scanMarkdown(readFileSync(document, 'utf8')).links) {

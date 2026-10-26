@@ -166,16 +166,28 @@ by a workflow of the same shape on the pull request (run 38453489165), and
 that workflow removed: both sweeps ran from the call and the job after them
 started when they had passed. The first rehearsal after it shows the rest.
 
+*Amended 2026-10-26.* From 0.12.0 the package is `@spec-family/spec-brief`,
+published from the repository `spec-family/spec-brief`: that day the family
+moved to a GitHub organization and an npm scope of its own, and its versions
+go on under the new names (spec-core's
+[ADR-0005](https://github.com/spec-family/spec-core/blob/main/docs/adr/0005-the-family-contract.md#names),
+amended 2026-10-26). 0.1.0 to 0.11.0 were published as
+`@descent-vtt/spec-brief` from `DescentVTT/spec-brief`, and keep that name
+on the registry. The new package is set up on npmjs.com as the first of the
+Consequences below says, with a trusted publisher of its own for the
+repository `spec-family/spec-brief`; `package.json` names that repository,
+and the summary a staged release ends with names the new package.
+
 ## Consequences
 
 - A maintainer sets up npmjs.com once. In the package's settings, add a
-  trusted publisher: GitHub Actions, repository `DescentVTT/spec-brief`,
+  trusted publisher: GitHub Actions, repository `spec-family/spec-brief`,
   workflow `release.yml`, environment `npm`. Then set publishing access to
   require two-factor authentication and disallow tokens, which leaves this
   workflow and a person with a second factor as the only ways to publish.
 - **A maintainer approves each release.** The tag's run ends with the version
   staged, and its summary names the commands: `npm stage list
-  @descent-vtt/spec-brief`, `npm stage view <id>`, then `npm stage approve <id>`
+  @spec-family/spec-brief`, `npm stage view <id>`, then `npm stage approve <id>`
   with a second factor, or the Staged Packages tab on npmjs.com.
 - The `npm` environment in the repository's settings is where a required
   reviewer goes, if a release should wait for one.

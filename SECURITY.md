@@ -2,10 +2,10 @@
 
 ## Supported versions
 
-The latest minor release of `@descent-vtt/spec-brief` on npm gets security
+The latest minor release of `@spec-family/spec-brief` on npm gets security
 fixes, as a patch release of that minor. Older minors do not: before 1.0 a
 tool keeps no support window
-([spec-core's ADR-0009](https://github.com/DescentVTT/spec-core/blob/main/docs/adr/0009-versions-before-1-0.md)),
+([spec-core's ADR-0009](https://github.com/spec-family/spec-core/blob/main/docs/adr/0009-versions-before-1-0.md)),
 so a fix reaches you by upgrading to the latest minor.
 
 ## Reporting a vulnerability

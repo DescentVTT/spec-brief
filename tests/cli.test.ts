@@ -1036,7 +1036,7 @@ describe('init and new', () => {
       err: '',
     });
     expect(JSON.parse(readFileSync(join(root, '.spec-brief.json'), 'utf8'))).toEqual(
-      expect.objectContaining({ $schema: './node_modules/@descent-vtt/spec-brief/schema.json', briefs: 'briefs' }),
+      expect.objectContaining({ $schema: './node_modules/@spec-family/spec-brief/schema.json', briefs: 'briefs' }),
     );
     expect((await run(root, ['init'])).err).toBe('spec-brief: .spec-brief.json already exists here; edit it instead\n');
     // The file that keeps an empty directory in git holds nothing.

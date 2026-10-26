@@ -122,7 +122,7 @@ The release workflow runs CI again and both mutation sweeps, on the tagged
 commit, and packs nothing until they pass: 15 to 23 minutes more than the
 suite alone, by the same sweeps. Then it packs, stages the version on npm
 with provenance and makes the GitHub release. Then a maintainer releases it
-with a second factor: `npm stage list @descent-vtt/spec-brief`, `npm stage view <id>`,
+with a second factor: `npm stage list @spec-family/spec-brief`, `npm stage view <id>`,
 `npm stage approve <id>`. A prerelease (`0.3.0-rc.1`) goes out under the `next`
 dist-tag. To try the workflow without publishing, run it by hand from main
 (Actions, Release, Run workflow): it does everything but the signing, the

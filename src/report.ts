@@ -112,7 +112,7 @@ export function sarif(findings: readonly Finding[], version: string): string {
           driver: {
             name: 'spec-brief',
             version,
-            informationUri: 'https://github.com/DescentVTT/spec-brief',
+            informationUri: 'https://github.com/spec-family/spec-brief',
             rules: ids.map((id) => {
               const rule = described.get(id);
               return {
