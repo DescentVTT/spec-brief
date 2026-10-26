@@ -30,7 +30,7 @@ const sha256 = (path: string): string => `sha256-${createHash('sha256').update(r
 
 describe('the vendored spec-core', () => {
   it('names the commit it was copied from', () => {
-    expect(record.source).toBe('https://github.com/DescentVTT/spec-core');
+    expect(record.source).toBe('https://github.com/spec-family/spec-core');
     expect(record.commit).toMatch(/^[0-9a-f]{40}$/);
   });
 
