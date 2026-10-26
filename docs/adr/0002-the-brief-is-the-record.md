@@ -53,7 +53,7 @@ checks, and on Windows a start of Node is most of what that costs. The
 family contract now lets a tool give
 another's answer again without starting it, where that answer named
 everything it was read from and each input reads as listed
-([spec-core ADR-0005](https://github.com/DescentVTT/spec-core/blob/main/docs/adr/0005-the-family-contract.md),
+([spec-core ADR-0005](https://github.com/spec-family/spec-core/blob/main/docs/adr/0005-the-family-contract.md),
 *Findings and output*, amended 2026-10-19). The manifest is still computed
 when asked, and nothing is written into the tree: the answer says what it
 was made of, and a tool that keeps it keeps it as state of its own.

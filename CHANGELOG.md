@@ -7,9 +7,30 @@ that was accepted, a flag, key or JSON field removed or renamed after a
 release of warning - and new features; a patch release carries only fixes
 that report less, crashes, speed and documentation, so `^0.3.0` takes no
 release that can turn a run red. This is the family's policy, recorded in
-[spec-core ADR-0009](https://github.com/DescentVTT/spec-core/blob/main/docs/adr/0009-versions-before-1-0.md);
+[spec-core ADR-0009](https://github.com/spec-family/spec-core/blob/main/docs/adr/0009-versions-before-1-0.md);
 releases up to 0.2.7 came before it, and several of their patches changed
 what a run reports.
+
+## Unreleased
+
+### Changed
+
+- **Published as `@spec-family/spec-brief`, from `spec-family/spec-brief`.**
+  The family moved to a GitHub organization and an npm scope of its own,
+  and versions go on from 0.11.0 under the new name. `init` writes
+  `$schema` as `./node_modules/@spec-family/spec-brief/schema.json`, the
+  schema's `$id` is
+  `https://raw.githubusercontent.com/spec-family/spec-brief/main/schema.json`,
+  and SARIF names `https://github.com/spec-family/spec-brief` (ADR-0010,
+  amended 2026-10-26). A configuration whose `$schema` names the old path
+  or the old address loads as before: spec-brief reads the key as any
+  string. Upgrading: `npm uninstall @descent-vtt/spec-brief` and
+  `npm install --save-dev @spec-family/spec-brief`; change every
+  `npx --no-install @descent-vtt/spec-brief`, in CI and in scripts, to
+  `npx --no-install @spec-family/spec-brief`, an `import` from
+  `@descent-vtt/spec-brief` to `@spec-family/spec-brief`, and `$schema` in
+  `.spec-brief.json` to `./node_modules/@spec-family/spec-brief/schema.json`,
+  since the old path names no file once the old package is uninstalled.
 
 ## 0.11.0
 
@@ -53,7 +74,7 @@ under its name was read without end.
   way, were refused as two directories; each is taken once. The rest of a
   path is compared as it resolves, so `C:\x` beside `C:\X` is still two
   ([An option given two values](README.md#an-option-given-two-values);
-  [the family contract](https://github.com/DescentVTT/spec-core/blob/main/docs/adr/0005-the-family-contract.md),
+  [the family contract](https://github.com/spec-family/spec-core/blob/main/docs/adr/0005-the-family-contract.md),
   amended 2026-10-19).
 - **A revision written two ways is asked of git.** `--commit HEAD` beside
   the hash it names, or `--base main` beside the commit `main` is at, was
@@ -114,7 +135,7 @@ holds is refused with `--help` or `--version` on it, and `--help` beside
   read, so one value written two ways is taken once: `--root .` beside
   `--root ./`, `--wave 1` beside `--wave 01`
   ([An option given two values](README.md#an-option-given-two-values);
-  [the family contract](https://github.com/DescentVTT/spec-core/blob/main/docs/adr/0005-the-family-contract.md),
+  [the family contract](https://github.com/spec-family/spec-core/blob/main/docs/adr/0005-the-family-contract.md),
   amended 2026-10-18). Upgrading: give each option once; a shell alias or
   a script that gives an option, and a line that gives it again to override
   it, now stops there.
@@ -257,7 +278,7 @@ as it was.
   Error: EPIPE: broken pipe, write` and a stack once `head` had left; it now
   prints `spec-brief: stdout was closed before all of the output was
   written` on stderr, exit 2 as before
-  ([the family contract](https://github.com/DescentVTT/spec-core/blob/main/docs/adr/0005-the-family-contract.md)).
+  ([the family contract](https://github.com/spec-family/spec-core/blob/main/docs/adr/0005-the-family-contract.md)).
 - A `SOURCE_DATE_EPOCH` of more seconds than any date has is named, with
   what to do about it, where the run ended on `RangeError: Invalid time
   value` and a stack. Exit 2, as before.
@@ -284,7 +305,7 @@ is exit 2 now, as it was already inside a command.
   no date can be made of, for one - left the process as Node's uncaught
   error with exit 1, which reads as findings, and so did an error thrown
   where nothing waits for it. Each is now reported the same way, with exit 2
-  ([the family contract](https://github.com/DescentVTT/spec-core/blob/main/docs/adr/0005-the-family-contract.md)).
+  ([the family contract](https://github.com/spec-family/spec-core/blob/main/docs/adr/0005-the-family-contract.md)).
   Upgrading: a script that took exit 1 after such a crash for findings now
   sees 2, "the run could not be trusted"; `main()` from the package resolves
   to 2 where its promise rejected.
@@ -305,7 +326,7 @@ not this project's package. spec-brief itself is unchanged.
   clone, a worktree before `npm ci`, a CI job with no install step.
   The CI examples install first, and [Names](README.md#names) says whose the
   names are; what was measured is in the family's
-  [adopting guide](https://github.com/DescentVTT/spec-core/blob/main/docs/adopting.md#names).
+  [adopting guide](https://github.com/spec-family/spec-core/blob/main/docs/adopting.md#names).
   Upgrading: where a CI job or a script gives `npx` the command's name
   alone, write `npx --no-install @descent-vtt/spec-brief`. `--no-install`
   before the bare name is not enough: npm still runs a copy of that name's

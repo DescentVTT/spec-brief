@@ -100,7 +100,7 @@ export const BANNER_PLACEHOLDERS: readonly string[] = [
   'author',
 ];
 
-export const SCHEMA_URL = 'https://raw.githubusercontent.com/DescentVTT/spec-brief/main/schema.json';
+export const SCHEMA_URL = 'https://raw.githubusercontent.com/spec-family/spec-brief/main/schema.json';
 
 /**
  * The `$schema` `init` writes, the path the README recommends: the schema of
@@ -108,7 +108,7 @@ export const SCHEMA_URL = 'https://raw.githubusercontent.com/DescentVTT/spec-bri
  * follows main, and would flag a key the installed version accepts, or pass
  * one it refuses, as soon as the two differ.
  */
-export const SCHEMA_PATH = './node_modules/@descent-vtt/spec-brief/schema.json';
+export const SCHEMA_PATH = './node_modules/@spec-family/spec-brief/schema.json';
 
 const SEVERITY: Schema = { type: 'string', enum: ['off', 'note', 'warning', 'error'] };
 const STRINGS: Schema = { type: 'array', items: { type: 'string', minLength: 1 } };

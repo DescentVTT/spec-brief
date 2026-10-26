@@ -133,7 +133,7 @@ was taken when it was all digits and passed over otherwise, so `tomorrow`,
 had the clock's date written, exit 0. The pipeline that set the variable to
 fix the date, and mistyped it, got another date and no word: the fall back
 to a default that the family contract rules out
-([spec-core ADR-0005](https://github.com/DescentVTT/spec-core/blob/main/docs/adr/0005-the-family-contract.md)).
+([spec-core ADR-0005](https://github.com/spec-family/spec-core/blob/main/docs/adr/0005-the-family-contract.md)).
 The specification has the value be "an ASCII representation of an integer
 with no fractional component, identical to the output format of `date +%s`",
 and says of a malformed one that the build process "SHOULD exit with a

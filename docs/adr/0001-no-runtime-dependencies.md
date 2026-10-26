@@ -64,7 +64,7 @@ module, with the `text` module it imports, copied beside the glob engine at
 spec-core 4f2826a and verified by hash in the same way. spec-core is exact,
 as CommonMark is, about what is code and what is a comment - indented code,
 raw-text HTML, code spans that close on a later line, a `<!--` that opens
-nothing ([spec-core ADR-0004](https://github.com/DescentVTT/spec-core/blob/main/docs/adr/0004-markdown-structure.md)) -
+nothing ([spec-core ADR-0004](https://github.com/spec-family/spec-core/blob/main/docs/adr/0004-markdown-structure.md)) -
 and one scanner is one set of answers for the family. Its differential test
 runs 0.1's scanner and reader beside it and names every difference.
 `src/markdown.ts` and `src/frontmatter.ts` are adapters over it, in a brief's
@@ -243,7 +243,7 @@ amendment:
 Each ended with exit 0, having answered a question nobody had put: the
 fall back to a default that the family contract rules out for a
 configuration
-([spec-core ADR-0005](https://github.com/DescentVTT/spec-core/blob/main/docs/adr/0005-the-family-contract.md)),
+([spec-core ADR-0005](https://github.com/spec-family/spec-core/blob/main/docs/adr/0005-the-family-contract.md)),
 and that [ADR-0004](0004-archival-is-a-planned-transaction.md) rules out
 for `SOURCE_DATE_EPOCH`. A value comes out of a shell variable as often as
 it is typed, and `--root "$DIR"` where the variable is not set is the line
@@ -404,12 +404,12 @@ every pairing, the 58 that run and the 6 that are refused, and to the
 commands and options the help lists.
 
 Each refusal is input refused that was accepted, a minor release
-([spec-core ADR-0009](https://github.com/DescentVTT/spec-core/blob/main/docs/adr/0009-versions-before-1-0.md)).
+([spec-core ADR-0009](https://github.com/spec-family/spec-core/blob/main/docs/adr/0009-versions-before-1-0.md)).
 
 **`FORCE_COLOR=false` is off.** The same day, in the three tools that read
 the variable: off for exactly `0` and exactly `false`, on for any other
 value that is not empty, and as unset when empty
-([spec-core ADR-0005](https://github.com/DescentVTT/spec-core/blob/main/docs/adr/0005-the-family-contract.md)).
+([spec-core ADR-0005](https://github.com/spec-family/spec-core/blob/main/docs/adr/0005-the-family-contract.md)).
 `false` forced colour on here, into a pipe too, where Node itself
 (`getColorDepth({ FORCE_COLOR: 'false' })` is 1 on 24.18.1) and
 `supports-color` read it as off. Only the two spellings are off: Node reads
@@ -421,7 +421,7 @@ each of those still forces colour on, as the family's reading has it.
 The amendment of 2026-10-11 left two things as they were: an option given
 twice, read as its last, and `--help` and `--version`, which answered
 first. The family contract decides both
-([spec-core ADR-0005](https://github.com/DescentVTT/spec-core/blob/main/docs/adr/0005-the-family-contract.md),
+([spec-core ADR-0005](https://github.com/spec-family/spec-core/blob/main/docs/adr/0005-the-family-contract.md),
 amended 2026-10-18), and this is how spec-brief reads it.
 
 Measured on 2026-10-18 through the launcher at cab7f8b (Windows 11, Node
@@ -509,7 +509,7 @@ A test holds each refusal of the line to `--help`, `-h`, `--version` and
 help and the version.
 
 Each refusal is input refused that was accepted, a minor release
-([spec-core ADR-0009](https://github.com/DescentVTT/spec-core/blob/main/docs/adr/0009-versions-before-1-0.md)).
+([spec-core ADR-0009](https://github.com/spec-family/spec-core/blob/main/docs/adr/0009-versions-before-1-0.md)).
 
 ## Amended 2026-10-19: a drive letter, a revision and a set of ids
 
@@ -533,7 +533,7 @@ Node 24.18.1), in a repository of its own with two commits:
   `7` twice, and `007` names the brief `7` names.
 
 **A drive letter names its volume in either case**
-([spec-core ADR-0005](https://github.com/DescentVTT/spec-core/blob/main/docs/adr/0005-the-family-contract.md),
+([spec-core ADR-0005](https://github.com/spec-family/spec-core/blob/main/docs/adr/0005-the-family-contract.md),
 amended 2026-10-19). On Windows a resolved path starts with its drive
 letter or a backslash, and that first character is folded before two
 values of `--root`, or of `--config`, are compared. The rest is compared as
@@ -567,7 +567,7 @@ beside `8,7` is two because the brief writes its ids in their order: both
 name the same briefs, and the order the brief writes is the one read.
 
 Nothing that ran is refused, so this is a patch
-([spec-core ADR-0009](https://github.com/DescentVTT/spec-core/blob/main/docs/adr/0009-versions-before-1-0.md)).
+([spec-core ADR-0009](https://github.com/spec-family/spec-core/blob/main/docs/adr/0009-versions-before-1-0.md)).
 One refusal changes its words: `--commit HEAD --commit=-x` is refused as
 `"-x" is not a revision`, which the line checks of the value the run
 reads, where it was refused as two values.
