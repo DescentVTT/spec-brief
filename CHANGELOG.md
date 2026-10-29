@@ -11,7 +11,11 @@ release that can turn a run red. This is the family's policy, recorded in
 releases up to 0.2.7 came before it, and several of their patches changed
 what a run reports.
 
-## Unreleased
+## 0.12.0
+
+The first release as `@spec-family/spec-brief`, from
+`spec-family/spec-brief`: the family moved to a GitHub organization and
+an npm scope of its own. What a run decides is as in 0.11.0.
 
 ### Changed
 

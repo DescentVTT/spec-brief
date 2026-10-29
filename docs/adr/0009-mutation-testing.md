@@ -241,7 +241,11 @@ new, and the core reads as before. For 0.11.0 the sweep of 5270f6d (run
 40105674374) read 99.29% over 7,585 and, for the core, 99.33% over 5,362.
 The refusals of that release made 26 mutants and left none: mutant for
 mutant against 716da8d's, no survivor is new and none is gone, in either
-sweep.
+sweep. For 0.12.0, the first release as `@spec-family/spec-brief`, the
+sweep of b6b674c (run 40317429095) read 99.29% over 7,585 and, for the
+core, 99.33% over 5,362, as 0.11.0's did: the move changed strings and
+made no mutant, and mutant for mutant against 5270f6d's no survivor is
+new and none is gone.
 
 Reading them was a review again, and found what no test had:
 
